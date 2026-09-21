@@ -45,6 +45,29 @@ const formatLongDate = (value: string) =>
     .format(new Date(`${value}T08:00:00`));
 const formatNumber = (value: number) => new Intl.NumberFormat("en-MY").format(value);
 
+type AdminSettings = {
+  organisation: string; site: string; timezone: string;
+  emailEnabled: boolean; auditEnabled: boolean; uploadsEnabled: boolean;
+};
+
+const defaultAdminSettings: AdminSettings = {
+  organisation: "Sugihara Grand Industries Sdn Bhd",
+  site: "Port Klang",
+  timezone: "Asia/Kuala_Lumpur",
+  emailEnabled: true,
+  auditEnabled: true,
+  uploadsEnabled: true
+};
+
+function loadAdminSettings(): AdminSettings {
+  try {
+    const saved = window.localStorage.getItem("hr-digital-admin-settings");
+    return saved ? { ...defaultAdminSettings, ...JSON.parse(saved) } : defaultAdminSettings;
+  } catch {
+    return defaultAdminSettings;
+  }
+}
+
 function App() {
   const [activeView, setActiveView] = useState<View>("overview");
   const [trainingOpen, setTrainingOpen] = useState(false);
@@ -143,13 +166,13 @@ function Topbar({ meta, onMenu, onSettings }: { meta: { title: string; eyebrow: 
 }
 
 function Administration({ showNotice }: { showNotice: (message: string) => void }) {
-  const [emailEnabled, setEmailEnabled] = useState(true);
-  const [auditEnabled, setAuditEnabled] = useState(true);
-  const [uploadsEnabled, setUploadsEnabled] = useState(true);
-  const [timezone, setTimezone] = useState("Asia/Kuala_Lumpur");
+  const [settings, setSettings] = useState<AdminSettings>(loadAdminSettings);
+  const update = <K extends keyof AdminSettings>(key: K, value: AdminSettings[K]) =>
+    setSettings((current) => ({ ...current, [key]: value }));
 
   const save = (event: FormEvent) => {
     event.preventDefault();
+    window.localStorage.setItem("hr-digital-admin-settings", JSON.stringify(settings));
     showNotice("Administration settings saved successfully.");
   };
 
@@ -157,14 +180,14 @@ function Administration({ showNotice }: { showNotice: (message: string) => void 
     <div className="module-intro admin-intro"><div><span className="module-kicker"><LockKeyhole size={15} /> Restricted administration</span><h2>Control the platform from one secure workspace.</h2><p>System Admin access is active. Manage communication, security, file handling and server behaviour here.</p></div><span className="admin-access"><ShieldCheck size={17} /> Full access</span></div>
     <div className="admin-grid">
       <section className="card admin-panel"><SectionHeader kicker="Platform" title="System preferences" />
-        <label className="field"><span>Organisation name</span><input defaultValue="Sugihara Grand Industries Sdn Bhd" /></label>
-        <label className="field"><span>Default site</span><input defaultValue="Port Klang" /></label>
-        <label className="field"><span>Timezone</span><select value={timezone} onChange={(event) => setTimezone(event.target.value)}><option value="Asia/Kuala_Lumpur">Asia/Kuala Lumpur (MYT)</option><option value="UTC">UTC</option></select></label>
+        <label className="field"><span>Organisation name</span><input value={settings.organisation} onChange={(event) => update("organisation", event.target.value)} /></label>
+        <label className="field"><span>Default site</span><input value={settings.site} onChange={(event) => update("site", event.target.value)} /></label>
+        <label className="field"><span>Timezone</span><select value={settings.timezone} onChange={(event) => update("timezone", event.target.value)}><option value="Asia/Kuala_Lumpur">Asia/Kuala Lumpur (MYT)</option><option value="UTC">UTC</option></select></label>
       </section>
       <section className="card admin-panel"><SectionHeader kicker="Services" title="Feature controls" />
-        <SettingToggle icon={MailCheck} title="Automated training email" detail="Allow scheduled invites, reminders and follow-ups." checked={emailEnabled} onChange={setEmailEnabled} />
-        <SettingToggle icon={FileText} title="Employee note uploads" detail="Allow employees to upload training evidence and notes." checked={uploadsEnabled} onChange={setUploadsEnabled} />
-        <SettingToggle icon={ShieldCheck} title="Administration audit log" detail="Record sensitive configuration and access changes." checked={auditEnabled} onChange={setAuditEnabled} />
+        <SettingToggle icon={MailCheck} title="Automated training email" detail="Allow scheduled invites, reminders and follow-ups." checked={settings.emailEnabled} onChange={(value) => update("emailEnabled", value)} />
+        <SettingToggle icon={FileText} title="Employee note uploads" detail="Allow employees to upload training evidence and notes." checked={settings.uploadsEnabled} onChange={(value) => update("uploadsEnabled", value)} />
+        <SettingToggle icon={ShieldCheck} title="Administration audit log" detail="Record sensitive configuration and access changes." checked={settings.auditEnabled} onChange={(value) => update("auditEnabled", value)} />
       </section>
       <section className="card admin-panel"><SectionHeader kicker="Security" title="Access & sessions" />
         <div className="admin-status-row"><span><UserCog size={18} /></span><div><strong>System Admin</strong><small>Full platform administration</small></div><em>Active</em></div>
