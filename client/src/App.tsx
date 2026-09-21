@@ -132,7 +132,7 @@ function Sidebar({ activeView, trainingOpen, mobileOpen, onTrainingToggle, onNav
         <button className="sidebar-close" onClick={onClose} aria-label="Close navigation"><X size={20} /></button>
       </div>
       <div className="product-name"><strong>Human Resource Digital</strong><span>HR operations workspace</span></div>
-      <div className="environment-pill"><i /> Internal operations platform</div>
+      <div className="environment-pill">Internal operations platform</div>
       <nav className="primary-nav" aria-label="Primary navigation">
         <NavButton icon={LayoutDashboard} label="Dashboard" active={activeView === "overview"} onClick={() => onNavigate("overview")} />
         <p className="nav-section-label">People</p>
@@ -150,7 +150,7 @@ function Sidebar({ activeView, trainingOpen, mobileOpen, onTrainingToggle, onNav
         <NavButton icon={Settings2} label="Settings" active={activeView === "administration"} onClick={() => onNavigate("administration")} />
       </nav>
       <div className="sidebar-footer">
-        <div className="server-status"><span><i /> AI PC server</span><strong>Online</strong></div>
+        <div className="server-status"><span>AI PC server</span><strong>Online</strong></div>
         <span className="copyright">© 2026 Digital Transformation Unit</span>
       </div>
     </aside>
