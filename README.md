@@ -12,6 +12,8 @@ Human Resource Digital is the internal HR operations platform for Sugihara Grand
 - Email automation journey with branded responsive templates
 - Searchable employee training-notes library
 - Company vehicle mileage, utilisation, servicing, and trip tracking
+- System administration for platform preferences, feature controls, access, sessions, and server status
+- Installable Progressive Web App (PWA) shell with offline access to previously loaded interface assets
 
 ## Technology
 
@@ -65,6 +67,12 @@ curl http://localhost:4000/api/health
 At minimum, replace `POSTGRES_PASSWORD` in `.env` with a strong unique password. Set `CLIENT_ORIGIN` to the final HTTPS origin. Add SMTP values only when real training-email delivery is ready.
 
 Open `http://<AI-PC-IP>:4000`. For company-network use, place a reverse proxy such as Nginx or Caddy in front of port 4000 and terminate HTTPS there.
+
+### PWA installation
+
+The production build includes a web app manifest, SGI browser/install icon, standalone display metadata, and a service worker. PWA installation and service workers require HTTPS, except when using `localhost` during testing. After HTTPS is configured, open the application in Chrome or Edge and use **Install Human Resource Digital** from the browser menu.
+
+The cached application shell helps the interface reopen after a temporary connection interruption. Live employee, training, email, and vehicle data still requires the AI PC API and database to be reachable.
 
 ### Long-running service behavior
 

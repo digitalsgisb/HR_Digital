@@ -1,0 +1,17 @@
+{
+  "name": "Human Resource Digital",
+  "short_name": "HR Digital",
+  "description": "Sugihara Grand Industries HR operations, training and company vehicle platform.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101112",
+  "theme_color": "#101112",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

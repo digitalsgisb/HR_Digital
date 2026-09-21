@@ -3,9 +3,9 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity, ArrowRight, Bell, BookOpenCheck, CalendarCheck2, CalendarDays, CarFront, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, Clock3, FileSpreadsheet,
-  FileText, Gauge, GraduationCap, LayoutDashboard, Library, MailCheck, MapPin, Menu,
-  MessageSquareText, Plus, Route, Search, Send, Settings2, ShieldCheck, Sparkles, Upload,
-  UserRound, UsersRound, Wrench, X
+  FileText, Gauge, GraduationCap, LayoutDashboard, Library, LockKeyhole, MailCheck, MapPin, Menu,
+  MessageSquareText, Plus, Route, Search, Send, ServerCog, Settings2, ShieldCheck, Upload,
+  UserCog, UserRound, UsersRound, Wrench, X
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { DashboardSummary, EmployeeImportPreview } from "@hr-training/shared";
@@ -16,7 +16,7 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet";
+  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "administration";
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   overview: { title: "Dashboard", eyebrow: "Human Resource Digital" },
@@ -27,7 +27,8 @@ const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   "training-records": { title: "Employee training records", eyebrow: "Learning & development" },
   "email-automation": { title: "Email automation", eyebrow: "Learning & development" },
   "notes-library": { title: "Training notes library", eyebrow: "Learning & development" },
-  fleet: { title: "Company car usage", eyebrow: "Mobility" }
+  fleet: { title: "Company car usage", eyebrow: "Mobility" },
+  administration: { title: "Administration", eyebrow: "System controls" }
 };
 
 const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
@@ -46,7 +47,7 @@ const formatNumber = (value: number) => new Intl.NumberFormat("en-MY").format(va
 
 function App() {
   const [activeView, setActiveView] = useState<View>("overview");
-  const [trainingOpen, setTrainingOpen] = useState(true);
+  const [trainingOpen, setTrainingOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [calendarSessions, setCalendarSessions] = useState<CalendarSession[]>(initialTrainingSessions);
@@ -73,7 +74,7 @@ function App() {
         onTrainingToggle={() => setTrainingOpen((open) => !open)} onNavigate={navigate} onClose={() => setMobileNavOpen(false)} />
       <main className="workspace">
         <Topbar meta={viewMeta[activeView]} onMenu={() => setMobileNavOpen(true)}
-          onSettings={() => setNotice("Administration settings will be connected in the next platform phase.")} />
+          onSettings={() => navigate("administration")} />
         <div className="page-stage" key={activeView}>
           {activeView === "overview" && <Overview dashboard={dashboard} sessions={calendarSessions} navigate={navigate} />}
           {activeView === "employees" && <EmployeesDatabase showNotice={setNotice} />}
@@ -87,6 +88,7 @@ function App() {
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}
           {activeView === "notes-library" && <NotesLibrary showNotice={setNotice} />}
           {activeView === "fleet" && <FleetTracker showNotice={setNotice} />}
+          {activeView === "administration" && <Administration showNotice={setNotice} />}
         </div>
       </main>
       {notice && <div className="toast" role="status"><CheckCircle2 size={18} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={16} /></button></div>}
@@ -102,11 +104,11 @@ function Sidebar({ activeView, trainingOpen, mobileOpen, onTrainingToggle, onNav
   return <>
     {mobileOpen && <button className="nav-backdrop" onClick={onClose} aria-label="Close navigation" />}
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
-      <div className="brand-lockup"><img className="product-mark" src="/hrd-mark.svg" alt="Human Resource Digital logo" />
-        <div className="product-name"><strong>Human Resource</strong><span>Digital</span></div>
+      <div className="brand-lockup">
+        <img className="company-brand" src="/sgi-logo.png" alt="Sugihara Grand Industries Sdn Bhd" />
         <button className="sidebar-close" onClick={onClose} aria-label="Close navigation"><X size={20} /></button>
       </div>
-      <div className="company-lockup"><img src="/sgi-logo.png" alt="Sugihara Grand Industries Sdn Bhd" /></div>
+      <div className="product-name"><strong>Human Resource Digital</strong><span>HR operations workspace</span></div>
       <div className="environment-pill"><i /> Internal operations platform</div>
       <nav className="primary-nav" aria-label="Primary navigation">
         <NavButton icon={LayoutDashboard} label="Dashboard" active={activeView === "overview"} onClick={() => onNavigate("overview")} />
@@ -121,10 +123,11 @@ function Sidebar({ activeView, trainingOpen, mobileOpen, onTrainingToggle, onNav
           {trainingNav.map((item) => <button key={item.id} className={`nav-child ${activeView === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
             <item.icon size={15} /><span>{item.label}</span></button>)}
         </div>
+        <p className="nav-section-label">Administration</p>
+        <NavButton icon={Settings2} label="Settings" active={activeView === "administration"} onClick={() => onNavigate("administration")} />
       </nav>
       <div className="sidebar-footer">
         <div className="server-status"><span><i /> AI PC server</span><strong>Online</strong></div>
-        <div className="platform-note"><Sparkles size={16} /><div><strong>Built to grow</strong><span>Payroll, leave and recruitment ready.</span></div></div>
         <span className="copyright">© 2026 Digital Transformation Unit</span>
       </div>
     </aside>
@@ -137,6 +140,48 @@ function NavButton({ icon: Icon, label, active, onClick }: { icon: LucideIcon; l
 
 function Topbar({ meta, onMenu, onSettings }: { meta: { title: string; eyebrow: string }; onMenu: () => void; onSettings: () => void }) {
   return <header className="topbar"><div className="topbar-title"><button className="mobile-menu" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div><p>{meta.eyebrow}</p><h1>{meta.title}</h1></div></div><div className="topbar-actions"><div className="location-chip"><MapPin size={15} /><span>Port Klang</span></div><span className="today-label">Mon, 21 Sep 2026</span><button className="topbar-icon" aria-label="Notifications"><Bell size={18} /><i /></button><button className="topbar-icon" onClick={onSettings} aria-label="Settings"><Settings2 size={18} /></button><div className="user-chip"><span>SA</span><div><strong>System Admin</strong><small>HR operations</small></div></div></div></header>;
+}
+
+function Administration({ showNotice }: { showNotice: (message: string) => void }) {
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [auditEnabled, setAuditEnabled] = useState(true);
+  const [uploadsEnabled, setUploadsEnabled] = useState(true);
+  const [timezone, setTimezone] = useState("Asia/Kuala_Lumpur");
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    showNotice("Administration settings saved successfully.");
+  };
+
+  return <form className="page-stack admin-page" onSubmit={save}>
+    <div className="module-intro admin-intro"><div><span className="module-kicker"><LockKeyhole size={15} /> Restricted administration</span><h2>Control the platform from one secure workspace.</h2><p>System Admin access is active. Manage communication, security, file handling and server behaviour here.</p></div><span className="admin-access"><ShieldCheck size={17} /> Full access</span></div>
+    <div className="admin-grid">
+      <section className="card admin-panel"><SectionHeader kicker="Platform" title="System preferences" />
+        <label className="field"><span>Organisation name</span><input defaultValue="Sugihara Grand Industries Sdn Bhd" /></label>
+        <label className="field"><span>Default site</span><input defaultValue="Port Klang" /></label>
+        <label className="field"><span>Timezone</span><select value={timezone} onChange={(event) => setTimezone(event.target.value)}><option value="Asia/Kuala_Lumpur">Asia/Kuala Lumpur (MYT)</option><option value="UTC">UTC</option></select></label>
+      </section>
+      <section className="card admin-panel"><SectionHeader kicker="Services" title="Feature controls" />
+        <SettingToggle icon={MailCheck} title="Automated training email" detail="Allow scheduled invites, reminders and follow-ups." checked={emailEnabled} onChange={setEmailEnabled} />
+        <SettingToggle icon={FileText} title="Employee note uploads" detail="Allow employees to upload training evidence and notes." checked={uploadsEnabled} onChange={setUploadsEnabled} />
+        <SettingToggle icon={ShieldCheck} title="Administration audit log" detail="Record sensitive configuration and access changes." checked={auditEnabled} onChange={setAuditEnabled} />
+      </section>
+      <section className="card admin-panel"><SectionHeader kicker="Security" title="Access & sessions" />
+        <div className="admin-status-row"><span><UserCog size={18} /></span><div><strong>System Admin</strong><small>Full platform administration</small></div><em>Active</em></div>
+        <div className="admin-status-row"><span><LockKeyhole size={18} /></span><div><strong>Session policy</strong><small>Never expires · administrator-controlled termination</small></div><em>Enforced</em></div>
+        <button type="button" className="button button-secondary" onClick={() => showNotice("All other administrator sessions have been terminated.")}>Terminate other sessions</button>
+      </section>
+      <section className="card admin-panel"><SectionHeader kicker="Infrastructure" title="AI PC server" />
+        <div className="server-health"><span><ServerCog size={25} /></span><div><strong>Production server online</strong><small>Application, database and background services are healthy.</small></div><em>Healthy</em></div>
+        <dl className="admin-facts"><div><dt>Environment</dt><dd>Linux · Docker Compose</dd></div><div><dt>Data region</dt><dd>On-premise</dd></div><div><dt>Update channel</dt><dd>Stable</dd></div></dl>
+      </section>
+    </div>
+    <div className="admin-savebar"><div><strong>Configuration controls unlocked</strong><span>Changes are limited to System Admin accounts.</span></div><button className="button button-primary" type="submit"><Check size={16} /> Save settings</button></div>
+  </form>;
+}
+
+function SettingToggle({ icon: Icon, title, detail, checked, onChange }: { icon: LucideIcon; title: string; detail: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return <label className="setting-toggle"><span><Icon size={18} /></span><div><strong>{title}</strong><small>{detail}</small></div><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
 }
 
 function Overview({ dashboard, sessions, navigate }: { dashboard: DashboardSummary | null; sessions: CalendarSession[]; navigate: (view: View) => void }) {
