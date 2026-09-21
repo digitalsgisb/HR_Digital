@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  RESIGNED
+}
+
+enum TrainingCourseStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CompletionStatus {
+  REQUIRED
+  COMPLETED
+  ABSENT
+  EXCUSED
+  NOT_REQUIRED
+}
+
+enum ScopeType {
+  INDIVIDUAL
+  DEPARTMENT
+  LINE
+  ROLE
+  CUSTOM
+}
+
+enum UserRole {
+  HR_ADMIN
+  HR_STAFF
+  TRAINER
+  SUPERVISOR
+  VIEWER
+}
+
+model Department {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String     @unique
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model Employee {
+  id           String               @id @default(cuid())
+  employeeId   String               @unique
+  name         String?
+  email        String?
+  departmentId String
+  department   Department           @relation(fields: [departmentId], references: [id])
+  line         String?
+  role         String?
+  status       EmployeeStatus       @default(ACTIVE)
+  completions  TrainingCompletion[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([departmentId])
+  @@index([status])
+}
+
+model TrainingCourse {
+  id           String               @id @default(cuid())
+  code         String               @unique
+  name         String
+  defaultHours Float                @default(0)
+  category     String?
+  status       TrainingCourseStatus @default(ACTIVE)
+  sessions     TrainingSession[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([status])
+}
+
+model TrainingSession {
+  id          String               @id @default(cuid())
+  courseId    String
+  course      TrainingCourse       @relation(fields: [courseId], references: [id])
+  dateStart   DateTime
+  dateEnd     DateTime?
+  trainerName String?
+  scopeType   ScopeType            @default(CUSTOM)
+  scopeValue  String?
+  notes       String?
+  completions TrainingCompletion[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([courseId])
+  @@index([dateStart])
+}
+
+model TrainingCompletion {
+  id          String           @id @default(cuid())
+  employeeId  String
+  employee    Employee         @relation(fields: [employeeId], references: [id])
+  sessionId   String
+  session     TrainingSession  @relation(fields: [sessionId], references: [id])
+  status      CompletionStatus @default(REQUIRED)
+  hours       Float            @default(0)
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([employeeId, sessionId])
+  @@index([status])
+  @@index([completedAt])
+}
+
+model UserAccount {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  displayName String
+  role        UserRole @default(VIEWER)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

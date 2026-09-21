@@ -1,0 +1,23 @@
+{
+  "name": "hr-training-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm --workspace server run dev\" \"npm --workspace client run dev\"",
+    "build": "npm --workspaces --if-present run build",
+    "test": "npm --workspaces --if-present test",
+    "typecheck": "npm --workspaces --if-present run typecheck",
+    "prisma:generate": "npm --workspace server run prisma:generate",
+    "prisma:migrate": "npm --workspace server run prisma:migrate",
+    "prisma:seed": "npm --workspace server run prisma:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  }
+}

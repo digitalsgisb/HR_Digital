@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+coverage/
+.vite/
+*.log
+*.tsbuildinfo
+.agents/
+.codex/
+backups/
+*.sql
