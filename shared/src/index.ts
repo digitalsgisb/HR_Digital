@@ -22,6 +22,51 @@ export const userRoles = [
 ] as const;
 export type UserRole = (typeof userRoles)[number];
 
+export const vehicleStatuses = ["AVAILABLE", "IN_USE", "SERVICE_DUE", "OUT_OF_SERVICE"] as const;
+export type VehicleStatus = (typeof vehicleStatuses)[number];
+
+export const vehicleConditions = ["GOOD", "ATTENTION_REQUIRED", "UNSAFE"] as const;
+export type VehicleCondition = (typeof vehicleConditions)[number];
+
+export const vehicleTripStatuses = ["IN_PROGRESS", "COMPLETED"] as const;
+export type VehicleTripStatus = (typeof vehicleTripStatuses)[number];
+
+export type VehicleTrip = {
+  id: string;
+  vehicleId: string;
+  driverEmployeeId: string;
+  driverName: string;
+  destination: string;
+  purpose: string;
+  passengers: number;
+  startedAt: string;
+  endedAt?: string | null;
+  odometerStart: number;
+  odometerEnd?: number | null;
+  fuelBefore: number;
+  fuelAfter?: number | null;
+  conditionBefore: VehicleCondition;
+  conditionAfter?: VehicleCondition | null;
+  checksBefore: Record<string, boolean>;
+  checksAfter?: Record<string, boolean> | null;
+  notesBefore?: string | null;
+  notesAfter?: string | null;
+  status: VehicleTripStatus;
+  vehicle?: Vehicle;
+};
+
+export type Vehicle = {
+  id: string;
+  plate: string;
+  model: string;
+  category: string;
+  mileage: number;
+  serviceAt: number;
+  status: VehicleStatus;
+  assigned: string;
+  activeTrip?: VehicleTrip | null;
+};
+
 export type EmployeeImportRow = {
   employeeId: string;
   department: string;

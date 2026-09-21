@@ -42,6 +42,24 @@ enum UserRole {
   VIEWER
 }
 
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  SERVICE_DUE
+  OUT_OF_SERVICE
+}
+
+enum VehicleCondition {
+  GOOD
+  ATTENTION_REQUIRED
+  UNSAFE
+}
+
+enum VehicleTripStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
 model Department {
   id        String     @id @default(cuid())
   code      String     @unique
@@ -125,4 +143,50 @@ model UserAccount {
   role        UserRole @default(VIEWER)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Vehicle {
+  id        String        @id
+  plate     String        @unique
+  model     String
+  category  String
+  mileage   Int
+  serviceAt Int
+  status    VehicleStatus @default(AVAILABLE)
+  assigned  String
+  trips     VehicleTrip[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status])
+}
+
+model VehicleTrip {
+  id               String               @id @default(cuid())
+  vehicleId        String
+  vehicle          Vehicle              @relation(fields: [vehicleId], references: [id])
+  driverEmployeeId String
+  driverName       String
+  destination      String
+  purpose          String
+  passengers       Int                  @default(1)
+  startedAt        DateTime             @default(now())
+  endedAt          DateTime?
+  odometerStart    Int
+  odometerEnd      Int?
+  fuelBefore       Int
+  fuelAfter        Int?
+  conditionBefore  VehicleCondition
+  conditionAfter   VehicleCondition?
+  checksBefore     Json
+  checksAfter      Json?
+  notesBefore      String?
+  notesAfter       String?
+  status           VehicleTripStatus    @default(IN_PROGRESS)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([vehicleId, status])
+  @@index([driverEmployeeId])
+  @@index([startedAt])
 }

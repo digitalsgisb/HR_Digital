@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { env } from "./env.js";
 import { createRouter } from "./routes.js";
 
@@ -41,6 +42,16 @@ export const createApp = () => {
       res.status(503).json({
         message: "Database is not configured yet. Set DATABASE_URL in server/.env after installing PostgreSQL."
       });
+      return;
+    }
+
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ message: error.issues[0]?.message ?? "Invalid request.", issues: error.issues });
+      return;
+    }
+
+    if (error instanceof Error && "status" in error && typeof error.status === "number") {
+      res.status(error.status).json({ message: error.message });
       return;
     }
 

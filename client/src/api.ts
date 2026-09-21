@@ -1,4 +1,6 @@
-import type { DashboardSummary, EmployeeImportPreview } from "@hr-training/shared";
+import type {
+  DashboardSummary, EmployeeImportPreview, Vehicle, VehicleCondition, VehicleTrip
+} from "@hr-training/shared";
 import { sampleCourses, sampleDashboard, sampleEmployees, sampleSessions } from "./sample-data";
 import type { Course, Employee, SessionListItem } from "./types";
 
@@ -9,7 +11,12 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   });
 
   if (!response.ok) {
-    const message = await response.text();
+    const body = await response.text();
+    let message = body;
+    try {
+      const parsed = JSON.parse(body) as { message?: string };
+      message = parsed.message ?? body;
+    } catch { /* Keep the original non-JSON response. */ }
     throw new Error(message || `Request failed with ${response.status}`);
   }
 
@@ -62,6 +69,35 @@ export const api = {
     return request<{ imported: number }>("/api/employees/import/commit", {
       method: "POST",
       body: JSON.stringify({ rows })
+    });
+  },
+
+  getVehicles() {
+    return request<Vehicle[]>("/api/vehicles");
+  },
+
+  getVehicleTrips() {
+    return request<VehicleTrip[]>("/api/vehicle-trips");
+  },
+
+  startVehicleTrip(input: {
+    vehicleId: string; driverEmployeeId: string; driverName: string; destination: string;
+    purpose: string; passengers: number; odometerStart: number; fuelBefore: number;
+    conditionBefore: VehicleCondition; checksBefore: Record<string, boolean>; notesBefore?: string;
+  }) {
+    return request<VehicleTrip>("/api/vehicle-trips/start", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+
+  completeVehicleTrip(id: string, input: {
+    odometerEnd: number; fuelAfter: number; conditionAfter: VehicleCondition;
+    checksAfter: Record<string, boolean>; notesAfter?: string;
+  }) {
+    return request<VehicleTrip>(`/api/vehicle-trips/${id}/complete`, {
+      method: "PUT",
+      body: JSON.stringify(input)
     });
   }
 };

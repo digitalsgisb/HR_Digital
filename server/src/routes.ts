@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   completionStatuses,
   employeeStatuses,
+  vehicleConditions,
   type DashboardSummary
 } from "@hr-training/shared";
 import { prisma } from "./prisma.js";
@@ -11,6 +12,12 @@ import { parseEmployeeImport } from "./importer.js";
 import { summarizeCourseHours, summarizeDepartmentHours, type CompletionRecordForSummary } from "./dashboard-summary.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+class HttpError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+  }
+}
 
 const asyncHandler =
   (handler: (req: Request, res: Response, next: NextFunction) => Promise<void>) =>
@@ -83,6 +90,72 @@ const bulkCompletionSchema = z.object({
   hours: z.coerce.number().min(0).default(0),
   completedAt: z.string().datetime().optional().nullable()
 });
+
+const beforeChecksSchema = z.object({
+  exterior: z.literal(true),
+  tyres: z.literal(true),
+  lights: z.literal(true),
+  documents: z.literal(true)
+});
+
+const afterChecksSchema = z.object({
+  interiorClean: z.literal(true),
+  fuelCardReturned: z.literal(true),
+  belongingsRemoved: z.literal(true),
+  damageReported: z.boolean()
+});
+
+const startVehicleTripSchema = z.object({
+  vehicleId: z.string().trim().min(1),
+  driverEmployeeId: z.string().trim().min(1),
+  driverName: z.string().trim().min(2),
+  destination: z.string().trim().min(2),
+  purpose: z.string().trim().min(2),
+  passengers: z.coerce.number().int().min(1).max(20).default(1),
+  odometerStart: z.coerce.number().int().min(0),
+  fuelBefore: z.coerce.number().int().min(0).max(100),
+  conditionBefore: z.enum(vehicleConditions),
+  checksBefore: beforeChecksSchema,
+  notesBefore: nullableText
+});
+
+const completeVehicleTripSchema = z.object({
+  odometerEnd: z.coerce.number().int().min(0),
+  fuelAfter: z.coerce.number().int().min(0).max(100),
+  conditionAfter: z.enum(vehicleConditions),
+  checksAfter: afterChecksSchema,
+  notesAfter: nullableText
+});
+
+const defaultVehicles = [
+  { id: "VH-01", plate: "VBU 2841", model: "Toyota Hilux 2.4", category: "Operations", mileage: 48260, serviceAt: 50000, status: "IN_USE" as const, assigned: "Shared pool" },
+  { id: "VH-02", plate: "BKV 9132", model: "Honda City 1.5", category: "Management", mileage: 31780, serviceAt: 35000, status: "AVAILABLE" as const, assigned: "Management" },
+  { id: "VH-03", plate: "VFY 6620", model: "Perodua Alza", category: "Staff transport", mileage: 69440, serviceAt: 70000, status: "SERVICE_DUE" as const, assigned: "Shared pool" },
+  { id: "VH-04", plate: "BPP 4418", model: "Toyota Hiace", category: "Logistics", mileage: 22510, serviceAt: 25000, status: "AVAILABLE" as const, assigned: "Warehouse" }
+];
+
+const ensureFleetData = async () => {
+  if (await prisma.vehicle.count()) return;
+  await prisma.vehicle.createMany({ data: defaultVehicles, skipDuplicates: true });
+  await prisma.vehicleTrip.create({
+    data: {
+      id: "TRIP-408",
+      vehicleId: "VH-01",
+      driverEmployeeId: "EMP001",
+      driverName: "Muhammad Muqri",
+      destination: "Port Klang",
+      purpose: "Vendor collection",
+      passengers: 1,
+      startedAt: new Date("2026-09-21T08:30:00+08:00"),
+      odometerStart: 48174,
+      fuelBefore: 78,
+      conditionBefore: "GOOD",
+      checksBefore: { exterior: true, tyres: true, lights: true, documents: true },
+      notesBefore: "No visible defects.",
+      status: "IN_PROGRESS"
+    }
+  });
+};
 
 const upsertDepartment = (name: string) =>
   prisma.department.upsert({
@@ -501,6 +574,97 @@ export const createRouter = () => {
       );
 
       res.json({ updated: input.employeeIds.length });
+    })
+  );
+
+  router.get(
+    "/vehicles",
+    asyncHandler(async (_req, res) => {
+      await ensureFleetData();
+      const vehicleRows = await prisma.vehicle.findMany({
+        include: {
+          trips: {
+            where: { status: "IN_PROGRESS" },
+            orderBy: { startedAt: "desc" },
+            take: 1
+          }
+        },
+        orderBy: { plate: "asc" }
+      });
+      res.json(vehicleRows.map(({ trips, ...vehicle }) => ({ ...vehicle, activeTrip: trips[0] ?? null })));
+    })
+  );
+
+  router.get(
+    "/vehicle-trips",
+    asyncHandler(async (req, res) => {
+      await ensureFleetData();
+      const vehicleId = String(req.query.vehicleId ?? "").trim();
+      const status = String(req.query.status ?? "").trim();
+      const trips = await prisma.vehicleTrip.findMany({
+        where: {
+          ...(vehicleId ? { vehicleId } : {}),
+          ...(status === "IN_PROGRESS" || status === "COMPLETED" ? { status } : {})
+        },
+        include: { vehicle: true },
+        orderBy: { startedAt: "desc" },
+        take: 100
+      });
+      res.json(trips);
+    })
+  );
+
+  router.post(
+    "/vehicle-trips/start",
+    asyncHandler(async (req, res) => {
+      const input = startVehicleTripSchema.parse(req.body);
+      await ensureFleetData();
+      const trip = await prisma.$transaction(async (tx) => {
+        const vehicle = await tx.vehicle.findUniqueOrThrow({ where: { id: input.vehicleId } });
+        const activeTrip = await tx.vehicleTrip.findFirst({ where: { vehicleId: input.vehicleId, status: "IN_PROGRESS" } });
+        if (activeTrip || vehicle.status === "IN_USE") throw new HttpError(409, "This vehicle already has an active trip.");
+        if (vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE") throw new HttpError(409, "This vehicle is not cleared for use.");
+        if (input.odometerStart < vehicle.mileage) throw new HttpError(400, `Starting odometer cannot be below ${vehicle.mileage} km.`);
+
+        const created = await tx.vehicleTrip.create({ data: input });
+        await tx.vehicle.update({
+          where: { id: vehicle.id },
+          data: { status: "IN_USE", mileage: input.odometerStart }
+        });
+        return tx.vehicleTrip.findUniqueOrThrow({ where: { id: created.id }, include: { vehicle: true } });
+      });
+      res.status(201).json(trip);
+    })
+  );
+
+  router.put(
+    "/vehicle-trips/:id/complete",
+    asyncHandler(async (req, res) => {
+      const input = completeVehicleTripSchema.parse(req.body);
+      const id = routeParam(req.params.id);
+      const completed = await prisma.$transaction(async (tx) => {
+        const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, include: { vehicle: true } });
+        if (trip.status !== "IN_PROGRESS") throw new HttpError(409, "This trip has already been completed.");
+        if (input.odometerEnd < trip.odometerStart) throw new HttpError(400, `Ending odometer cannot be below ${trip.odometerStart} km.`);
+
+        const nextStatus = input.conditionAfter === "UNSAFE"
+          ? "OUT_OF_SERVICE"
+          : input.conditionAfter === "ATTENTION_REQUIRED" || input.checksAfter.damageReported || input.odometerEnd >= trip.vehicle.serviceAt
+            ? "SERVICE_DUE"
+            : "AVAILABLE";
+
+        const updated = await tx.vehicleTrip.update({
+          where: { id },
+          data: { ...input, status: "COMPLETED", endedAt: new Date() },
+          include: { vehicle: true }
+        });
+        await tx.vehicle.update({
+          where: { id: trip.vehicleId },
+          data: { mileage: input.odometerEnd, status: nextStatus }
+        });
+        return updated;
+      });
+      res.json(completed);
     })
   );
 
