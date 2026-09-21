@@ -18,4 +18,6 @@ ENV SERVER_PORT=4000
 
 EXPOSE 4000
 
+USER node
+
 CMD ["sh", "-c", "npx prisma db push --schema server/prisma/schema.prisma && npm --workspace server run start"]

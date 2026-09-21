@@ -26,7 +26,7 @@ Human Resource Digital is the internal HR operations platform for Sugihara Grand
 
 Requirements: Node.js 22+, npm, and PostgreSQL 16 or newer.
 
-1. Copy `.env.example` to `server/.env`.
+1. Copy `server/.env.example` to `server/.env`.
 2. Update `DATABASE_URL` for the local PostgreSQL instance.
 3. Install and prepare the database:
 
@@ -52,21 +52,56 @@ PowerShell blocks `npm.ps1` on the original development PC, so the examples use 
 
 Recommended baseline: Ubuntu Server 24.04 LTS, Docker Engine 27+, Docker Compose v2, at least 4 CPU cores, 8 GB RAM, and a persistent SSD volume.
 
-### First deployment
+### First deployment in `/srv/apps/hr`
+
+The production baseline assumes:
+
+- Public address: `https://hr.sugidigital.org`
+- Tunnel service/origin: `http://localhost:4000`
+- Checkout directory: `/srv/apps/hr`
+- The tunnel has an authenticated access policy for authorised HR users
+
+Port `4000` is bound to `127.0.0.1` by default. This deliberately makes the application reachable from the tunnel process on the AI PC without exposing the container port directly to other network devices.
 
 ```bash
-git clone https://github.com/digitalsgisb/HR_Digital.git
-cd HR_Digital
+sudo mkdir -p /srv/apps/hr
+sudo chown -R "$USER":"$USER" /srv/apps/hr
+cd /srv/apps/hr
+git clone https://github.com/digitalsgisb/HR_Digital.git .
 cp .env.example .env
 nano .env
+chmod 600 .env
 docker compose up -d --build
 docker compose ps
 curl http://localhost:4000/api/health
 ```
 
-At minimum, replace `POSTGRES_PASSWORD` in `.env` with a strong unique password. Set `CLIENT_ORIGIN` to the final HTTPS origin. Add SMTP values only when real training-email delivery is ready.
+The `git clone ... .` form requires `/srv/apps/hr` to be empty. If the folder already contains files, inspect and move them before cloning rather than deleting them blindly.
 
-Open `http://<AI-PC-IP>:4000`. For company-network use, place a reverse proxy such as Nginx or Caddy in front of port 4000 and terminate HTTPS there.
+At minimum, replace `POSTGRES_PASSWORD` in `.env` with a long, unique password. Keep `CLIENT_ORIGIN` equal to the final public HTTPS address. Add SMTP values only when real training-email delivery is ready.
+
+### Tunnel route
+
+Create one published-application route using these values:
+
+| Setting | Value |
+| --- | --- |
+| Destination | `hr.sugidigital.org` |
+| Type | Published application |
+| Service | `http://localhost:4000` |
+
+Keep the tunnel and Docker Compose on the same AI PC. The service uses trusted proxy headers in production so the application can correctly recognise the original HTTPS request.
+
+Before making the route available to employees, require authentication in the tunnel access policy and restrict it to the appropriate HR/admin group. The current application interface does not yet provide a production identity provider, so it must not be published as an anonymous public application.
+
+After the route is active, verify both the private origin and public tunnel:
+
+```bash
+curl --fail http://localhost:4000/api/health
+curl --head https://hr.sugidigital.org/api/health
+```
+
+Open `https://hr.sugidigital.org`. Do not use the AI PC's LAN IP for normal access; the application port is intentionally loopback-only.
 
 ### PWA installation
 
@@ -120,12 +155,14 @@ docker compose exec -T database pg_dump -U hr_admin hr_training_tracker > "backu
 Pull, validate, rebuild, and restart:
 
 ```bash
+cd /srv/apps/hr
 git pull --ff-only origin main
 docker compose build --pull app
 docker compose run --rm app npm test
 docker compose up -d
 docker compose ps
 curl http://localhost:4000/api/health
+curl --head https://hr.sugidigital.org/api/health
 ```
 
 The application container applies the checked-in Prisma schema with `prisma db push` before starting. For later high-risk database changes, replace this with reviewed Prisma migrations.
