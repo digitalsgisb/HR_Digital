@@ -59,6 +59,41 @@ const defaultAdminSettings: AdminSettings = {
   uploadsEnabled: true
 };
 
+type BrowserNotificationPermission = NotificationPermission | "unsupported";
+
+const notificationFeed = [
+  { title: "Training starts today", detail: "GMP Refresher 2026 begins at 9:00 AM.", time: "Now" },
+  { title: "Effectiveness forms due", detail: "12 post-training reviews have reached their 3-month checkpoint.", time: "2h" },
+  { title: "Vehicle service approaching", detail: "VFY 6620 is due for service in 560 km.", time: "Today" }
+];
+
+function getNotificationPermission(): BrowserNotificationPermission {
+  return "Notification" in window ? window.Notification.permission : "unsupported";
+}
+
+async function showSystemNotification(title: string, body: string) {
+  try {
+    const options: NotificationOptions = {
+      body,
+      icon: "/sgi-logo.png",
+      badge: "/favicon.svg",
+      tag: "hr-digital-notification",
+      data: { url: "/" }
+    };
+
+    const registration = "serviceWorker" in navigator
+      ? await navigator.serviceWorker.getRegistration()
+      : undefined;
+
+    if (registration) await registration.showNotification(title, options);
+    else new window.Notification(title, options);
+    return true;
+  } catch (error) {
+    console.error("Unable to display system notification", error);
+    return false;
+  }
+}
+
 function loadAdminSettings(): AdminSettings {
   try {
     const saved = window.localStorage.getItem("hr-digital-admin-settings");
@@ -97,7 +132,7 @@ function App() {
         onTrainingToggle={() => setTrainingOpen((open) => !open)} onNavigate={navigate} onClose={() => setMobileNavOpen(false)} />
       <main className="workspace">
         <Topbar meta={viewMeta[activeView]} onMenu={() => setMobileNavOpen(true)}
-          onSettings={() => navigate("administration")} />
+          onSettings={() => navigate("administration")} showNotice={setNotice} />
         <div className="page-stage" key={activeView}>
           {activeView === "overview" && <Overview dashboard={dashboard} sessions={calendarSessions} navigate={navigate} />}
           {activeView === "employees" && <EmployeesDatabase showNotice={setNotice} />}
@@ -161,8 +196,37 @@ function NavButton({ icon: Icon, label, active, onClick }: { icon: LucideIcon; l
   return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}><span className="nav-icon"><Icon size={18} /></span><span>{label}</span></button>;
 }
 
-function Topbar({ meta, onMenu, onSettings }: { meta: { title: string; eyebrow: string }; onMenu: () => void; onSettings: () => void }) {
-  return <header className="topbar"><div className="topbar-title"><button className="mobile-menu" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div><p>{meta.eyebrow}</p><h1>{meta.title}</h1></div></div><div className="topbar-actions"><div className="location-chip"><MapPin size={15} /><span>Port Klang</span></div><span className="today-label">Mon, 21 Sep 2026</span><button className="topbar-icon" aria-label="Notifications"><Bell size={18} /><i /></button><button className="topbar-icon" onClick={onSettings} aria-label="Settings"><Settings2 size={18} /></button><div className="user-chip"><span>SA</span><div><strong>System Admin</strong><small>HR operations</small></div></div></div></header>;
+function Topbar({ meta, onMenu, onSettings, showNotice }: {
+  meta: { title: string; eyebrow: string }; onMenu: () => void; onSettings: () => void;
+  showNotice: (message: string) => void;
+}) {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [permission, setPermission] = useState<BrowserNotificationPermission>(getNotificationPermission);
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) {
+      setPermission("unsupported");
+      showNotice("This browser does not support system notifications.");
+      return;
+    }
+
+    const result = await window.Notification.requestPermission();
+    setPermission(result);
+    if (result === "granted") {
+      const delivered = await showSystemNotification("HR Digital notifications enabled", "Training, employee and vehicle alerts can now appear on this device.");
+      showNotice(delivered ? "Notifications are enabled for this browser and installed PWA." : "Permission was granted, but this browser could not display the test alert.");
+    } else if (result === "denied") {
+      showNotice("Notifications are blocked. Allow them from the browser site settings to enable alerts.");
+    }
+  };
+
+  const sendTestNotification = async () => {
+    if (permission !== "granted") return enableNotifications();
+    const delivered = await showSystemNotification("Human Resource Digital", "Notifications are working on this device.");
+    showNotice(delivered ? "Test notification sent successfully." : "The browser could not display the test notification.");
+  };
+
+  return <header className="topbar"><div className="topbar-title"><button className="mobile-menu" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div><p>{meta.eyebrow}</p><h1>{meta.title}</h1></div></div><div className="topbar-actions"><span className="today-label">Mon, 21 Sep 2026</span><div className="topbar-notifications"><button className={`topbar-icon ${notificationsOpen ? "active" : ""}`} onClick={() => { setPermission(getNotificationPermission()); setNotificationsOpen((open) => !open); }} aria-label="Notifications" aria-expanded={notificationsOpen}><Bell size={18} /><i /></button>{notificationsOpen && <section className="notification-panel" role="dialog" aria-label="Notification centre"><header><div><strong>Notifications</strong><span>{permission === "granted" ? "Device alerts active" : "Device alerts need permission"}</span></div><button onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={16} /></button></header><div className={`notification-permission ${permission}`}><Bell size={17} /><div><strong>{permission === "granted" ? "PC & PWA notifications are on" : permission === "denied" ? "Notifications are blocked" : permission === "unsupported" ? "Notifications unavailable" : "Enable alerts on this device"}</strong><span>{permission === "granted" ? "Alerts can appear even when HR Digital is installed as an app." : permission === "denied" ? "Open this site's browser settings and change Notifications to Allow." : permission === "unsupported" ? "Use a current version of Chrome, Edge or another compatible browser." : "Allow training, employee and vehicle reminders to appear on your PC."}</span></div>{permission === "granted" ? <button onClick={sendTestNotification}>Test</button> : permission === "default" ? <button onClick={enableNotifications}>Enable</button> : null}</div><div className="notification-feed">{notificationFeed.map((item, index) => <article key={item.title}><span className={index === 0 ? "unread" : ""}><Bell size={15} /></span><div><strong>{item.title}</strong><p>{item.detail}</p></div><time>{item.time}</time></article>)}</div></section>}</div><button className="topbar-icon" onClick={onSettings} aria-label="Settings"><Settings2 size={18} /></button><div className="user-chip"><span>SA</span><div><strong>System Admin</strong><small>HR operations</small></div></div></div></header>;
 }
 
 function Administration({ showNotice }: { showNotice: (message: string) => void }) {

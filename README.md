@@ -74,6 +74,8 @@ The production build includes a web app manifest, SGI browser/install icon, stan
 
 The cached application shell helps the interface reopen after a temporary connection interruption. Live employee, training, email, and vehicle data still requires the AI PC API and database to be reachable.
 
+The notification bell can request device permission and send a test notification in both a desktop browser and the installed PWA. Notifications require HTTPS (or `localhost`) and must be allowed by the user in the browser or operating-system settings. The service worker can display Push API payloads and focuses the existing HR Digital window when an alert is opened; continuous server-originated push delivery requires a production push subscription and VAPID-enabled notification service.
+
 ### Long-running service behavior
 
 Both the application and PostgreSQL use Docker's `restart: unless-stopped` policy. They restart after a process failure or AI PC reboot and continue running indefinitely until an administrator explicitly stops them:
