@@ -80,6 +80,14 @@ The `git clone ... .` form requires `/srv/apps/hr` to be empty. If the folder al
 
 At minimum, replace `POSTGRES_PASSWORD` in `.env` with a long, unique password. Keep `CLIENT_ORIGIN` equal to the final public HTTPS address. Add SMTP values only when real training-email delivery is ready.
 
+Validate Compose without printing resolved secrets:
+
+```bash
+docker compose config --quiet
+```
+
+Avoid pasting the full output of `docker compose config` into tickets or chats because it expands passwords and other environment values.
+
 ### Tunnel route
 
 Create one published-application route using these values:

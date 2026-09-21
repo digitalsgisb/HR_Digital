@@ -11,7 +11,10 @@ RUN npm ci
 
 COPY . .
 
-RUN npm run prisma:generate && npm run build
+RUN chmod +x /app/docker-entrypoint.sh
+
+RUN DATABASE_URL="postgresql://hr_admin:build-only@127.0.0.1:5432/hr_training_tracker?schema=public" \
+    npm run prisma:generate && npm run build
 
 ENV NODE_ENV=production
 ENV SERVER_PORT=4000
@@ -20,4 +23,4 @@ EXPOSE 4000
 
 USER node
 
-CMD ["sh", "-c", "npx prisma db push --schema server/prisma/schema.prisma && npm --workspace server run start"]
+CMD ["/app/docker-entrypoint.sh"]

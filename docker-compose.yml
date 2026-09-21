@@ -33,7 +33,7 @@ services:
       SERVER_PORT: 4000
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-https://hr.sugidigital.org}
       TRUST_PROXY: ${TRUST_PROXY:-true}
-      DATABASE_URL: postgresql://hr_admin:${POSTGRES_PASSWORD:?Set_POSTGRES_PASSWORD_in_.env}@database:5432/hr_training_tracker?schema=public
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set_POSTGRES_PASSWORD_in_.env}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
