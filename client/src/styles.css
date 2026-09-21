@@ -72,7 +72,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .nav-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; }
 .nav-item:hover, .nav-item.active, .nav-item.active-parent { color: #fff; background: rgba(255,255,255,.075); }
 .nav-item.active .nav-icon, .nav-item.active-parent .nav-icon { color: #101112; background: #fff; box-shadow: 0 8px 22px rgba(255,255,255,.16); }
-.nav-item.active::after { content: ""; position: absolute; z-index: 0; inset: 0 auto 0 -42%; width: 30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent); transform: skewX(-18deg); animation: activeSweep 2.4s ease-in-out infinite; }
 .nav-parent svg:last-child { transition: transform .22s ease; }
 .nav-parent svg.rotate { transform: rotate(180deg); }
 .nav-children { display: grid; max-height: 0; overflow: hidden; opacity: 0; transform: translateY(-6px); transition: max-height .38s cubic-bezier(.16,1,.3,1), opacity .25s ease, transform .3s ease; }
@@ -285,7 +284,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   68% { background-position: 100% 0%, 100% 82%; }
 }
 @keyframes sidebarSweep { 0%,18% { transform: translateX(0) skewX(-14deg); opacity: 0; } 28% { opacity: 1; } 62% { transform: translateX(350%) skewX(-14deg); opacity: .9; } 72%,100% { transform: translateX(350%) skewX(-14deg); opacity: 0; } }
-@keyframes activeSweep { 0%,18% { left: -42%; opacity: 0; } 35% { opacity: 1; } 68% { left: 128%; opacity: .85; } 78%,100% { left: 128%; opacity: 0; } }
 @keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(78,210,164,.25); } 50% { box-shadow: 0 0 0 6px rgba(78,210,164,0); } }
