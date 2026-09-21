@@ -37,7 +37,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .sidebar {
   position: fixed; inset: 0 auto 0 0; z-index: 20; display: flex; flex-direction: column;
   width: 276px; overflow: hidden; padding: 18px 18px 14px; color: #fff;
-  background: radial-gradient(circle at -10% 112%, rgba(255,255,255,.09), transparent 38%), linear-gradient(160deg, #111214 0%, #090a0b 100%);
+  background:
+    radial-gradient(circle at 12% 110%, rgba(255,255,255,.16), transparent 42%),
+    linear-gradient(135deg, #050606 0%, #1d2024 27%, #090a0b 52%, #252a30 74%, #070809 100%);
+  background-size: 170% 170%, 320% 320%;
+  background-position: 0% 100%, 0% 50%;
+  animation: sidebarGradientShift 8s ease-in-out infinite;
   border-right: 1px solid rgba(255,255,255,.07);
 }
 .sidebar::before {
@@ -274,6 +279,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 @keyframes activeBreath { 0%,100% { box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 0 0 rgba(255,255,255,0); } 50% { box-shadow: 0 0 0 1px rgba(255,255,255,.45), 0 0 28px rgba(255,255,255,.13); } }
 @keyframes statusBeacon { 0%,100% { box-shadow: 0 0 0 4px rgba(66,200,155,.09); transform: scale(1); } 50% { box-shadow: 0 0 0 9px rgba(66,200,155,0); transform: scale(1.16); } }
 @keyframes sidebarAura { from { transform: translate3d(-6%, 0, 0) scale(.96); opacity: .7; } to { transform: translate3d(7%, -9%, 0) scale(1.08); opacity: 1; } }
+@keyframes sidebarGradientShift {
+  0%,100% { background-position: 0% 100%, 0% 50%; }
+  35% { background-position: 70% 35%, 52% 0%; }
+  68% { background-position: 100% 0%, 100% 82%; }
+}
 @keyframes sidebarSweep { 0%,18% { transform: translateX(0) skewX(-14deg); opacity: 0; } 28% { opacity: 1; } 62% { transform: translateX(350%) skewX(-14deg); opacity: .9; } 72%,100% { transform: translateX(350%) skewX(-14deg); opacity: 0; } }
 @keyframes activeSweep { 0%,18% { left: -42%; opacity: 0; } 35% { opacity: 1; } 68% { left: 128%; opacity: .85; } 78%,100% { left: 128%; opacity: 0; } }
 @keyframes pageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
