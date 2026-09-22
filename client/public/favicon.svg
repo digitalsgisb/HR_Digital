@@ -1,3 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sugihara Grand Industries">
-  <image href="sgi-logo.png" x="10" y="10" width="1850" height="492" preserveAspectRatio="none" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sugihara Grand Industries">
+  <defs>
+    <linearGradient id="background" x1="12" y1="8" x2="52" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#b6232b" />
+      <stop offset="1" stop-color="#790d13" />
+    </linearGradient>
+  </defs>
+
+  <circle cx="32" cy="32" r="30" fill="#ffffff" />
+  <circle cx="32" cy="32" r="27" fill="url(#background)" />
+  <circle cx="32" cy="32" r="24" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.9" />
+
+  <g fill="#ffffff">
+    <path d="M21 14 12 27h5l-6 9h7l-7 11h20l-7-11h7l-6-9h5Z" />
+    <path d="M43 14 34 27h5l-6 9h7l-7 11h20l-7-11h7l-6-9h5Z" />
+  </g>
 </svg>
