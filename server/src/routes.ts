@@ -111,6 +111,12 @@ const odometerPhotoSchema = z.string()
   .max(6_000_000, "Odometer photo is too large.")
   .refine((value) => /^data:image\/(jpeg|png|webp);base64,/i.test(value), "A valid odometer photo is required.");
 
+const optionalVehiclePhotoSchema = z.string()
+  .max(6_000_000, "Vehicle photo is too large.")
+  .refine((value) => /^data:image\/(jpeg|png|webp);base64,/i.test(value), "Upload a valid vehicle photo.")
+  .optional()
+  .nullable();
+
 const startVehicleTripSchema = z.object({
   vehicleId: z.string().trim().min(1),
   driverEmployeeId: z.string().trim().min(1),
@@ -142,7 +148,8 @@ const vehicleInputSchema = z.object({
   mileage: z.coerce.number().int().min(0),
   serviceAt: z.coerce.number().int().min(0),
   status: z.enum(vehicleStatuses).refine((status) => status !== "IN_USE", "A vehicle can only be marked in use by starting a trip."),
-  assigned: z.string().trim().min(2).max(100)
+  assigned: z.string().trim().min(2).max(100),
+  photo: optionalVehiclePhotoSchema
 });
 
 const odometerRecognitionSchema = z.object({
@@ -605,6 +612,7 @@ export const createRouter = () => {
     asyncHandler(async (_req, res) => {
       await ensureFleetData();
       const vehicleRows = await prisma.vehicle.findMany({
+        where: { archivedAt: null },
         include: {
           trips: {
             where: { status: "IN_PROGRESS" },
@@ -693,6 +701,24 @@ export const createRouter = () => {
         data: { ...input, status: activeTrip ? "IN_USE" : input.status }
       });
       res.json({ ...vehicle, activeTrip });
+    })
+  );
+
+  router.delete(
+    "/vehicles/:id",
+    asyncHandler(async (req, res) => {
+      const id = routeParam(req.params.id);
+      const vehicle = await prisma.vehicle.findUnique({
+        where: { id },
+        include: { trips: { where: { status: "IN_PROGRESS" }, take: 1 } }
+      });
+      if (!vehicle) throw new HttpError(404, "Vehicle not found.");
+      if (vehicle.trips.length) throw new HttpError(409, "Return the active trip before removing this vehicle.");
+      await prisma.vehicle.update({
+        where: { id },
+        data: { archivedAt: new Date(), status: "OUT_OF_SERVICE" }
+      });
+      res.json({ removed: true });
     })
   );
 

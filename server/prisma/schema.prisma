@@ -10,7 +10,9 @@ datasource db {
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
+  ON_LEAVE
   RESIGNED
+  TERMINATED
 }
 
 enum TrainingCourseStatus {
@@ -154,11 +156,14 @@ model Vehicle {
   serviceAt Int
   status    VehicleStatus @default(AVAILABLE)
   assigned  String
+  photo     String?
+  archivedAt DateTime?
   trips     VehicleTrip[]
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
   @@index([status])
+  @@index([archivedAt])
 }
 
 model VehicleTrip {

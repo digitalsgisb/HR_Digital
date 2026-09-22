@@ -11,7 +11,9 @@ Human Resource Digital is the internal HR operations platform for Sugihara Grand
 - Employee training requirement matrix
 - Email automation journey with branded responsive templates
 - Searchable employee training-notes library
-- Fleet registry with vehicle creation/editing, per-vehicle QR access, before/after inspections, odometer-photo evidence, local OCR, mileage, utilisation, servicing, and trip tracking
+- Employee profile management with create/edit controls, employment statuses, and audit-safe removal that retains training history
+- Separate vehicle registry with car photos, create/edit controls, and audit-safe removal that retains trip history
+- Company-car usage tracking with per-vehicle QR access, before/after inspections, odometer-photo evidence, local OCR, mileage, utilisation, servicing, and trip tracking
 - System administration for platform preferences, feature controls, access, sessions, and server status
 - Installable Progressive Web App (PWA) shell with offline access to previously loaded interface assets
 

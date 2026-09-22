@@ -1,4 +1,4 @@
-export const employeeStatuses = ["ACTIVE", "INACTIVE", "RESIGNED"] as const;
+export const employeeStatuses = ["ACTIVE", "INACTIVE", "ON_LEAVE", "RESIGNED", "TERMINATED"] as const;
 export type EmployeeStatus = (typeof employeeStatuses)[number];
 
 export const courseStatuses = ["ACTIVE", "ARCHIVED"] as const;
@@ -66,6 +66,8 @@ export type Vehicle = {
   serviceAt: number;
   status: VehicleStatus;
   assigned: string;
+  photo?: string | null;
+  archivedAt?: string | null;
   activeTrip?: VehicleTrip | null;
 };
 

@@ -4,7 +4,7 @@ import {
   Activity, ArrowRight, Bell, BookOpenCheck, CalendarCheck2, CalendarDays, CarFront, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardCheck, Clock3, Download, FileSpreadsheet,
   FileText, Fuel, Gauge, GraduationCap, LayoutDashboard, Library, LockKeyhole, MailCheck, MapPin, Menu,
-  MessageSquareText, Pencil, Plus, QrCode, Route, Search, Send, ServerCog, Settings2, ShieldCheck, Upload,
+  MessageSquareText, Pencil, Plus, QrCode, Route, Search, Send, ServerCog, Settings2, ShieldCheck, Trash2, Upload,
   UserCog, UserRound, UsersRound, Wrench, X
 } from "lucide-react";
 import QRCode from "qrcode";
@@ -13,8 +13,10 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import type {
   DashboardSummary, EmployeeImportPreview, Vehicle, VehicleCondition, VehicleTrip
 } from "@hr-training/shared";
-import { api, type VehicleInput } from "./api";
+import { api, type EmployeeInput, type VehicleInput } from "./api";
 import { OdometerPhotoField } from "./OdometerPhotoField";
+import { VehiclePhotoField } from "./VehiclePhotoField";
+import type { Employee } from "./types";
 import {
   departmentReadiness, emailAutomations, employeeTrainingRows, notesLibrary,
   trainingSessions as initialTrainingSessions, vehicleTrips as fallbackVehicleTrips,
@@ -22,7 +24,7 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "administration";
+  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-registry" | "administration";
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   overview: { title: "Dashboard", eyebrow: "Human Resource Digital" },
@@ -34,6 +36,7 @@ const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   "email-automation": { title: "Email automation", eyebrow: "Learning & development" },
   "notes-library": { title: "Training notes library", eyebrow: "Learning & development" },
   fleet: { title: "Company car usage", eyebrow: "Mobility" },
+  "fleet-registry": { title: "Vehicle registry", eyebrow: "Mobility" },
   administration: { title: "Administration", eyebrow: "System controls" }
 };
 
@@ -44,6 +47,11 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "training-records", label: "Training records", icon: GraduationCap },
   { id: "email-automation", label: "Email automation", icon: MailCheck },
   { id: "notes-library", label: "Notes library", icon: Library }
+];
+
+const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
+  { id: "fleet", label: "Usage tracker", icon: Route },
+  { id: "fleet-registry", label: "Vehicle registry", icon: CarFront }
 ];
 
 const formatLongDate = (value: string) =>
@@ -113,6 +121,7 @@ function App() {
   const initialVehicleId = new URLSearchParams(window.location.search).get("vehicle") ?? undefined;
   const [activeView, setActiveView] = useState<View>(initialVehicleId ? "fleet" : "overview");
   const [trainingOpen, setTrainingOpen] = useState(false);
+  const [fleetOpen, setFleetOpen] = useState(Boolean(initialVehicleId));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [calendarSessions, setCalendarSessions] = useState<CalendarSession[]>(initialTrainingSessions);
@@ -130,13 +139,14 @@ function App() {
     setActiveView(view);
     setMobileNavOpen(false);
     if (view.startsWith("training") || view === "email-automation" || view === "notes-library") setTrainingOpen(true);
+    if (view === "fleet" || view === "fleet-registry") setFleetOpen(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
     <div className="app-shell">
-      <Sidebar activeView={activeView} trainingOpen={trainingOpen} mobileOpen={mobileNavOpen}
-        onTrainingToggle={() => setTrainingOpen((open) => !open)} onNavigate={navigate} onClose={() => setMobileNavOpen(false)} />
+      <Sidebar activeView={activeView} trainingOpen={trainingOpen} fleetOpen={fleetOpen} mobileOpen={mobileNavOpen}
+        onTrainingToggle={() => setTrainingOpen((open) => !open)} onFleetToggle={() => setFleetOpen((open) => !open)} onNavigate={navigate} onClose={() => setMobileNavOpen(false)} />
       <main className="workspace">
         <Topbar meta={viewMeta[activeView]} onMenu={() => setMobileNavOpen(true)}
           onSettings={() => navigate("administration")} showNotice={setNotice} />
@@ -152,7 +162,8 @@ function App() {
           {activeView === "training-records" && <TrainingRecords />}
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}
           {activeView === "notes-library" && <NotesLibrary showNotice={setNotice} />}
-          {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} />}
+          {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} />}
+          {activeView === "fleet-registry" && <VehicleRegistryPage showNotice={setNotice} />}
           {activeView === "administration" && <Administration showNotice={setNotice} />}
         </div>
       </main>
@@ -161,11 +172,12 @@ function App() {
   );
 }
 
-function Sidebar({ activeView, trainingOpen, mobileOpen, onTrainingToggle, onNavigate, onClose }: {
-  activeView: View; trainingOpen: boolean; mobileOpen: boolean; onTrainingToggle: () => void;
+function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingToggle, onFleetToggle, onNavigate, onClose }: {
+  activeView: View; trainingOpen: boolean; fleetOpen: boolean; mobileOpen: boolean; onTrainingToggle: () => void; onFleetToggle: () => void;
   onNavigate: (view: View) => void; onClose: () => void;
 }) {
   const inTraining = trainingNav.some((item) => item.id === activeView);
+  const inFleet = fleetNav.some((item) => item.id === activeView);
   return <>
     {mobileOpen && <button className="nav-backdrop" onClick={onClose} aria-label="Close navigation" />}
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
@@ -180,12 +192,18 @@ function Sidebar({ activeView, trainingOpen, mobileOpen, onTrainingToggle, onNav
         <p className="nav-section-label">People</p>
         <NavButton icon={UsersRound} label="Employee database" active={activeView === "employees"} onClick={() => onNavigate("employees")} />
         <p className="nav-section-label">Services</p>
-        <NavButton icon={CarFront} label="Company car usage" active={activeView === "fleet"} onClick={() => onNavigate("fleet")} />
         <button className={`nav-item nav-parent ${inTraining ? "active-parent" : ""}`} onClick={onTrainingToggle}>
           <span className="nav-icon"><BookOpenCheck size={18} /></span><span>Training</span><ChevronDown className={trainingOpen ? "rotate" : ""} size={16} />
         </button>
         <div className={`nav-children ${trainingOpen ? "open" : ""}`}>
           {trainingNav.map((item) => <button key={item.id} className={`nav-child ${activeView === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
+            <item.icon size={15} /><span>{item.label}</span></button>)}
+        </div>
+        <button className={`nav-item nav-parent ${inFleet ? "active-parent" : ""}`} onClick={onFleetToggle}>
+          <span className="nav-icon"><CarFront size={18} /></span><span>Company car</span><ChevronDown className={fleetOpen ? "rotate" : ""} size={16} />
+        </button>
+        <div className={`nav-children fleet-children ${fleetOpen ? "open" : ""}`}>
+          {fleetNav.map((item) => <button key={item.id} className={`nav-child ${activeView === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
             <item.icon size={15} /><span>{item.label}</span></button>)}
         </div>
         <p className="nav-section-label">Administration</p>
@@ -328,12 +346,45 @@ function TrainingPlanner({ onCreate }: { onCreate: (session: CalendarSession) =>
   return <form className="planner-layout" onSubmit={submit}><div className="planner-main"><section className="card form-card"><SectionHeader kicker="Step 1 of 3" title="Training details" /><div className="form-grid"><label className="field span-2"><span>Training title</span><input value={title} onChange={(e) => setTitle(e.target.value)} required /></label><label className="field"><span>Category</span><select value={category} onChange={(e) => setCategory(e.target.value as CalendarSession["category"])}><option>Compliance</option><option>Safety</option><option>System</option><option>Development</option></select></label><label className="field"><span>Delivery method</span><select><option>Instructor-led</option><option>Online</option><option>On-the-job</option><option>External provider</option></select></label><label className="field"><span>Date</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></label><label className="field"><span>Start time</span><input type="time" value={time} onChange={(e) => setTime(e.target.value)} required /></label><label className="field"><span>End time</span><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required /></label><label className="field"><span>Trainer</span><input value={trainer} onChange={(e) => setTrainer(e.target.value)} required /></label><label className="field span-2"><span>Venue / meeting link</span><input value={venue} onChange={(e) => setVenue(e.target.value)} required /></label></div></section><section className="card form-card"><SectionHeader kicker="Step 2 of 3" title="Select participants" /><div className="participant-tools"><label className="compact-search"><Search size={16} /><input placeholder="Search employee or department" /></label><select aria-label="Department filter"><option>All departments</option><option>Production</option><option>Quality Management</option><option>HR & Admin</option></select></div><div className="participant-picker">{employeeTrainingRows.map((person) => <label key={person.id} className={selected.includes(person.id) ? "selected" : ""}><input type="checkbox" checked={selected.includes(person.id)} onChange={() => toggleEmployee(person.id)} /><Avatar initials={person.initials} /><span><strong>{person.name}</strong><small>{person.id} · {person.department}</small></span><em>{person.risk}</em></label>)}</div></section></div><aside className="planner-side"><section className="card plan-summary"><SectionHeader kicker="Step 3 of 3" title="Review plan" /><div className="summary-hero"><CalendarCheck2 size={24} /><strong>{title}</strong><span>{date ? formatLongDate(date) : "Choose a date"}</span></div><dl><div><dt>Time</dt><dd>{time}–{endTime}</dd></div><div><dt>Trainer</dt><dd>{trainer || "Not assigned"}</dd></div><div><dt>Venue</dt><dd>{venue || "Not assigned"}</dd></div><div><dt>Participants</dt><dd>{selected.length} selected</dd></div></dl><div className="automation-included"><MailCheck size={18} /><div><strong>Email journey included</strong><span>Invites, day reminders, notes request and 3-month follow-up.</span></div></div><button className="button button-primary full" type="submit"><CalendarCheck2 size={17} /> Create training plan</button><button className="text-button" type="button">Save as draft</button></section></aside></form>;
 }
 
+const employeeStatusLabel = (status: Employee["status"]) => status.toLowerCase().replaceAll("_", " ").replace(/^./, (value) => value.toUpperCase());
+
 function EmployeesDatabase({ showNotice }: { showNotice: (message: string) => void }) {
-  const [query, setQuery] = useState(""); const [preview, setPreview] = useState<EmployeeImportPreview | null>(null); const [importing, setImporting] = useState(false);
-  const visible = employeeTrainingRows.filter((person) => `${person.name} ${person.id} ${person.department} ${person.role}`.toLowerCase().includes(query.toLowerCase()));
+  const [query, setQuery] = useState("");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [preview, setPreview] = useState<EmployeeImportPreview | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [profile, setProfile] = useState<Employee | null>(null);
+  const [editor, setEditor] = useState<Employee | null | undefined>(undefined);
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState("");
+
+  const refresh = async () => setEmployees(await api.getEmployees());
+  useEffect(() => { void refresh(); }, []);
+
+  const trainingFor = (employee: Employee) => employeeTrainingRows.find((item) => item.id === employee.employeeId);
+  const visible = employees.filter((person) => `${person.name ?? ""} ${person.employeeId} ${person.department.name} ${person.role ?? ""} ${person.status}`.toLowerCase().includes(query.toLowerCase()));
+  const activeCount = employees.filter((person) => person.status === "ACTIVE").length;
   const previewFile = async (file?: File) => { if (!file) return; setImporting(true); try { const result = await api.previewEmployeeImport(file); setPreview(result); showNotice(`${result.meta.validRows} valid employee records are ready to import.`); } catch { showNotice("The spreadsheet could not be previewed. Check the required column names."); } finally { setImporting(false); } };
-  const commit = async () => { if (!preview?.rows.length) return; setImporting(true); try { const result = await api.commitEmployeeImport(preview.rows); showNotice(`${result.imported} employee records were imported.`); setPreview(null); } catch { showNotice("The database is not connected yet, so the import could not be saved."); } finally { setImporting(false); } };
-  return <section className="page-stack"><div className="page-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, employee ID, role or department" /></label><div className="toolbar-actions"><label className="button button-secondary upload-button"><Upload size={16} />{importing ? "Reading…" : "Import spreadsheet"}<input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => previewFile(e.target.files?.[0])} /></label><button className="button button-primary" onClick={() => showNotice("New employee form is ready for backend connection.")}><Plus size={16} /> Add employee</button></div></div>{preview && <section className="import-banner"><FileSpreadsheet size={22} /><div><strong>Spreadsheet ready</strong><span>{preview.meta.validRows} valid rows · {preview.errors.length} issues found</span></div><button onClick={commit} disabled={importing}>Import valid rows</button><button onClick={() => setPreview(null)} aria-label="Dismiss import"><X size={17} /></button></section>}<div className="metric-grid compact-metrics"><MetricCard icon={UsersRound} label="Active employees" value="175" detail="+4 this month" tone="burgundy" /><MetricCard icon={ShieldCheck} label="Fully compliant" value="148" detail="84.6% of workforce" tone="green" /><MetricCard icon={CircleAlert} label="Training attention" value="27" detail="7 overdue" tone="violet" /><MetricCard icon={Clock3} label="Average learning" value="19.3h" detail="Per employee YTD" tone="blue" /></div><section className="card data-card"><SectionHeader kicker="Master employee record" title="People directory" /><div className="table-wrap"><table className="data-table employee-table"><thead><tr><th>Employee</th><th>Department & role</th><th>Training progress</th><th>Learning hours</th><th>Next requirement</th><th>Status</th><th /></tr></thead><tbody>{visible.map((person) => { const percent = Math.round(person.completed / person.required * 100); return <tr key={person.id}><td><div className="person-cell"><Avatar initials={person.initials} /><span><strong>{person.name}</strong><small>{person.id}</small></span></div></td><td><strong>{person.department}</strong><small>{person.role}</small></td><td><div className="table-progress"><span><b>{person.completed}/{person.required}</b><em>{percent}%</em></span><div><i style={{ width: `${percent}%` }} /></div></div></td><td><strong>{person.hours} hours</strong><small>Year to date</small></td><td><strong>{person.nextDue.split(" · ")[0]}</strong><small>{person.nextDue.split(" · ")[1]}</small></td><td><span className={`risk-badge ${person.risk.toLowerCase().replace(" ", "-")}`}>{person.risk}</span></td><td><button className="row-action" onClick={() => showNotice(`${person.name}'s complete training profile is ready to open.`)}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table></div></section></section>;
+  const commit = async () => { if (!preview?.rows.length) return; setImporting(true); try { const result = await api.commitEmployeeImport(preview.rows); await refresh(); showNotice(`${result.imported} employee records were imported.`); setPreview(null); } catch { showNotice("The database is not connected yet, so the import could not be saved."); } finally { setImporting(false); } };
+
+  const profileDialog = profile ? createPortal(<div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !removing) setProfile(null); }}><section className="fleet-dialog employee-profile-dialog" role="dialog" aria-modal="true" aria-label={`${profile.name ?? profile.employeeId} employee profile`}><header><div><span>{profile.employeeId}</span><strong>Employee profile</strong></div><button onClick={() => setProfile(null)} aria-label="Close"><X size={19} /></button></header><div className="employee-profile-body"><div className="profile-identity"><Avatar initials={(profile.name ?? profile.employeeId).split(" ").map((part) => part[0]).slice(0, 2).join("")} /><div><h2>{profile.name || "Name not recorded"}</h2><p>{profile.role || "Role not recorded"} · {profile.department.name}</p></div><span className={`employment-status ${profile.status.toLowerCase().replaceAll("_", "-")}`}>{employeeStatusLabel(profile.status)}</span></div><div className="profile-details"><div><span>Email</span><strong>{profile.email || "Not recorded"}</strong></div><div><span>Production line</span><strong>{profile.line || "Not assigned"}</strong></div><div><span>Employee ID</span><strong>{profile.employeeId}</strong></div><div><span>Department</span><strong>{profile.department.name}</strong></div></div>{(() => { const training = trainingFor(profile); return training ? <section className="profile-training"><div><span>Training completion</span><strong>{training.completed} / {training.required}</strong></div><div><span>Learning hours</span><strong>{training.hours} hours</strong></div><div><span>Next requirement</span><strong>{training.nextDue}</strong></div><div><span>Training attention</span><strong>{training.risk}</strong></div></section> : <section className="profile-training-empty"><GraduationCap size={22} /><span>No training summary is linked to this employee yet.</span></section>; })()} {error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="profile-actions"><button className="button button-danger-outline" disabled={removing || profile.status === "INACTIVE"} onClick={async () => { try { setRemoving(true); setError(""); await api.removeEmployee(profile.id); await refresh(); showNotice(`${profile.name ?? profile.employeeId} was removed from the active directory. Training history was retained.`); setProfile(null); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to remove this employee."); } finally { setRemoving(false); } }}><Trash2 size={16} />{removing ? "Removing…" : "Remove from active directory"}</button><button className="button button-primary" onClick={() => { setEditor(profile); setProfile(null); }}><Pencil size={16} /> Edit profile & status</button></footer></div></section></div>, document.body) : null;
+
+  const editorDialog = editor !== undefined ? createPortal(<div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditor(undefined); }}><section className="fleet-dialog employee-profile-dialog" role="dialog" aria-modal="true" aria-label={editor ? "Edit employee" : "Add employee"}><header><div><span>{editor?.employeeId ?? "People directory"}</span><strong>{editor ? "Edit employee profile" : "Add a new employee"}</strong></div><button onClick={() => setEditor(undefined)} aria-label="Close"><X size={19} /></button></header><EmployeeForm employee={editor ?? undefined} onSubmit={async (input) => { const saved = editor ? await api.updateEmployee(editor.id, input) : await api.createEmployee(input); await refresh(); showNotice(editor ? `${saved.name ?? saved.employeeId}'s profile was updated.` : `${saved.name ?? saved.employeeId} was added to the people directory.`); setEditor(undefined); }} /></section></div>, document.body) : null;
+
+  return <><section className="page-stack"><div className="page-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, employee ID, role or department" /></label><div className="toolbar-actions"><label className="button button-secondary upload-button"><Upload size={16} />{importing ? "Reading…" : "Import spreadsheet"}<input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => previewFile(e.target.files?.[0])} /></label><button className="button button-primary" onClick={() => setEditor(null)}><Plus size={16} /> Add employee</button></div></div>{preview && <section className="import-banner"><FileSpreadsheet size={22} /><div><strong>Spreadsheet ready</strong><span>{preview.meta.validRows} valid rows · {preview.errors.length} issues found</span></div><button onClick={commit} disabled={importing}>Import valid rows</button><button onClick={() => setPreview(null)} aria-label="Dismiss import"><X size={17} /></button></section>}<div className="metric-grid compact-metrics"><MetricCard icon={UsersRound} label="Active employees" value={String(activeCount)} detail={`${employees.length} total records`} tone="burgundy" /><MetricCard icon={ShieldCheck} label="Fully compliant" value={String(employeeTrainingRows.filter((item) => item.risk === "Complete" || item.risk === "On track").length)} detail="Current training sample" tone="green" /><MetricCard icon={CircleAlert} label="Training attention" value={String(employeeTrainingRows.filter((item) => item.risk === "Attention" || item.risk === "Due now").length)} detail="Requires HR review" tone="violet" /><MetricCard icon={UserCog} label="Inactive / departed" value={String(employees.length - activeCount)} detail="History retained" tone="blue" /></div><section className="card data-card"><SectionHeader kicker="Master employee record" title="People directory" /><div className="table-wrap"><table className="data-table employee-table"><thead><tr><th>Employee</th><th>Department & role</th><th>Training progress</th><th>Learning hours</th><th>Next requirement</th><th>Employment</th><th /></tr></thead><tbody>{visible.map((person) => { const training = trainingFor(person); const percent = training ? Math.round(training.completed / training.required * 100) : 0; return <tr key={person.id}><td><div className="person-cell"><Avatar initials={(person.name ?? person.employeeId).split(" ").map((part) => part[0]).slice(0, 2).join("")} /><span><strong>{person.name || "Name not recorded"}</strong><small>{person.employeeId}</small></span></div></td><td><strong>{person.department.name}</strong><small>{person.role || "Role not recorded"}</small></td><td>{training ? <div className="table-progress"><span><b>{training.completed}/{training.required}</b><em>{percent}%</em></span><div><i style={{ width: `${percent}%` }} /></div></div> : <small>No linked records</small>}</td><td><strong>{training?.hours ?? 0} hours</strong><small>Year to date</small></td><td><strong>{training?.nextDue.split(" · ")[0] ?? "None"}</strong><small>{training?.nextDue.split(" · ")[1] ?? "—"}</small></td><td><span className={`employment-status ${person.status.toLowerCase().replaceAll("_", "-")}`}>{employeeStatusLabel(person.status)}</span></td><td><button className="row-action" aria-label={`Open ${person.name ?? person.employeeId} profile`} onClick={() => { setError(""); setProfile(person); }}><ChevronRight size={17} /></button></td></tr>; })}</tbody></table></div></section></section>{profileDialog}{editorDialog}</>;
+}
+
+function EmployeeForm({ employee, onSubmit }: { employee?: Employee; onSubmit: (input: EmployeeInput) => Promise<void> }) {
+  const [employeeId, setEmployeeId] = useState(employee?.employeeId ?? "");
+  const [name, setName] = useState(employee?.name ?? "");
+  const [email, setEmail] = useState(employee?.email ?? "");
+  const [department, setDepartment] = useState(employee?.department.name ?? "");
+  const [line, setLine] = useState(employee?.line ?? "");
+  const [role, setRole] = useState(employee?.role ?? "");
+  const [status, setStatus] = useState<Employee["status"]>(employee?.status ?? "ACTIVE");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, department, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="registry-note"><UserRound size={22} /><div><strong>{employee ? "Maintain the master employee record" : "Create a master employee record"}</strong><small>Status controls whether the employee appears in active workforce workflows; historical training records are always retained.</small></div></div><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / position</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label><label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Changes are saved to the central people directory.</span><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
 }
 
 function TrainingRecords() {
@@ -398,9 +449,11 @@ const makeFallbackFleet = () => {
 function FleetTracker({
   showNotice,
   initialVehicleId,
+  onOpenRegistry,
 }: {
   showNotice: (message: string) => void;
   initialVehicleId?: string;
+  onOpenRegistry: () => void;
 }) {
   const fallback = makeFallbackFleet();
   const [fleetVehicles, setFleetVehicles] = useState<Vehicle[]>(
@@ -604,19 +657,16 @@ function FleetTracker({
             </span>
             <h2>Scan. Inspect. Drive. Return.</h2>
             <p>
-              Register the fleet, keep vehicle details current, and record every
-              journey from inspection to return.
+              Record every journey from the before-drive inspection to the
+              final odometer photo and vehicle return.
             </p>
           </div>
           <div className="fleet-hero-actions">
             <button
               className="button button-light"
-              onClick={() => {
-                setEditingVehicleId(null);
-                setDialog("vehicle");
-              }}
+              onClick={onOpenRegistry}
             >
-              <Plus size={17} /> Register vehicle
+              <Settings2 size={17} /> Manage vehicle registry
             </button>
             <button
               className="button button-ghost-light"
@@ -661,8 +711,8 @@ function FleetTracker({
         </div>
         <section className="card vehicle-section">
           <SectionHeader
-            kicker="Fleet registry"
-            title="Vehicles, status & QR access"
+            kicker="Trip-ready fleet"
+            title="Vehicle status & QR access"
           />
           <div className="vehicle-grid">
             {fleetVehicles.map((vehicle) => {
@@ -673,6 +723,7 @@ function FleetTracker({
                   : 100;
               return (
                 <article key={vehicle.id} className="vehicle-card">
+                  {vehicle.photo && <img className="vehicle-card-photo" src={vehicle.photo} alt={`${vehicle.plate} ${vehicle.model}`} />}
                   <header>
                     <span>
                       <CarFront size={22} />
@@ -742,15 +793,6 @@ function FleetTracker({
                       }}
                     >
                       <QrCode size={15} /> QR
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingVehicleId(vehicle.id);
-                        setSelectedVehicleId(vehicle.id);
-                        setDialog("vehicle");
-                      }}
-                    >
-                      <Pencil size={14} /> Edit
                     </button>
                     {vehicle.activeTrip ? (
                       <button
@@ -885,6 +927,95 @@ function FleetTracker({
   );
 }
 
+function VehicleRegistryPage({ showNotice }: { showNotice: (message: string) => void }) {
+  const fallback = makeFallbackFleet();
+  const [vehicles, setVehicles] = useState<Vehicle[]>(fallback.vehicles);
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<Vehicle | null | undefined>(undefined);
+  const [removing, setRemoving] = useState<Vehicle | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const refresh = async () => {
+    try {
+      const rows = await api.getVehicles();
+      setVehicles(rows);
+    } catch {
+      setVehicles(fallback.vehicles);
+    }
+  };
+
+  useEffect(() => { void refresh(); }, []);
+
+  const visible = vehicles.filter((vehicle) =>
+    `${vehicle.plate} ${vehicle.model} ${vehicle.category} ${vehicle.assigned}`.toLowerCase().includes(query.toLowerCase()),
+  );
+  const serviceAttention = vehicles.filter((vehicle) => vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE").length;
+
+  const editor = editing !== undefined ? createPortal(
+    <div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(undefined); }}>
+      <section className="fleet-dialog" role="dialog" aria-modal="true" aria-label={editing ? "Edit vehicle" : "Register vehicle"}>
+        <header><div><span>{editing?.plate ?? "Fleet registry"}</span><strong>{editing ? "Edit vehicle details" : "Register a new vehicle"}</strong></div><button onClick={() => setEditing(undefined)} aria-label="Close"><X size={19} /></button></header>
+        <VehicleForm vehicle={editing ?? undefined} onSubmit={async (input) => {
+          const saved = editing ? await api.updateVehicle(editing.id, input) : await api.createVehicle(input);
+          await refresh();
+          showNotice(editing ? `${saved.plate} was updated.` : `${saved.plate} was added to the vehicle registry.`);
+          setEditing(undefined);
+        }} />
+      </section>
+    </div>, document.body,
+  ) : null;
+
+  const removalDialog = removing ? createPortal(
+    <div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setRemoving(null); }}>
+      <section className="fleet-dialog confirm-dialog" role="dialog" aria-modal="true" aria-label="Remove vehicle">
+        <header><div><span>{removing.plate}</span><strong>Remove vehicle from active registry?</strong></div><button onClick={() => setRemoving(null)} aria-label="Close" disabled={busy}><X size={19} /></button></header>
+        <div className="confirm-dialog-body">
+          <span className="danger-icon"><Trash2 size={25} /></span>
+          <div><h3>{removing.model}</h3><p>This vehicle will disappear from the active fleet and cannot start new trips. Its previous journeys, mileage evidence and audit history will be retained.</p></div>
+          {removing.activeTrip && <div className="form-error span-all"><CircleAlert size={16} />Return the active trip before removing this vehicle.</div>}
+          {error && <div className="form-error span-all"><CircleAlert size={16} />{error}</div>}
+          <footer><button className="button button-secondary" onClick={() => setRemoving(null)} disabled={busy}>Cancel</button><button className="button button-danger" disabled={busy || Boolean(removing.activeTrip)} onClick={async () => {
+            try {
+              setBusy(true); setError("");
+              await api.removeVehicle(removing.id);
+              await refresh();
+              showNotice(`${removing.plate} was removed from the active vehicle registry. Trip history was retained.`);
+              setRemoving(null);
+            } catch (cause) {
+              setError(cause instanceof Error ? cause.message : "Unable to remove this vehicle.");
+            } finally { setBusy(false); }
+          }}><Trash2 size={16} />{busy ? "Removing…" : "Remove vehicle"}</button></footer>
+        </div>
+      </section>
+    </div>, document.body,
+  ) : null;
+
+  return <>
+    <section className="page-stack">
+      <div className="module-intro fleet-intro registry-intro"><div><span className="module-kicker"><CarFront size={15} /> Vehicle registry</span><h2>Every company car, properly documented.</h2><p>Maintain vehicle identity, photos, ownership, odometer readings, service limits and operational availability in one place.</p></div><button className="button button-light" onClick={() => setEditing(null)}><Plus size={17} /> Register vehicle</button></div>
+      <div className="metric-grid compact-metrics">
+        <MetricCard icon={CarFront} label="Active registry" value={String(vehicles.length)} detail="Company vehicles" tone="burgundy" />
+        <MetricCard icon={CheckCircle2} label="Available" value={String(vehicles.filter((item) => item.status === "AVAILABLE").length)} detail="Ready for a trip" tone="green" />
+        <MetricCard icon={Route} label="In use" value={String(vehicles.filter((item) => item.status === "IN_USE").length)} detail="Live check-outs" tone="blue" />
+        <MetricCard icon={Wrench} label="Attention" value={String(serviceAttention)} detail="Service or unavailable" tone="violet" />
+      </div>
+      <div className="page-toolbar registry-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search registration, model, category or owner" /></label><button className="button button-primary" onClick={() => setEditing(null)}><Plus size={16} /> Add vehicle</button></div>
+      <section className="card registry-section"><SectionHeader kicker="Fleet master data" title="Registered vehicles" />
+        <div className="registry-card-grid">
+          {visible.map((vehicle) => <article className="registry-vehicle-card" key={vehicle.id}>
+            <div className="registry-vehicle-photo">{vehicle.photo ? <img src={vehicle.photo} alt={`${vehicle.plate} ${vehicle.model}`} /> : <span><CarFront size={34} /><small>Photo not added</small></span>}<em className={vehicle.status.toLowerCase().replaceAll("_", "-")}>{fleetStatusLabel(vehicle.status)}</em></div>
+            <div className="registry-vehicle-copy"><div><span>{vehicle.category}</span><h3>{vehicle.plate}</h3><p>{vehicle.model}</p></div><dl><div><dt>Current odometer</dt><dd>{formatNumber(vehicle.mileage)} km</dd></div><div><dt>Next service</dt><dd>{formatNumber(vehicle.serviceAt)} km</dd></div><div><dt>Pool / owner</dt><dd>{vehicle.assigned}</dd></div></dl><footer><button className="button button-secondary" onClick={() => setEditing(vehicle)}><Pencil size={15} /> Edit details</button><button className="button button-danger-outline" onClick={() => { setError(""); setRemoving(vehicle); }}><Trash2 size={15} /> Remove</button></footer></div>
+          </article>)}
+          {!visible.length && <div className="registry-empty"><Search size={27} /><strong>No vehicle matched that search</strong><p>Try a plate number, model, category or assigned pool.</p></div>}
+        </div>
+      </section>
+    </section>
+    {editor}
+    {removalDialog}
+  </>;
+}
+
 function VehicleForm({
   vehicle,
   onSubmit,
@@ -896,6 +1027,7 @@ function VehicleForm({
   const [model, setModel] = useState(vehicle?.model ?? "");
   const [category, setCategory] = useState(vehicle?.category ?? "Operations");
   const [assigned, setAssigned] = useState(vehicle?.assigned ?? "Shared pool");
+  const [photo, setPhoto] = useState<string | null>(vehicle?.photo ?? null);
   const [mileage, setMileage] = useState(vehicle?.mileage ?? 0);
   const [serviceAt, setServiceAt] = useState(vehicle?.serviceAt ?? 10000);
   const [status, setStatus] = useState<VehicleInput["status"]>(
@@ -928,6 +1060,7 @@ function VehicleForm({
         mileage,
         serviceAt,
         status,
+        photo,
       });
     } catch (cause) {
       setError(
@@ -954,6 +1087,7 @@ function VehicleForm({
           </small>
         </div>
       </div>
+      <VehiclePhotoField photo={photo} onChange={setPhoto} />
       <div className="form-grid">
         <label className="field">
           <span>Registration / plate number</span>

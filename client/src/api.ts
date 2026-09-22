@@ -4,6 +4,16 @@ import type {
 import { sampleCourses, sampleDashboard, sampleEmployees, sampleSessions } from "./sample-data";
 import type { Course, Employee, SessionListItem } from "./types";
 
+export type EmployeeInput = {
+  employeeId: string;
+  name?: string;
+  email?: string;
+  department: string;
+  line?: string;
+  role?: string;
+  status: Employee["status"];
+};
+
 const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(path, {
     headers: options?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
@@ -31,6 +41,7 @@ export type VehicleInput = {
   serviceAt: number;
   status: Exclude<VehicleStatus, "IN_USE">;
   assigned: string;
+  photo?: string | null;
 };
 
 export const api = {
@@ -48,6 +59,18 @@ export const api = {
     } catch {
       return sampleEmployees;
     }
+  },
+
+  createEmployee(input: EmployeeInput) {
+    return request<Employee>("/api/employees", { method: "POST", body: JSON.stringify(input) });
+  },
+
+  updateEmployee(id: string, input: EmployeeInput) {
+    return request<Employee>(`/api/employees/${id}`, { method: "PUT", body: JSON.stringify(input) });
+  },
+
+  removeEmployee(id: string) {
+    return request<Employee>(`/api/employees/${id}`, { method: "DELETE" });
   },
 
   async getCourses(): Promise<Course[]> {
@@ -98,6 +121,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(input)
     });
+  },
+
+  removeVehicle(id: string) {
+    return request<{ removed: true }>(`/api/vehicles/${id}`, { method: "DELETE" });
   },
 
   getVehicleTrips() {
