@@ -11,11 +11,13 @@
   },
   "dependencies": {
     "@hr-training/shared": "*",
+    "@tesseract.js-data/eng": "^1.0.0",
     "lucide-react": "^0.468.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^2.15.0"
+    "recharts": "^2.15.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.6",

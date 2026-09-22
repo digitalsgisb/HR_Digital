@@ -5,9 +5,11 @@ import {
   completionStatuses,
   employeeStatuses,
   vehicleConditions,
+  vehicleStatuses,
   type DashboardSummary
 } from "@hr-training/shared";
 import { prisma } from "./prisma.js";
+import { env } from "./env.js";
 import { parseEmployeeImport } from "./importer.js";
 import { summarizeCourseHours, summarizeDepartmentHours, type CompletionRecordForSummary } from "./dashboard-summary.js";
 
@@ -105,6 +107,10 @@ const afterChecksSchema = z.object({
   damageReported: z.boolean()
 });
 
+const odometerPhotoSchema = z.string()
+  .max(6_000_000, "Odometer photo is too large.")
+  .refine((value) => /^data:image\/(jpeg|png|webp);base64,/i.test(value), "A valid odometer photo is required.");
+
 const startVehicleTripSchema = z.object({
   vehicleId: z.string().trim().min(1),
   driverEmployeeId: z.string().trim().min(1),
@@ -113,6 +119,7 @@ const startVehicleTripSchema = z.object({
   purpose: z.string().trim().min(2),
   passengers: z.coerce.number().int().min(1).max(20).default(1),
   odometerStart: z.coerce.number().int().min(0),
+  odometerPhotoBefore: odometerPhotoSchema,
   fuelBefore: z.coerce.number().int().min(0).max(100),
   conditionBefore: z.enum(vehicleConditions),
   checksBefore: beforeChecksSchema,
@@ -121,10 +128,26 @@ const startVehicleTripSchema = z.object({
 
 const completeVehicleTripSchema = z.object({
   odometerEnd: z.coerce.number().int().min(0),
+  odometerPhotoAfter: odometerPhotoSchema,
   fuelAfter: z.coerce.number().int().min(0).max(100),
   conditionAfter: z.enum(vehicleConditions),
   checksAfter: afterChecksSchema,
   notesAfter: nullableText
+});
+
+const vehicleInputSchema = z.object({
+  plate: z.string().trim().min(2).max(20).transform((value) => value.toUpperCase()),
+  model: z.string().trim().min(2).max(100),
+  category: z.string().trim().min(2).max(60),
+  mileage: z.coerce.number().int().min(0),
+  serviceAt: z.coerce.number().int().min(0),
+  status: z.enum(vehicleStatuses).refine((status) => status !== "IN_USE", "A vehicle can only be marked in use by starting a trip."),
+  assigned: z.string().trim().min(2).max(100)
+});
+
+const odometerRecognitionSchema = z.object({
+  photo: odometerPhotoSchema,
+  minimumMileage: z.coerce.number().int().min(0).default(0)
 });
 
 const defaultVehicles = [
@@ -592,6 +615,84 @@ export const createRouter = () => {
         orderBy: { plate: "asc" }
       });
       res.json(vehicleRows.map(({ trips, ...vehicle }) => ({ ...vehicle, activeTrip: trips[0] ?? null })));
+    })
+  );
+
+  router.post(
+    "/ocr/odometer",
+    asyncHandler(async (req, res) => {
+      const input = odometerRecognitionSchema.parse(req.body);
+      if (!env.ollamaBaseUrl || !env.ollamaVisionModel) {
+        throw new HttpError(503, "On-prem vision OCR is not configured.");
+      }
+      const image = input.photo.replace(/^data:image\/[^;]+;base64,/i, "");
+      let response: globalThis.Response;
+      try {
+        response = await fetch(`${env.ollamaBaseUrl.replace(/\/$/, "")}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(90_000),
+          body: JSON.stringify({
+            model: env.ollamaVisionModel,
+            stream: false,
+            format: "json",
+            options: { temperature: 0 },
+            messages: [{
+              role: "user",
+              content: `Read the vehicle's total ODO mileage from this dashboard photo. Ignore Trip A, Trip B, speedometer and tachometer numbers. The total mileage should not be below ${input.minimumMileage}. Return only JSON with mileage as an integer or null, confidence from 0 to 1, and a short reason.`,
+              images: [image]
+            }]
+          })
+        });
+      } catch {
+        throw new HttpError(503, "On-prem vision service is unavailable; bundled OCR will be used.");
+      }
+      if (!response.ok) throw new HttpError(502, `On-prem vision service returned ${response.status}.`);
+      const payload = await response.json() as { message?: { content?: string } };
+      let decoded: unknown;
+      try { decoded = JSON.parse(payload.message?.content ?? "{}"); }
+      catch { throw new HttpError(502, "On-prem vision service returned an unreadable result."); }
+      const result = z.object({ mileage: z.number().int().min(0).nullable(), confidence: z.number().min(0).max(1).default(0), reason: z.string().default("") }).parse(decoded);
+      if (result.mileage != null && result.mileage < input.minimumMileage) {
+        res.json({ ...result, mileage: null, reason: "Detected value was below the current recorded mileage." });
+        return;
+      }
+      res.json(result);
+    })
+  );
+
+  router.post(
+    "/vehicles",
+    asyncHandler(async (req, res) => {
+      const input = vehicleInputSchema.parse(req.body);
+      const duplicate = await prisma.vehicle.findUnique({ where: { plate: input.plate } });
+      if (duplicate) throw new HttpError(409, "A vehicle with this registration number already exists.");
+      const vehicle = await prisma.vehicle.create({ data: input });
+      res.status(201).json({ ...vehicle, activeTrip: null });
+    })
+  );
+
+  router.put(
+    "/vehicles/:id",
+    asyncHandler(async (req, res) => {
+      const input = vehicleInputSchema.parse(req.body);
+      const id = routeParam(req.params.id);
+      const current = await prisma.vehicle.findUnique({
+        where: { id },
+        include: { trips: { where: { status: "IN_PROGRESS" }, orderBy: { startedAt: "desc" }, take: 1 } }
+      });
+      if (!current) throw new HttpError(404, "Vehicle not found.");
+      const duplicate = await prisma.vehicle.findFirst({ where: { plate: input.plate, NOT: { id } } });
+      if (duplicate) throw new HttpError(409, "A vehicle with this registration number already exists.");
+      const activeTrip = current.trips[0] ?? null;
+      if (activeTrip && input.mileage < activeTrip.odometerStart) {
+        throw new HttpError(400, `Mileage cannot be below this active trip's starting odometer (${activeTrip.odometerStart} km).`);
+      }
+      const vehicle = await prisma.vehicle.update({
+        where: { id },
+        data: { ...input, status: activeTrip ? "IN_USE" : input.status }
+      });
+      res.json({ ...vehicle, activeTrip });
     })
   );
 

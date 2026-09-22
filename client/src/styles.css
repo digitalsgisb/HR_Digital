@@ -309,6 +309,28 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .admin-savebar strong, .admin-savebar span { display: block; }.admin-savebar strong { font-size: 11px; }.admin-savebar span { margin-top: 3px; color: #999b9f; font-size: 8px; }
 .admin-savebar .button-primary { border-color: white; color: #17181a; background: white; }
 
+.fleet-hero-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
+.button-ghost-light { border: 1px solid rgba(255,255,255,.36); color: #fff; background: rgba(255,255,255,.06); }
+.button-ghost-light:hover { background: rgba(255,255,255,.13); }
+.vehicle-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.registry-note { display: grid; grid-template-columns: 42px 1fr; align-items: center; gap: 11px; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--soft); }
+.registry-note > svg { width: 40px; height: 40px; padding: 9px; border-radius: 9px; color: #fff; background: #17181a; }
+.registry-note strong, .registry-note small { display: block; }
+.registry-note strong { font-size: 11px; }
+.registry-note small, .field-help { margin-top: 4px; color: var(--muted); font-size: 8px; line-height: 1.45; }
+.vehicle-registry-form .field select:disabled { color: #555; background: #f1f1f1; cursor: not-allowed; }
+.odometer-photo { display: grid; gap: 10px; padding: 14px; border: 1px solid #d8d5d2; border-radius: 12px; background: #f7f7f7; }
+.odometer-photo-heading { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 10px; }
+.odometer-photo-heading > span { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 9px; color: #fff; background: #17181a; }
+.odometer-photo-heading strong, .odometer-photo-heading small { display: block; }.odometer-photo-heading strong { font-size: 10px; }.odometer-photo-heading small { margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.4; }.odometer-photo-heading em { padding: 4px 7px; border-radius: 99px; color: #fff; background: #252628; font-size: 7px; font-style: normal; font-weight: 850; text-transform: uppercase; }
+.odometer-capture { position: relative; display: grid; min-height: 170px; overflow: hidden; place-items: center; border: 1px dashed #b8b4b0; border-radius: 10px; background: #fff; }
+.odometer-capture > img { width: 100%; max-height: 310px; object-fit: contain; background: #111; }
+.odometer-placeholder { display: grid; justify-items: center; gap: 6px; padding: 28px; color: #777; text-align: center; }.odometer-placeholder strong { color: #333; font-size: 10px; }.odometer-placeholder small { font-size: 8px; }
+.odometer-capture > label { position: absolute; right: 9px; bottom: 9px; cursor: pointer; box-shadow: 0 5px 16px rgba(0,0,0,.12); }.odometer-capture input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ocr-progress { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; }.ocr-progress > span { height: 6px; overflow: hidden; border-radius: 99px; background: #ddd; }.ocr-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#17181a,#73777b); transition: width .2s ease; }.ocr-progress strong { font-size: 8px; }
+.ocr-result, .ocr-warning { display: flex; align-items: center; gap: 7px; padding: 9px 10px; border-radius: 8px; font-size: 8px; font-weight: 750; }.ocr-result { color: #176346; background: #e9f5ef; }.ocr-warning { color: #7a5517; background: #fff4df; }.odometer-photo > p { margin: 0; color: var(--muted); font-size: 7px; line-height: 1.45; }
+.trip-evidence { display: flex !important; gap: 5px; margin-top: 5px !important; }.trip-evidence a { padding: 3px 5px; border: 1px solid var(--line); border-radius: 5px; color: #333; background: #fff; font-size: 7px; font-weight: 800; text-decoration: none; }
+
 @keyframes stageReveal { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes heroReveal { from { opacity: 0; transform: translateY(24px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes signalPop { from { opacity: 0; transform: translateY(22px) scale(.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -341,6 +363,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .app-shell { padding-left: 0; }.sidebar { transform: translateX(-100%); transition: transform .25s ease; box-shadow: 15px 0 40px rgba(0,0,0,.25); }.sidebar.mobile-open { transform: translateX(0); }.sidebar-close { display: block; margin-left: 8px; }.nav-backdrop { position: fixed; inset: 0; z-index: 19; display: block; border: 0; background: rgba(0,0,0,.45); }.mobile-menu { display: grid; place-items: center; }.calendar-layout, .planner-layout, .email-layout { grid-template-columns: 1fr; }.day-panel, .planner-side, .library-filter { position: static; }.library-layout { grid-template-columns: 190px 1fr; }.topbar { padding: 13px 20px; }.page-stage { padding: 22px 20px 34px; }
 }
 @media (max-width: 760px) {
+  .fleet-hero-actions { width: 100%; justify-content: stretch; }.fleet-hero-actions .button { flex: 1; }
+  .odometer-photo-heading { grid-template-columns: 38px 1fr; }.odometer-photo-heading em { grid-column: 2; justify-self: start; }.odometer-capture { min-height: 210px; }
   .topbar-actions > .topbar-icon { display: none; }
   .notification-panel { position: fixed; top: 70px; right: 10px; }
   .fleet-dialog-backdrop { align-items: end; padding: 0; }.fleet-dialog { width: 100%; max-height: 94vh; border-radius: 17px 17px 0 0; }.fleet-form { padding: 15px; }.inspection-grid { grid-template-columns: 1fr; }.fleet-form-actions { align-items: stretch; flex-direction: column; }.fleet-form-actions .button { width: 100%; }.return-summary { grid-template-columns: 38px 1fr; }.return-summary em { grid-column: 2; }.qr-actions { width: 100%; flex-direction: column; }.qr-actions .button { width: 100%; }.vehicle-actions button { min-height: 38px; }

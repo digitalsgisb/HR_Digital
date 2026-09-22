@@ -43,6 +43,8 @@ export type VehicleTrip = {
   endedAt?: string | null;
   odometerStart: number;
   odometerEnd?: number | null;
+  odometerPhotoBefore?: string | null;
+  odometerPhotoAfter?: string | null;
   fuelBefore: number;
   fuelAfter?: number | null;
   conditionBefore: VehicleCondition;

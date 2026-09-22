@@ -17,7 +17,7 @@ export const createApp = () => {
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(cors({ origin: env.clientOrigin }));
-  app.use(express.json({ limit: "2mb" }));
+  app.use(express.json({ limit: "8mb" }));
   app.use("/api", createRouter());
 
   if (env.nodeEnv === "production") {

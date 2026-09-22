@@ -1,5 +1,5 @@
 import type {
-  DashboardSummary, EmployeeImportPreview, Vehicle, VehicleCondition, VehicleTrip
+  DashboardSummary, EmployeeImportPreview, Vehicle, VehicleCondition, VehicleStatus, VehicleTrip
 } from "@hr-training/shared";
 import { sampleCourses, sampleDashboard, sampleEmployees, sampleSessions } from "./sample-data";
 import type { Course, Employee, SessionListItem } from "./types";
@@ -21,6 +21,16 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   }
 
   return response.json() as Promise<T>;
+};
+
+export type VehicleInput = {
+  plate: string;
+  model: string;
+  category: string;
+  mileage: number;
+  serviceAt: number;
+  status: Exclude<VehicleStatus, "IN_USE">;
+  assigned: string;
 };
 
 export const api = {
@@ -76,13 +86,27 @@ export const api = {
     return request<Vehicle[]>("/api/vehicles");
   },
 
+  createVehicle(input: VehicleInput) {
+    return request<Vehicle>("/api/vehicles", {
+      method: "POST",
+      body: JSON.stringify(input)
+    });
+  },
+
+  updateVehicle(id: string, input: VehicleInput) {
+    return request<Vehicle>(`/api/vehicles/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input)
+    });
+  },
+
   getVehicleTrips() {
     return request<VehicleTrip[]>("/api/vehicle-trips");
   },
 
   startVehicleTrip(input: {
     vehicleId: string; driverEmployeeId: string; driverName: string; destination: string;
-    purpose: string; passengers: number; odometerStart: number; fuelBefore: number;
+    purpose: string; passengers: number; odometerStart: number; odometerPhotoBefore: string; fuelBefore: number;
     conditionBefore: VehicleCondition; checksBefore: Record<string, boolean>; notesBefore?: string;
   }) {
     return request<VehicleTrip>("/api/vehicle-trips/start", {
@@ -92,7 +116,7 @@ export const api = {
   },
 
   completeVehicleTrip(id: string, input: {
-    odometerEnd: number; fuelAfter: number; conditionAfter: VehicleCondition;
+    odometerEnd: number; odometerPhotoAfter: string; fuelAfter: number; conditionAfter: VehicleCondition;
     checksAfter: Record<string, boolean>; notesAfter?: string;
   }) {
     return request<VehicleTrip>(`/api/vehicle-trips/${id}/complete`, {

@@ -11,7 +11,7 @@ Human Resource Digital is the internal HR operations platform for Sugihara Grand
 - Employee training requirement matrix
 - Email automation journey with branded responsive templates
 - Searchable employee training-notes library
-- Company vehicle mileage, utilisation, servicing, and trip tracking
+- Fleet registry with vehicle creation/editing, per-vehicle QR access, before/after inspections, odometer-photo evidence, local OCR, mileage, utilisation, servicing, and trip tracking
 - System administration for platform preferences, feature controls, access, sessions, and server status
 - Installable Progressive Web App (PWA) shell with offline access to previously loaded interface assets
 
@@ -79,6 +79,26 @@ curl http://localhost:4000/api/health
 The `git clone ... .` form requires `/srv/apps/hr` to be empty. If the folder already contains files, inspect and move them before cloning rather than deleting them blindly.
 
 At minimum, replace `POSTGRES_PASSWORD` in `.env` with a long, unique password. Keep `CLIENT_ORIGIN` equal to the final public HTTPS address. Add SMTP values only when real training-email delivery is ready.
+
+### Optional on-prem odometer vision
+
+The vehicle form always includes bundled browser OCR, so no cloud service is required. For better results on full-dashboard photos such as displays containing both **ODO** and **Trip A/B**, the API can first ask a vision model running in Ollama on the AI PC and then fall back to bundled OCR.
+
+Install a vision-capable model on the host (choose a model that fits the AI PC), then set these values in `/srv/apps/hr/.env`:
+
+```env
+OLLAMA_BASE_URL="http://host.docker.internal:11434"
+OLLAMA_VISION_MODEL="qwen2.5vl:7b"
+```
+
+Restart only the application container after changing these values:
+
+```bash
+docker compose up -d --build app
+docker compose logs --tail=100 app
+```
+
+`host.docker.internal` is mapped to the Linux Docker host by `docker-compose.yml`. If Ollama runs elsewhere, use its private LAN URL instead. Do not expose Ollama through the public tunnel. n8n is not required for OCR; it can later consume low-confidence or mileage-mismatch events for admin review without placing it in the driver's critical path.
 
 Validate Compose without printing resolved secrets:
 
@@ -215,6 +235,7 @@ GitHub Actions runs the same type checking, tests, and production build for ever
 ## Data and backup notes
 
 - PostgreSQL data lives in the Docker named volume `hr_training_data`.
+- Before/after odometer photos are compressed in the browser and stored with their vehicle trip records; include the database in retention sizing and backups.
 - Employee notes should be moved to durable object or network storage before production uploads are enabled.
 - The interface uses demonstration fallback data when `DATABASE_URL` is unavailable.
 - Real authentication, SMTP delivery, and document storage must be configured before exposing the platform outside the trusted company network.

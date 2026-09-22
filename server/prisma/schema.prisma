@@ -146,7 +146,7 @@ model UserAccount {
 }
 
 model Vehicle {
-  id        String        @id
+  id        String        @id @default(cuid())
   plate     String        @unique
   model     String
   category  String
@@ -174,6 +174,8 @@ model VehicleTrip {
   endedAt          DateTime?
   odometerStart    Int
   odometerEnd      Int?
+  odometerPhotoBefore String?
+  odometerPhotoAfter  String?
   fuelBefore       Int
   fuelAfter        Int?
   conditionBefore  VehicleCondition

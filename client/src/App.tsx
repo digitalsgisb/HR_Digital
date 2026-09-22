@@ -4,7 +4,7 @@ import {
   Activity, ArrowRight, Bell, BookOpenCheck, CalendarCheck2, CalendarDays, CarFront, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ClipboardCheck, Clock3, Download, FileSpreadsheet,
   FileText, Fuel, Gauge, GraduationCap, LayoutDashboard, Library, LockKeyhole, MailCheck, MapPin, Menu,
-  MessageSquareText, Plus, QrCode, Route, Search, Send, ServerCog, Settings2, ShieldCheck, Upload,
+  MessageSquareText, Pencil, Plus, QrCode, Route, Search, Send, ServerCog, Settings2, ShieldCheck, Upload,
   UserCog, UserRound, UsersRound, Wrench, X
 } from "lucide-react";
 import QRCode from "qrcode";
@@ -13,7 +13,8 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import type {
   DashboardSummary, EmployeeImportPreview, Vehicle, VehicleCondition, VehicleTrip
 } from "@hr-training/shared";
-import { api } from "./api";
+import { api, type VehicleInput } from "./api";
+import { OdometerPhotoField } from "./OdometerPhotoField";
 import {
   departmentReadiness, emailAutomations, employeeTrainingRows, notesLibrary,
   trainingSessions as initialTrainingSessions, vehicleTrips as fallbackVehicleTrips,
@@ -394,17 +395,33 @@ const makeFallbackFleet = () => {
   return { vehicles, trips };
 };
 
-function FleetTracker({ showNotice, initialVehicleId }: { showNotice: (message: string) => void; initialVehicleId?: string }) {
+function FleetTracker({
+  showNotice,
+  initialVehicleId,
+}: {
+  showNotice: (message: string) => void;
+  initialVehicleId?: string;
+}) {
   const fallback = makeFallbackFleet();
-  const [fleetVehicles, setFleetVehicles] = useState<Vehicle[]>(fallback.vehicles);
+  const [fleetVehicles, setFleetVehicles] = useState<Vehicle[]>(
+    fallback.vehicles,
+  );
   const [trips, setTrips] = useState<VehicleTrip[]>(fallback.trips);
-  const [selectedVehicleId, setSelectedVehicleId] = useState(initialVehicleId ?? fallback.vehicles[0]?.id ?? "");
-  const [dialog, setDialog] = useState<"start" | "complete" | "qr" | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState(
+    initialVehicleId ?? fallback.vehicles[0]?.id ?? "",
+  );
+  const [dialog, setDialog] = useState<
+    "start" | "complete" | "qr" | "vehicle" | null
+  >(null);
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   const refreshFleet = async () => {
     try {
-      const [vehicleRows, tripRows] = await Promise.all([api.getVehicles(), api.getVehicleTrips()]);
+      const [vehicleRows, tripRows] = await Promise.all([
+        api.getVehicles(),
+        api.getVehicleTrips(),
+      ]);
       setFleetVehicles(vehicleRows);
       setTrips(tripRows);
       return vehicleRows;
@@ -415,7 +432,9 @@ function FleetTracker({ showNotice, initialVehicleId }: { showNotice: (message: 
     }
   };
 
-  useEffect(() => { void refreshFleet(); }, []);
+  useEffect(() => {
+    void refreshFleet();
+  }, []);
   useEffect(() => {
     if (!initialVehicleId || deepLinkHandled) return;
     const vehicle = fleetVehicles.find((item) => item.id === initialVehicleId);
@@ -425,74 +444,1155 @@ function FleetTracker({ showNotice, initialVehicleId }: { showNotice: (message: 
     setDeepLinkHandled(true);
   }, [deepLinkHandled, fleetVehicles, initialVehicleId]);
 
-  const selectedVehicle = fleetVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ?? fleetVehicles[0];
-  const activeTrip = selectedVehicle?.activeTrip ?? trips.find((trip) => trip.vehicleId === selectedVehicle?.id && trip.status === "IN_PROGRESS") ?? null;
-  const available = fleetVehicles.filter((vehicle) => vehicle.status === "AVAILABLE").length;
-  const distance = trips.reduce((total, trip) => total + Math.max(0, (trip.odometerEnd ?? trip.odometerStart) - trip.odometerStart), 0);
-  const serviceAttention = fleetVehicles.filter((vehicle) => vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE").length;
+  const selectedVehicle =
+    fleetVehicles.find((vehicle) => vehicle.id === selectedVehicleId) ??
+    fleetVehicles[0];
+  const activeTrip =
+    selectedVehicle?.activeTrip ??
+    trips.find(
+      (trip) =>
+        trip.vehicleId === selectedVehicle?.id && trip.status === "IN_PROGRESS",
+    ) ??
+    null;
+  const available = fleetVehicles.filter(
+    (vehicle) => vehicle.status === "AVAILABLE",
+  ).length;
+  const distance = trips.reduce(
+    (total, trip) =>
+      total +
+      Math.max(
+        0,
+        (trip.odometerEnd ?? trip.odometerStart) - trip.odometerStart,
+      ),
+    0,
+  );
+  const serviceAttention = fleetVehicles.filter(
+    (vehicle) =>
+      vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE",
+  ).length;
 
   const openStart = (vehicle?: Vehicle) => {
-    const target = vehicle ?? fleetVehicles.find((item) => item.status === "AVAILABLE");
-    if (!target) { showNotice("No vehicle is currently cleared and available for a new trip."); return; }
-    setSelectedVehicleId(target.id); setDialog("start");
+    const target =
+      vehicle ?? fleetVehicles.find((item) => item.status === "AVAILABLE");
+    if (!target) {
+      showNotice(
+        "No vehicle is currently cleared and available for a new trip.",
+      );
+      return;
+    }
+    setSelectedVehicleId(target.id);
+    setDialog("start");
   };
   const closeDialog = () => {
     setDialog(null);
-    if (initialVehicleId) window.history.replaceState({}, "", window.location.pathname);
+    if (initialVehicleId)
+      window.history.replaceState({}, "", window.location.pathname);
   };
 
-  const fleetDialog = dialog && selectedVehicle ? createPortal(<div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}><section className={`fleet-dialog ${dialog === "qr" ? "qr-dialog" : ""}`} role="dialog" aria-modal="true" aria-label={dialog === "start" ? "Start vehicle trip" : dialog === "complete" ? "Complete vehicle trip" : "Vehicle QR code"}><header><div><span>{selectedVehicle.plate}</span><strong>{dialog === "start" ? "Before-drive check & trip details" : dialog === "complete" ? "After-drive return check" : "Vehicle scan code"}</strong></div><button onClick={closeDialog} aria-label="Close"><X size={19} /></button></header>{dialog === "start" && <StartTripForm vehicles={fleetVehicles} selectedVehicleId={selectedVehicle.id} onVehicleChange={setSelectedVehicleId} onSubmit={async (input) => { await api.startVehicleTrip(input); await refreshFleet(); showNotice(`${selectedVehicle.plate} is checked out and the trip is now active.`); closeDialog(); }} />}{dialog === "complete" && activeTrip && <CompleteTripForm vehicle={selectedVehicle} trip={activeTrip} onSubmit={async (input) => { await api.completeVehicleTrip(activeTrip.id, input); await refreshFleet(); showNotice(`${selectedVehicle.plate} was returned and its mileage was updated.`); closeDialog(); }} />}{dialog === "complete" && !activeTrip && <div className="fleet-form-empty"><CircleAlert size={28} /><strong>No active trip found</strong><p>Refresh the fleet or start a new trip for this vehicle.</p></div>}{dialog === "qr" && <VehicleQr vehicle={selectedVehicle} />}</section></div>, document.body) : null;
+  const editingVehicle = editingVehicleId
+    ? fleetVehicles.find((vehicle) => vehicle.id === editingVehicleId)
+    : undefined;
+  const dialogVehicle = selectedVehicle ?? fleetVehicles[0];
+  const dialogTitle =
+    dialog === "vehicle"
+      ? editingVehicle
+        ? "Edit vehicle details"
+        : "Register a new vehicle"
+      : dialog === "start"
+        ? "Before-drive check & trip details"
+        : dialog === "complete"
+          ? "After-drive return check"
+          : "Vehicle scan code";
+  const dialogLabel =
+    dialog === "vehicle"
+      ? (editingVehicle?.plate ?? "Fleet registry")
+      : (dialogVehicle?.plate ?? "Company vehicle");
+  const fleetDialog =
+    dialog && (dialog === "vehicle" || dialogVehicle)
+      ? createPortal(
+          <div
+            className="fleet-dialog-backdrop"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeDialog();
+            }}
+          >
+            <section
+              className={`fleet-dialog ${dialog === "qr" ? "qr-dialog" : ""}`}
+              role="dialog"
+              aria-modal="true"
+              aria-label={dialogTitle}
+            >
+              <header>
+                <div>
+                  <span>{dialogLabel}</span>
+                  <strong>{dialogTitle}</strong>
+                </div>
+                <button onClick={closeDialog} aria-label="Close">
+                  <X size={19} />
+                </button>
+              </header>
+              {dialog === "vehicle" && (
+                <VehicleForm
+                  vehicle={editingVehicle}
+                  onSubmit={async (input) => {
+                    const saved = editingVehicle
+                      ? await api.updateVehicle(editingVehicle.id, input)
+                      : await api.createVehicle(input);
+                    const rows = await refreshFleet();
+                    setSelectedVehicleId(saved.id || rows[0]?.id || "");
+                    showNotice(
+                      editingVehicle
+                        ? `${saved.plate} vehicle details were updated.`
+                        : `${saved.plate} was added to the fleet.`,
+                    );
+                    closeDialog();
+                  }}
+                />
+              )}
+              {dialog === "start" && dialogVehicle && (
+                <StartTripForm
+                  vehicles={fleetVehicles}
+                  selectedVehicleId={dialogVehicle.id}
+                  onVehicleChange={setSelectedVehicleId}
+                  onSubmit={async (input) => {
+                    await api.startVehicleTrip(input);
+                    await refreshFleet();
+                    showNotice(
+                      `${dialogVehicle.plate} is checked out and the trip is now active.`,
+                    );
+                    closeDialog();
+                  }}
+                />
+              )}
+              {dialog === "complete" && dialogVehicle && activeTrip && (
+                <CompleteTripForm
+                  vehicle={dialogVehicle}
+                  trip={activeTrip}
+                  onSubmit={async (input) => {
+                    await api.completeVehicleTrip(activeTrip.id, input);
+                    await refreshFleet();
+                    showNotice(
+                      `${dialogVehicle.plate} was returned and its mileage was updated.`,
+                    );
+                    closeDialog();
+                  }}
+                />
+              )}
+              {dialog === "complete" && !activeTrip && (
+                <div className="fleet-form-empty">
+                  <CircleAlert size={28} />
+                  <strong>No active trip found</strong>
+                  <p>Refresh the fleet or start a new trip for this vehicle.</p>
+                </div>
+              )}
+              {dialog === "qr" && dialogVehicle && (
+                <VehicleQr vehicle={dialogVehicle} />
+              )}
+            </section>
+          </div>,
+          document.body,
+        )
+      : null;
 
-  return <><section className="page-stack"><div className="module-intro fleet-intro"><div><span className="module-kicker"><CarFront size={15} /> Company mobility</span><h2>Scan. Inspect. Drive. Return.</h2><p>Every journey starts with a vehicle check and ends with a verified return record.</p></div><button className="button button-light" onClick={() => openStart()}><Plus size={17} /> Start vehicle use</button></div><div className="metric-grid"><MetricCard icon={CarFront} label="Registered vehicles" value={String(fleetVehicles.length)} detail={`${available} currently available`} tone="burgundy" /><MetricCard icon={Route} label="Recorded distance" value={`${formatNumber(distance)} km`} detail={`${trips.length} journey records`} tone="blue" /><MetricCard icon={Gauge} label="Vehicles in use" value={String(fleetVehicles.filter((vehicle) => vehicle.status === "IN_USE").length)} detail="Live check-outs" tone="green" /><MetricCard icon={Wrench} label="Service attention" value={String(serviceAttention)} detail="Restricted from new trips" tone="violet" /></div><section className="card vehicle-section"><SectionHeader kicker="Scan-ready fleet" title="Vehicle status & QR access" /><div className="vehicle-grid">{fleetVehicles.map((vehicle) => { const remaining = vehicle.serviceAt - vehicle.mileage; const progress = Math.min(100, vehicle.mileage / vehicle.serviceAt * 100); return <article key={vehicle.id} className="vehicle-card"><header><span><CarFront size={22} /></span><div><strong>{vehicle.plate}</strong><small>{vehicle.model}</small></div><em className={vehicle.status.toLowerCase().replaceAll("_", "-")}>{fleetStatusLabel(vehicle.status)}</em></header><div className="vehicle-meta"><span><small>Category</small><strong>{vehicle.category}</strong></span><span><small>Pool / owner</small><strong>{vehicle.assigned}</strong></span></div>{vehicle.activeTrip && <div className="active-driver"><Route size={15} /><span><strong>{vehicle.activeTrip.driverName}</strong><small>To {vehicle.activeTrip.destination}</small></span></div>}<div className="odometer"><span><small>Current mileage</small><strong>{formatNumber(vehicle.mileage)} <em>km</em></strong></span><Gauge size={18} /></div><div className="service-meter"><div><span>Next service</span><strong>{formatNumber(vehicle.serviceAt)} km</strong></div><div><i className={remaining < 1000 ? "warning" : ""} style={{ width: `${progress}%` }} /></div><small>{remaining > 0 ? `${formatNumber(remaining)} km remaining` : "Service threshold reached"}</small></div><footer className="vehicle-actions"><button onClick={() => { setSelectedVehicleId(vehicle.id); setDialog("qr"); }}><QrCode size={15} /> QR code</button>{vehicle.activeTrip ? <button className="primary" onClick={() => { setSelectedVehicleId(vehicle.id); setDialog("complete"); }}>Return vehicle <ArrowRight size={14} /></button> : <button className="primary" disabled={vehicle.status !== "AVAILABLE"} onClick={() => openStart(vehicle)}>Start trip <ArrowRight size={14} /></button>}</footer></article>; })}</div></section><section className="card data-card"><SectionHeader kicker="Auditable usage log" title="Recent journeys" action="Export log" /><div className="table-wrap"><table className="data-table trip-table"><thead><tr><th>Trip</th><th>Vehicle</th><th>Driver</th><th>Destination</th><th>Before / after</th><th>Distance</th><th>Status</th></tr></thead><tbody>{trips.map((trip) => <tr key={trip.id}><td><strong>{trip.id.startsWith("TRIP-") ? trip.id : trip.id.slice(-8).toUpperCase()}</strong><small>{new Date(trip.startedAt).toLocaleDateString("en-MY", { day: "2-digit", month: "short" })}</small></td><td><strong>{trip.vehicle?.plate ?? fleetVehicles.find((vehicle) => vehicle.id === trip.vehicleId)?.plate}</strong></td><td>{trip.driverName}<small>{trip.driverEmployeeId}</small></td><td><MapPin size={14} /> {trip.destination}<small>{trip.purpose}</small></td><td><strong>{formatNumber(trip.odometerStart)} → {trip.odometerEnd ? formatNumber(trip.odometerEnd) : "Pending"}</strong><small>Condition: {fleetStatusLabel(trip.conditionAfter ?? trip.conditionBefore)}</small></td><td><strong>{trip.odometerEnd == null ? "—" : `${formatNumber(trip.odometerEnd - trip.odometerStart)} km`}</strong></td><td><span className={`status-badge ${trip.status.toLowerCase().replaceAll("_", "-")}`}>{fleetStatusLabel(trip.status)}</span>{trip.status === "IN_PROGRESS" && <button className="table-return" onClick={() => { setSelectedVehicleId(trip.vehicleId); setDialog("complete"); }}>Complete</button>}</td></tr>)}</tbody></table></div></section></section>{fleetDialog}</>;
+  return (
+    <>
+      <section className="page-stack">
+        <div className="module-intro fleet-intro">
+          <div>
+            <span className="module-kicker">
+              <CarFront size={15} /> Company mobility
+            </span>
+            <h2>Scan. Inspect. Drive. Return.</h2>
+            <p>
+              Register the fleet, keep vehicle details current, and record every
+              journey from inspection to return.
+            </p>
+          </div>
+          <div className="fleet-hero-actions">
+            <button
+              className="button button-light"
+              onClick={() => {
+                setEditingVehicleId(null);
+                setDialog("vehicle");
+              }}
+            >
+              <Plus size={17} /> Register vehicle
+            </button>
+            <button
+              className="button button-ghost-light"
+              onClick={() => openStart()}
+            >
+              <CarFront size={17} /> Start vehicle use
+            </button>
+          </div>
+        </div>
+        <div className="metric-grid">
+          <MetricCard
+            icon={CarFront}
+            label="Registered vehicles"
+            value={String(fleetVehicles.length)}
+            detail={`${available} currently available`}
+            tone="burgundy"
+          />
+          <MetricCard
+            icon={Route}
+            label="Recorded distance"
+            value={`${formatNumber(distance)} km`}
+            detail={`${trips.length} journey records`}
+            tone="blue"
+          />
+          <MetricCard
+            icon={Gauge}
+            label="Vehicles in use"
+            value={String(
+              fleetVehicles.filter((vehicle) => vehicle.status === "IN_USE")
+                .length,
+            )}
+            detail="Live check-outs"
+            tone="green"
+          />
+          <MetricCard
+            icon={Wrench}
+            label="Service attention"
+            value={String(serviceAttention)}
+            detail="Restricted from new trips"
+            tone="violet"
+          />
+        </div>
+        <section className="card vehicle-section">
+          <SectionHeader
+            kicker="Fleet registry"
+            title="Vehicles, status & QR access"
+          />
+          <div className="vehicle-grid">
+            {fleetVehicles.map((vehicle) => {
+              const remaining = vehicle.serviceAt - vehicle.mileage;
+              const progress =
+                vehicle.serviceAt > 0
+                  ? Math.min(100, (vehicle.mileage / vehicle.serviceAt) * 100)
+                  : 100;
+              return (
+                <article key={vehicle.id} className="vehicle-card">
+                  <header>
+                    <span>
+                      <CarFront size={22} />
+                    </span>
+                    <div>
+                      <strong>{vehicle.plate}</strong>
+                      <small>{vehicle.model}</small>
+                    </div>
+                    <em
+                      className={vehicle.status
+                        .toLowerCase()
+                        .replaceAll("_", "-")}
+                    >
+                      {fleetStatusLabel(vehicle.status)}
+                    </em>
+                  </header>
+                  <div className="vehicle-meta">
+                    <span>
+                      <small>Category</small>
+                      <strong>{vehicle.category}</strong>
+                    </span>
+                    <span>
+                      <small>Pool / owner</small>
+                      <strong>{vehicle.assigned}</strong>
+                    </span>
+                  </div>
+                  {vehicle.activeTrip && (
+                    <div className="active-driver">
+                      <Route size={15} />
+                      <span>
+                        <strong>{vehicle.activeTrip.driverName}</strong>
+                        <small>To {vehicle.activeTrip.destination}</small>
+                      </span>
+                    </div>
+                  )}
+                  <div className="odometer">
+                    <span>
+                      <small>Current mileage</small>
+                      <strong>
+                        {formatNumber(vehicle.mileage)} <em>km</em>
+                      </strong>
+                    </span>
+                    <Gauge size={18} />
+                  </div>
+                  <div className="service-meter">
+                    <div>
+                      <span>Next service</span>
+                      <strong>{formatNumber(vehicle.serviceAt)} km</strong>
+                    </div>
+                    <div>
+                      <i
+                        className={remaining < 1000 ? "warning" : ""}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <small>
+                      {remaining > 0
+                        ? `${formatNumber(remaining)} km remaining`
+                        : "Service threshold reached"}
+                    </small>
+                  </div>
+                  <footer className="vehicle-actions">
+                    <button
+                      onClick={() => {
+                        setSelectedVehicleId(vehicle.id);
+                        setDialog("qr");
+                      }}
+                    >
+                      <QrCode size={15} /> QR
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingVehicleId(vehicle.id);
+                        setSelectedVehicleId(vehicle.id);
+                        setDialog("vehicle");
+                      }}
+                    >
+                      <Pencil size={14} /> Edit
+                    </button>
+                    {vehicle.activeTrip ? (
+                      <button
+                        className="primary"
+                        onClick={() => {
+                          setSelectedVehicleId(vehicle.id);
+                          setDialog("complete");
+                        }}
+                      >
+                        Return <ArrowRight size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        className="primary"
+                        disabled={vehicle.status !== "AVAILABLE"}
+                        onClick={() => openStart(vehicle)}
+                      >
+                        Start trip <ArrowRight size={14} />
+                      </button>
+                    )}
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+        <section className="card data-card">
+          <SectionHeader
+            kicker="Auditable usage log"
+            title="Recent journeys"
+            action="Export log"
+          />
+          <div className="table-wrap">
+            <table className="data-table trip-table">
+              <thead>
+                <tr>
+                  <th>Trip</th>
+                  <th>Vehicle</th>
+                  <th>Driver</th>
+                  <th>Destination</th>
+                  <th>Before / after</th>
+                  <th>Distance</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trips.map((trip) => (
+                  <tr key={trip.id}>
+                    <td>
+                      <strong>
+                        {trip.id.startsWith("TRIP-")
+                          ? trip.id
+                          : trip.id.slice(-8).toUpperCase()}
+                      </strong>
+                      <small>
+                        {new Date(trip.startedAt).toLocaleDateString("en-MY", {
+                          day: "2-digit",
+                          month: "short",
+                        })}
+                      </small>
+                    </td>
+                    <td>
+                      <strong>
+                        {trip.vehicle?.plate ??
+                          fleetVehicles.find(
+                            (vehicle) => vehicle.id === trip.vehicleId,
+                          )?.plate}
+                      </strong>
+                    </td>
+                    <td>
+                      {trip.driverName}
+                      <small>{trip.driverEmployeeId}</small>
+                    </td>
+                    <td>
+                      <MapPin size={14} /> {trip.destination}
+                      <small>{trip.purpose}</small>
+                    </td>
+                    <td>
+                      <strong>
+                        {formatNumber(trip.odometerStart)} →{" "}
+                        {trip.odometerEnd
+                          ? formatNumber(trip.odometerEnd)
+                          : "Pending"}
+                      </strong>
+                      <small>
+                        Condition:{" "}
+                        {fleetStatusLabel(
+                          trip.conditionAfter ?? trip.conditionBefore,
+                        )}
+                      </small>
+                      {(trip.odometerPhotoBefore || trip.odometerPhotoAfter) && (
+                        <span className="trip-evidence">
+                          {trip.odometerPhotoBefore && <a href={trip.odometerPhotoBefore} target="_blank" rel="noreferrer">Before photo</a>}
+                          {trip.odometerPhotoAfter && <a href={trip.odometerPhotoAfter} target="_blank" rel="noreferrer">After photo</a>}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <strong>
+                        {trip.odometerEnd == null
+                          ? "—"
+                          : `${formatNumber(trip.odometerEnd - trip.odometerStart)} km`}
+                      </strong>
+                    </td>
+                    <td>
+                      <span
+                        className={`status-badge ${trip.status.toLowerCase().replaceAll("_", "-")}`}
+                      >
+                        {fleetStatusLabel(trip.status)}
+                      </span>
+                      {trip.status === "IN_PROGRESS" && (
+                        <button
+                          className="table-return"
+                          onClick={() => {
+                            setSelectedVehicleId(trip.vehicleId);
+                            setDialog("complete");
+                          }}
+                        >
+                          Complete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+      {fleetDialog}
+    </>
+  );
 }
 
-function StartTripForm({ vehicles, selectedVehicleId, onVehicleChange, onSubmit }: {
-  vehicles: Vehicle[]; selectedVehicleId: string; onVehicleChange: (id: string) => void;
-  onSubmit: (input: Parameters<typeof api.startVehicleTrip>[0]) => Promise<void>;
+function VehicleForm({
+  vehicle,
+  onSubmit,
+}: {
+  vehicle?: Vehicle;
+  onSubmit: (input: VehicleInput) => Promise<void>;
 }) {
-  const vehicle = vehicles.find((item) => item.id === selectedVehicleId)!;
-  const [employeeId, setEmployeeId] = useState(employeeTrainingRows[0]?.id ?? "");
-  const [destination, setDestination] = useState(""); const [purpose, setPurpose] = useState("");
-  const [passengers, setPassengers] = useState(1); const [odometer, setOdometer] = useState(vehicle.mileage);
-  const [fuel, setFuel] = useState(75); const [condition, setCondition] = useState<VehicleCondition>("GOOD");
-  const [notes, setNotes] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  const [checks, setChecks] = useState({ exterior: false, tyres: false, lights: false, documents: false });
-  useEffect(() => { setOdometer(vehicle.mileage); }, [vehicle.id, vehicle.mileage]);
+  const [plate, setPlate] = useState(vehicle?.plate ?? "");
+  const [model, setModel] = useState(vehicle?.model ?? "");
+  const [category, setCategory] = useState(vehicle?.category ?? "Operations");
+  const [assigned, setAssigned] = useState(vehicle?.assigned ?? "Shared pool");
+  const [mileage, setMileage] = useState(vehicle?.mileage ?? 0);
+  const [serviceAt, setServiceAt] = useState(vehicle?.serviceAt ?? 10000);
+  const [status, setStatus] = useState<VehicleInput["status"]>(
+    vehicle?.status === "SERVICE_DUE" || vehicle?.status === "OUT_OF_SERVICE"
+      ? vehicle.status
+      : "AVAILABLE",
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const hasActiveTrip = Boolean(
+    vehicle?.activeTrip || vehicle?.status === "IN_USE",
+  );
 
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setError("");
-    if (!Object.values(checks).every(Boolean)) { setError("Complete every required before-drive check."); return; }
-    const employee = employeeTrainingRows.find((person) => person.id === employeeId);
+    event.preventDefault();
+    setError("");
+    if (serviceAt < mileage && status === "AVAILABLE") {
+      setError(
+        "A vehicle past its service target cannot be marked available. Choose Service due or set a later service mileage.",
+      );
+      return;
+    }
+    try {
+      setBusy(true);
+      await onSubmit({
+        plate,
+        model,
+        category,
+        assigned,
+        mileage,
+        serviceAt,
+        status,
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to save this vehicle.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="fleet-form vehicle-registry-form" onSubmit={submit}>
+      <div className="registry-note">
+        <CarFront size={22} />
+        <div>
+          <strong>
+            {vehicle
+              ? "Keep the fleet record accurate"
+              : "Add this vehicle to the shared fleet"}
+          </strong>
+          <small>
+            The registration number appears on the QR label and every usage
+            record.
+          </small>
+        </div>
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          <span>Registration / plate number</span>
+          <input
+            value={plate}
+            onChange={(event) => setPlate(event.target.value.toUpperCase())}
+            placeholder="e.g. BKV 9132"
+            required
+            maxLength={20}
+          />
+        </label>
+        <label className="field">
+          <span>Make & model</span>
+          <input
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            placeholder="e.g. Toyota Hilux 2.4"
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Vehicle category</span>
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+          >
+            <option>Operations</option>
+            <option>Management</option>
+            <option>Staff transport</option>
+            <option>Logistics</option>
+            <option>Maintenance</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Assigned pool / owner</span>
+          <input
+            value={assigned}
+            onChange={(event) => setAssigned(event.target.value)}
+            placeholder="e.g. Shared pool or Warehouse"
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Current odometer (km)</span>
+          <input
+            type="number"
+            min="0"
+            value={mileage}
+            onChange={(event) => setMileage(Number(event.target.value))}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Next service at (km)</span>
+          <input
+            type="number"
+            min="0"
+            value={serviceAt}
+            onChange={(event) => setServiceAt(Number(event.target.value))}
+            required
+          />
+        </label>
+        <label className="field span-2">
+          <span>Operational status</span>
+          <select
+            value={hasActiveTrip ? "IN_USE" : status}
+            disabled={hasActiveTrip}
+            onChange={(event) =>
+              setStatus(event.target.value as VehicleInput["status"])
+            }
+          >
+            <option value="AVAILABLE">Available for use</option>
+            {hasActiveTrip && (
+              <option value="IN_USE">In use · controlled by active trip</option>
+            )}
+            <option value="SERVICE_DUE">Service due · block new trips</option>
+            <option value="OUT_OF_SERVICE">
+              Out of service · block new trips
+            </option>
+          </select>
+          {hasActiveTrip && (
+            <small className="field-help">
+              This status stays “In use” until the active trip is returned.
+            </small>
+          )}
+        </label>
+      </div>
+      {error && (
+        <div className="form-error">
+          <CircleAlert size={16} />
+          {error}
+        </div>
+      )}
+      <footer className="fleet-form-actions">
+        <span>
+          <ShieldCheck size={16} /> Vehicle details are stored in the fleet
+          registry and linked to its QR code.
+        </span>
+        <button className="button button-primary" disabled={busy}>
+          {busy ? (
+            "Saving…"
+          ) : (
+            <>
+              <CheckCircle2 size={16} />{" "}
+              {vehicle ? "Save vehicle changes" : "Register vehicle"}
+            </>
+          )}
+        </button>
+      </footer>
+    </form>
+  );
+}
+
+function StartTripForm({
+  vehicles,
+  selectedVehicleId,
+  onVehicleChange,
+  onSubmit,
+}: {
+  vehicles: Vehicle[];
+  selectedVehicleId: string;
+  onVehicleChange: (id: string) => void;
+  onSubmit: (
+    input: Parameters<typeof api.startVehicleTrip>[0],
+  ) => Promise<void>;
+}) {
+  const vehicle = vehicles.find((item) => item.id === selectedVehicleId)!;
+  const [employeeId, setEmployeeId] = useState(
+    employeeTrainingRows[0]?.id ?? "",
+  );
+  const [destination, setDestination] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [passengers, setPassengers] = useState(1);
+  const [odometer, setOdometer] = useState(vehicle.mileage);
+  const [odometerPhoto, setOdometerPhoto] = useState("");
+  const [fuel, setFuel] = useState(75);
+  const [condition, setCondition] = useState<VehicleCondition>("GOOD");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [checks, setChecks] = useState({
+    exterior: false,
+    tyres: false,
+    lights: false,
+    documents: false,
+  });
+  useEffect(() => {
+    setOdometer(vehicle.mileage);
+  }, [vehicle.id, vehicle.mileage]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (!odometerPhoto) {
+      setError(
+        "Take a clear photo of the ODO display before starting the trip.",
+      );
+      return;
+    }
+    if (!Object.values(checks).every(Boolean)) {
+      setError("Complete every required before-drive check.");
+      return;
+    }
+    const employee = employeeTrainingRows.find(
+      (person) => person.id === employeeId,
+    );
     if (!employee) return;
     try {
       setBusy(true);
-      await onSubmit({ vehicleId: vehicle.id, driverEmployeeId: employee.id, driverName: employee.name, destination, purpose, passengers, odometerStart: odometer, fuelBefore: fuel, conditionBefore: condition, checksBefore: checks, notesBefore: notes });
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to start this trip."); }
-    finally { setBusy(false); }
+      await onSubmit({
+        vehicleId: vehicle.id,
+        driverEmployeeId: employee.id,
+        driverName: employee.name,
+        destination,
+        purpose,
+        passengers,
+        odometerStart: odometer,
+        odometerPhotoBefore: odometerPhoto,
+        fuelBefore: fuel,
+        conditionBefore: condition,
+        checksBefore: checks,
+        notesBefore: notes,
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Unable to start this trip.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
-  return <form className="fleet-form" onSubmit={submit}><div className="fleet-form-step"><span>1</span><div><strong>Journey information</strong><small>Who is driving and where the vehicle is going.</small></div></div><div className="form-grid"><label className="field"><span>Vehicle</span><select value={vehicle.id} onChange={(event) => onVehicleChange(event.target.value)}>{vehicles.filter((item) => item.status === "AVAILABLE" || item.id === vehicle.id).map((item) => <option key={item.id} value={item.id}>{item.plate} · {item.model}</option>)}</select></label><label className="field"><span>Driver</span><select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>{employeeTrainingRows.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.id}</option>)}</select></label><label className="field"><span>Destination</span><input value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="e.g. Shah Alam" required /></label><label className="field"><span>Purpose</span><input value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder="e.g. Supplier meeting" required /></label><label className="field"><span>People in vehicle</span><input type="number" min="1" max="20" value={passengers} onChange={(event) => setPassengers(Number(event.target.value))} required /></label><label className="field"><span>Starting odometer (km)</span><input type="number" min={vehicle.mileage} value={odometer} onChange={(event) => setOdometer(Number(event.target.value))} required /></label></div><div className="fleet-form-step"><span>2</span><div><strong>Before-drive condition</strong><small>Confirm the vehicle is safe before leaving.</small></div></div><div className="inspection-grid">{[{ key: "exterior", label: "Body & exterior", detail: "No new damage or obstruction" }, { key: "tyres", label: "Tyres & wheels", detail: "Inflated with no visible damage" }, { key: "lights", label: "Lights & signals", detail: "Headlights, brake lights and signals work" }, { key: "documents", label: "Documents & equipment", detail: "Road tax, insurance and safety kit present" }].map((item) => <label key={item.key} className={checks[item.key as keyof typeof checks] ? "checked" : ""}><input type="checkbox" checked={checks[item.key as keyof typeof checks]} onChange={(event) => setChecks((current) => ({ ...current, [item.key]: event.target.checked }))} /><span><Check size={15} /></span><div><strong>{item.label}</strong><small>{item.detail}</small></div></label>)}</div><div className="form-grid inspection-fields"><label className="field"><span>Vehicle condition</span><select value={condition} onChange={(event) => setCondition(event.target.value as VehicleCondition)}><option value="GOOD">Good · cleared to drive</option><option value="ATTENTION_REQUIRED">Attention required</option><option value="UNSAFE">Unsafe · do not drive</option></select></label><label className="field fuel-field"><span>Fuel before drive <strong>{fuel}%</strong></span><input type="range" min="0" max="100" step="5" value={fuel} onChange={(event) => setFuel(Number(event.target.value))} /></label><label className="field span-2"><span>Existing damage / notes</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record scratches, warning lights or other observations before driving." rows={3} /></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Submitted checks are time-stamped in the trip record.</span><button className="button button-primary" disabled={busy || condition === "UNSAFE"}>{busy ? "Starting…" : <><CarFront size={16} /> Confirm & start trip</>}</button></footer></form>;
+  return (
+    <form className="fleet-form" onSubmit={submit}>
+      <div className="fleet-form-step">
+        <span>1</span>
+        <div>
+          <strong>Journey information</strong>
+          <small>Who is driving and where the vehicle is going.</small>
+        </div>
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          <span>Vehicle</span>
+          <select
+            value={vehicle.id}
+            onChange={(event) => onVehicleChange(event.target.value)}
+          >
+            {vehicles
+              .filter(
+                (item) => item.status === "AVAILABLE" || item.id === vehicle.id,
+              )
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.plate} · {item.model}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Driver</span>
+          <select
+            value={employeeId}
+            onChange={(event) => setEmployeeId(event.target.value)}
+          >
+            {employeeTrainingRows.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name} · {person.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Destination</span>
+          <input
+            value={destination}
+            onChange={(event) => setDestination(event.target.value)}
+            placeholder="e.g. Shah Alam"
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Purpose</span>
+          <input
+            value={purpose}
+            onChange={(event) => setPurpose(event.target.value)}
+            placeholder="e.g. Supplier meeting"
+            required
+          />
+        </label>
+        <label className="field">
+          <span>People in vehicle</span>
+          <input
+            type="number"
+            min="1"
+            max="20"
+            value={passengers}
+            onChange={(event) => setPassengers(Number(event.target.value))}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Starting odometer (km)</span>
+          <input
+            type="number"
+            min={vehicle.mileage}
+            value={odometer}
+            onChange={(event) => setOdometer(Number(event.target.value))}
+            required
+          />
+        </label>
+      </div>
+      <OdometerPhotoField
+        minimumMileage={vehicle.mileage}
+        photo={odometerPhoto}
+        onPhoto={setOdometerPhoto}
+        onMileage={setOdometer}
+      />
+      <div className="fleet-form-step">
+        <span>2</span>
+        <div>
+          <strong>Before-drive condition</strong>
+          <small>Confirm the vehicle is safe before leaving.</small>
+        </div>
+      </div>
+      <div className="inspection-grid">
+        {[
+          {
+            key: "exterior",
+            label: "Body & exterior",
+            detail: "No new damage or obstruction",
+          },
+          {
+            key: "tyres",
+            label: "Tyres & wheels",
+            detail: "Inflated with no visible damage",
+          },
+          {
+            key: "lights",
+            label: "Lights & signals",
+            detail: "Headlights, brake lights and signals work",
+          },
+          {
+            key: "documents",
+            label: "Documents & equipment",
+            detail: "Road tax, insurance and safety kit present",
+          },
+        ].map((item) => (
+          <label
+            key={item.key}
+            className={checks[item.key as keyof typeof checks] ? "checked" : ""}
+          >
+            <input
+              type="checkbox"
+              checked={checks[item.key as keyof typeof checks]}
+              onChange={(event) =>
+                setChecks((current) => ({
+                  ...current,
+                  [item.key]: event.target.checked,
+                }))
+              }
+            />
+            <span>
+              <Check size={15} />
+            </span>
+            <div>
+              <strong>{item.label}</strong>
+              <small>{item.detail}</small>
+            </div>
+          </label>
+        ))}
+      </div>
+      <div className="form-grid inspection-fields">
+        <label className="field">
+          <span>Vehicle condition</span>
+          <select
+            value={condition}
+            onChange={(event) =>
+              setCondition(event.target.value as VehicleCondition)
+            }
+          >
+            <option value="GOOD">Good · cleared to drive</option>
+            <option value="ATTENTION_REQUIRED">Attention required</option>
+            <option value="UNSAFE">Unsafe · do not drive</option>
+          </select>
+        </label>
+        <label className="field fuel-field">
+          <span>
+            Fuel before drive <strong>{fuel}%</strong>
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={fuel}
+            onChange={(event) => setFuel(Number(event.target.value))}
+          />
+        </label>
+        <label className="field span-2">
+          <span>Existing damage / notes</span>
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Record scratches, warning lights or other observations before driving."
+            rows={3}
+          />
+        </label>
+      </div>
+      {error && (
+        <div className="form-error">
+          <CircleAlert size={16} />
+          {error}
+        </div>
+      )}
+      <footer className="fleet-form-actions">
+        <span>
+          <ShieldCheck size={16} /> Submitted checks are time-stamped in the
+          trip record.
+        </span>
+        <button
+          className="button button-primary"
+          disabled={busy || condition === "UNSAFE"}
+        >
+          {busy ? (
+            "Starting…"
+          ) : (
+            <>
+              <CarFront size={16} /> Confirm & start trip
+            </>
+          )}
+        </button>
+      </footer>
+    </form>
+  );
 }
 
-function CompleteTripForm({ vehicle, trip, onSubmit }: {
-  vehicle: Vehicle; trip: VehicleTrip;
-  onSubmit: (input: Parameters<typeof api.completeVehicleTrip>[1]) => Promise<void>;
+function CompleteTripForm({
+  vehicle,
+  trip,
+  onSubmit,
+}: {
+  vehicle: Vehicle;
+  trip: VehicleTrip;
+  onSubmit: (
+    input: Parameters<typeof api.completeVehicleTrip>[1],
+  ) => Promise<void>;
 }) {
-  const [odometer, setOdometer] = useState(Math.max(vehicle.mileage, trip.odometerStart));
-  const [fuel, setFuel] = useState(50); const [condition, setCondition] = useState<VehicleCondition>("GOOD");
-  const [notes, setNotes] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  const [checks, setChecks] = useState({ interiorClean: false, fuelCardReturned: false, belongingsRemoved: false, damageReported: false });
+  const [odometer, setOdometer] = useState(
+    Math.max(vehicle.mileage, trip.odometerStart),
+  );
+  const [odometerPhoto, setOdometerPhoto] = useState("");
+  const [fuel, setFuel] = useState(50);
+  const [condition, setCondition] = useState<VehicleCondition>("GOOD");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [checks, setChecks] = useState({
+    interiorClean: false,
+    fuelCardReturned: false,
+    belongingsRemoved: false,
+    damageReported: false,
+  });
   const distance = Math.max(0, odometer - trip.odometerStart);
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setError("");
-    if (!checks.interiorClean || !checks.fuelCardReturned || !checks.belongingsRemoved) { setError("Complete every required return check."); return; }
+    event.preventDefault();
+    setError("");
+    if (!odometerPhoto) {
+      setError(
+        "Take a clear photo of the ODO display before completing the return.",
+      );
+      return;
+    }
+    if (
+      !checks.interiorClean ||
+      !checks.fuelCardReturned ||
+      !checks.belongingsRemoved
+    ) {
+      setError("Complete every required return check.");
+      return;
+    }
     try {
       setBusy(true);
-      await onSubmit({ odometerEnd: odometer, fuelAfter: fuel, conditionAfter: condition, checksAfter: checks, notesAfter: notes });
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to complete this trip."); }
-    finally { setBusy(false); }
+      await onSubmit({
+        odometerEnd: odometer,
+        odometerPhotoAfter: odometerPhoto,
+        fuelAfter: fuel,
+        conditionAfter: condition,
+        checksAfter: checks,
+        notesAfter: notes,
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to complete this trip.",
+      );
+    } finally {
+      setBusy(false);
+    }
   };
-  return <form className="fleet-form" onSubmit={submit}><div className="return-summary"><span><Route size={21} /></span><div><strong>{trip.driverName}</strong><small>{trip.purpose} · {trip.destination}</small></div><em>Started {new Date(trip.startedAt).toLocaleString("en-MY", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</em></div><div className="fleet-form-step"><span>1</span><div><strong>Return mileage & fuel</strong><small>The ending odometer automatically calculates total distance.</small></div></div><div className="form-grid"><label className="field"><span>Starting odometer</span><input value={`${formatNumber(trip.odometerStart)} km`} disabled /></label><label className="field"><span>Ending odometer (km)</span><input type="number" min={trip.odometerStart} value={odometer} onChange={(event) => setOdometer(Number(event.target.value))} required /></label><div className="distance-result"><span>Trip distance</span><strong>{formatNumber(distance)} km</strong></div><label className="field fuel-field"><span>Fuel after drive <strong>{fuel}%</strong></span><input type="range" min="0" max="100" step="5" value={fuel} onChange={(event) => setFuel(Number(event.target.value))} /></label></div><div className="fleet-form-step"><span>2</span><div><strong>After-drive inspection</strong><small>Leave the vehicle ready and report any change in condition.</small></div></div><div className="inspection-grid return-checks">{[{ key: "interiorClean", label: "Interior clean", detail: "Cabin and load area left tidy" }, { key: "fuelCardReturned", label: "Keys & fuel card returned", detail: "Returned to the designated location" }, { key: "belongingsRemoved", label: "Personal items removed", detail: "No belongings left in the vehicle" }, { key: "damageReported", label: "New damage / issue found", detail: "Selecting this flags the vehicle for attention" }].map((item) => <label key={item.key} className={checks[item.key as keyof typeof checks] ? `checked ${item.key === "damageReported" ? "attention" : ""}` : ""}><input type="checkbox" checked={checks[item.key as keyof typeof checks]} onChange={(event) => setChecks((current) => ({ ...current, [item.key]: event.target.checked }))} /><span><Check size={15} /></span><div><strong>{item.label}</strong><small>{item.detail}</small></div></label>)}</div><div className="form-grid inspection-fields"><label className="field"><span>Condition after drive</span><select value={condition} onChange={(event) => setCondition(event.target.value as VehicleCondition)}><option value="GOOD">Good · ready for next user</option><option value="ATTENTION_REQUIRED">Attention required</option><option value="UNSAFE">Unsafe · remove from service</option></select></label><label className="field span-2"><span>Return notes</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record refuelling, damage, warning lights, cleanliness or maintenance concerns." rows={3} /></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ClipboardCheck size={16} /> The vehicle status will update from this return check.</span><button className="button button-primary" disabled={busy}>{busy ? "Completing…" : <><CheckCircle2 size={16} /> Complete return</>}</button></footer></form>;
+  return (
+    <form className="fleet-form" onSubmit={submit}>
+      <div className="return-summary">
+        <span>
+          <Route size={21} />
+        </span>
+        <div>
+          <strong>{trip.driverName}</strong>
+          <small>
+            {trip.purpose} · {trip.destination}
+          </small>
+        </div>
+        <em>
+          Started{" "}
+          {new Date(trip.startedAt).toLocaleString("en-MY", {
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </em>
+      </div>
+      <div className="fleet-form-step">
+        <span>1</span>
+        <div>
+          <strong>Return mileage & fuel</strong>
+          <small>
+            The ending odometer automatically calculates total distance.
+          </small>
+        </div>
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          <span>Starting odometer</span>
+          <input value={`${formatNumber(trip.odometerStart)} km`} disabled />
+        </label>
+        <label className="field">
+          <span>Ending odometer (km)</span>
+          <input
+            type="number"
+            min={trip.odometerStart}
+            value={odometer}
+            onChange={(event) => setOdometer(Number(event.target.value))}
+            required
+          />
+        </label>
+        <div className="distance-result">
+          <span>Trip distance</span>
+          <strong>{formatNumber(distance)} km</strong>
+        </div>
+        <label className="field fuel-field">
+          <span>
+            Fuel after drive <strong>{fuel}%</strong>
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={fuel}
+            onChange={(event) => setFuel(Number(event.target.value))}
+          />
+        </label>
+      </div>
+      <OdometerPhotoField
+        minimumMileage={trip.odometerStart}
+        photo={odometerPhoto}
+        onPhoto={setOdometerPhoto}
+        onMileage={setOdometer}
+      />
+      <div className="fleet-form-step">
+        <span>2</span>
+        <div>
+          <strong>After-drive inspection</strong>
+          <small>
+            Leave the vehicle ready and report any change in condition.
+          </small>
+        </div>
+      </div>
+      <div className="inspection-grid return-checks">
+        {[
+          {
+            key: "interiorClean",
+            label: "Interior clean",
+            detail: "Cabin and load area left tidy",
+          },
+          {
+            key: "fuelCardReturned",
+            label: "Keys & fuel card returned",
+            detail: "Returned to the designated location",
+          },
+          {
+            key: "belongingsRemoved",
+            label: "Personal items removed",
+            detail: "No belongings left in the vehicle",
+          },
+          {
+            key: "damageReported",
+            label: "New damage / issue found",
+            detail: "Selecting this flags the vehicle for attention",
+          },
+        ].map((item) => (
+          <label
+            key={item.key}
+            className={
+              checks[item.key as keyof typeof checks]
+                ? `checked ${item.key === "damageReported" ? "attention" : ""}`
+                : ""
+            }
+          >
+            <input
+              type="checkbox"
+              checked={checks[item.key as keyof typeof checks]}
+              onChange={(event) =>
+                setChecks((current) => ({
+                  ...current,
+                  [item.key]: event.target.checked,
+                }))
+              }
+            />
+            <span>
+              <Check size={15} />
+            </span>
+            <div>
+              <strong>{item.label}</strong>
+              <small>{item.detail}</small>
+            </div>
+          </label>
+        ))}
+      </div>
+      <div className="form-grid inspection-fields">
+        <label className="field">
+          <span>Condition after drive</span>
+          <select
+            value={condition}
+            onChange={(event) =>
+              setCondition(event.target.value as VehicleCondition)
+            }
+          >
+            <option value="GOOD">Good · ready for next user</option>
+            <option value="ATTENTION_REQUIRED">Attention required</option>
+            <option value="UNSAFE">Unsafe · remove from service</option>
+          </select>
+        </label>
+        <label className="field span-2">
+          <span>Return notes</span>
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="Record refuelling, damage, warning lights, cleanliness or maintenance concerns."
+            rows={3}
+          />
+        </label>
+      </div>
+      {error && (
+        <div className="form-error">
+          <CircleAlert size={16} />
+          {error}
+        </div>
+      )}
+      <footer className="fleet-form-actions">
+        <span>
+          <ClipboardCheck size={16} /> The vehicle status will update from this
+          return check.
+        </span>
+        <button className="button button-primary" disabled={busy}>
+          {busy ? (
+            "Completing…"
+          ) : (
+            <>
+              <CheckCircle2 size={16} /> Complete return
+            </>
+          )}
+        </button>
+      </footer>
+    </form>
+  );
 }
 
 function VehicleQr({ vehicle }: { vehicle: Vehicle }) {
