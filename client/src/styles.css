@@ -211,12 +211,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .nav-backdrop { display: none; }
 
 /* Final platform treatment: fixed navigation, black-first branding and visible motion. */
-.brand-lockup { min-height: 51px; padding: 0 3px 8px; border-bottom: 0; animation: brandSweep .7s cubic-bezier(.16,1,.3,1) both; }
-.brand-lockup img.company-brand { display: block; width: 212px; height: 48px; max-height: 48px; flex: 0 1 auto; object-fit: contain; object-position: left center; filter: drop-shadow(0 8px 18px rgba(0,0,0,.3)); }
-.product-name { min-width: 0; margin: 0; padding: 10px 4px 12px; border: 0; border-bottom: 1px solid rgba(255,255,255,.09); line-height: 1.05; animation: brandSweep .7s .1s cubic-bezier(.16,1,.3,1) both; }
+.brand-lockup { min-height: 68px; gap: 10px; padding: 0 0 12px; border-bottom: 1px solid rgba(255,255,255,.09); animation: brandSweep .7s cubic-bezier(.16,1,.3,1) both; }
+.brand-lockup img.company-brand { display: block; width: 62px; height: 62px; max-height: none; flex: 0 0 62px; object-fit: contain; filter: drop-shadow(0 6px 12px rgba(0,0,0,.22)); }
+.product-name { min-width: 0; margin: 0; padding: 0; border: 0; line-height: 1.1; }
 .product-name strong, .product-name span { white-space: normal; }
-.product-name strong { font-size: 17px; letter-spacing: -.025em; }
-.product-name span { margin-top: 6px; color: #fff; font-size: 8px; font-weight: 850; letter-spacing: .18em; }
+.product-name strong { font-size: 16px; letter-spacing: -.025em; }
+.product-name span { margin-top: 5px; color: #b9babd; font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; }
 .company-lockup { display: none; }
 .environment-pill { margin: 12px 4px 8px; font-size: 9px; letter-spacing: .07em; }
 .environment-pill { animation: navArrive .5s .18s cubic-bezier(.16,1,.3,1) both; }
@@ -403,7 +403,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .hero-card { grid-template-columns: 1fr; gap: 28px; }.hero-signals { max-width: 650px; }.metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.feature-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }.vehicle-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }.overview-grid, .bottom-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 1050px) {
-  .app-shell { padding-left: 0; }.sidebar { transform: translateX(-100%); transition: transform .25s ease; box-shadow: 15px 0 40px rgba(0,0,0,.25); }.sidebar.mobile-open { transform: translateX(0); }.sidebar-close { display: block; margin-left: 8px; }.nav-backdrop { position: fixed; inset: 0; z-index: 19; display: block; border: 0; background: rgba(0,0,0,.45); }.mobile-menu { display: grid; place-items: center; }.calendar-layout, .planner-layout, .email-layout { grid-template-columns: 1fr; }.day-panel, .planner-side, .library-filter { position: static; }.library-layout { grid-template-columns: 190px 1fr; }.topbar { padding: 13px 20px; }.page-stage { padding: 22px 20px 34px; }
+  .app-shell { padding-left: 0; }.sidebar { transform: translateX(-100%); transition: transform .25s ease; box-shadow: 15px 0 40px rgba(0,0,0,.25); }.sidebar.mobile-open { transform: translateX(0); }.sidebar-close { display: block; flex: 0 0 auto; margin-left: auto; padding: 4px; }.nav-backdrop { position: fixed; inset: 0; z-index: 19; display: block; border: 0; background: rgba(0,0,0,.45); }.mobile-menu { display: grid; place-items: center; }.calendar-layout, .planner-layout, .email-layout { grid-template-columns: 1fr; }.day-panel, .planner-side, .library-filter { position: static; }.library-layout { grid-template-columns: 190px 1fr; }.topbar { padding: 13px 20px; }.page-stage { padding: 22px 20px 34px; }
 }
 @media (max-width: 760px) {
   .fleet-hero-actions { width: 100%; justify-content: stretch; }.fleet-hero-actions .button { flex: 1; }
@@ -420,11 +420,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .admin-savebar .button { width: 100%; }
 }
 
+@media (max-width: 760px) {
+  .brand-lockup img.company-brand { width: 58px; height: 58px; flex-basis: 58px; }
+}
+
 @media (max-height: 760px) and (min-width: 1051px) {
   .sidebar { padding-top: 11px; padding-bottom: 9px; }
-  .brand-lockup { min-height: 47px; padding-bottom: 6px; }
-  .brand-lockup img.company-brand { width: 190px; height: 40px; max-height: 40px; }
-  .product-name { padding-top: 7px; padding-bottom: 8px; }
+  .brand-lockup { min-height: 54px; padding-bottom: 6px; }
+  .brand-lockup img.company-brand { width: 50px; height: 50px; flex-basis: 50px; }
   .product-name strong { font-size: 15px; }
   .environment-pill { margin: 7px 4px 5px; }
   .nav-section-label { margin-top: 6px; }

@@ -182,10 +182,10 @@ function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingTo
     {mobileOpen && <button className="nav-backdrop" onClick={onClose} aria-label="Close navigation" />}
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="brand-lockup">
-        <img className="company-brand" src="/sgi-logo.png" alt="Sugihara Grand Industries Sdn Bhd" />
+        <img className="company-brand" src="/sugihara-mark.png" alt="Sugihara Grand Industries" />
+        <div className="product-name"><strong>Human Resource Digital</strong><span>HR operations workspace</span></div>
         <button className="sidebar-close" onClick={onClose} aria-label="Close navigation"><X size={20} /></button>
       </div>
-      <div className="product-name"><strong>Human Resource Digital</strong><span>HR operations workspace</span></div>
       <div className="environment-pill">Internal operations platform</div>
       <nav className="primary-nav" aria-label="Primary navigation">
         <NavButton icon={LayoutDashboard} label="Dashboard" active={activeView === "overview"} onClick={() => onNavigate("overview")} />
@@ -1028,8 +1028,11 @@ function VehicleForm({
   const [category, setCategory] = useState(vehicle?.category ?? "Operations");
   const [assigned, setAssigned] = useState(vehicle?.assigned ?? "Shared pool");
   const [photo, setPhoto] = useState<string | null>(vehicle?.photo ?? null);
-  const [mileage, setMileage] = useState(vehicle?.mileage ?? 0);
-  const [serviceAt, setServiceAt] = useState(vehicle?.serviceAt ?? 10000);
+  // Keep odometer inputs as text while they are being edited. Converting an
+  // empty number input to Number immediately produces 0, which prevented an
+  // existing (seeded) reading from being cleared and replaced naturally.
+  const [mileage, setMileage] = useState(() => String(vehicle?.mileage ?? ""));
+  const [serviceAt, setServiceAt] = useState(() => String(vehicle?.serviceAt ?? 10000));
   const [status, setStatus] = useState<VehicleInput["status"]>(
     vehicle?.status === "SERVICE_DUE" || vehicle?.status === "OUT_OF_SERVICE"
       ? vehicle.status
@@ -1044,12 +1047,19 @@ function VehicleForm({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
-    if (serviceAt < mileage && status === "AVAILABLE") {
-      setError(
-        "A vehicle past its service target cannot be marked available. Choose Service due or set a later service mileage.",
-      );
+    const actualMileage = Number(mileage);
+    const nextServiceMileage = Number(serviceAt);
+    if (!Number.isInteger(actualMileage) || actualMileage < 0) {
+      setError("Enter the vehicle's actual odometer reading as a whole number.");
       return;
     }
+    if (!Number.isInteger(nextServiceMileage) || nextServiceMileage < 0) {
+      setError("Enter the next service mileage as a whole number.");
+      return;
+    }
+    const savedStatus = status === "AVAILABLE" && actualMileage >= nextServiceMileage
+      ? "SERVICE_DUE"
+      : status;
     try {
       setBusy(true);
       await onSubmit({
@@ -1057,9 +1067,9 @@ function VehicleForm({
         model,
         category,
         assigned,
-        mileage,
-        serviceAt,
-        status,
+        mileage: actualMileage,
+        serviceAt: nextServiceMileage,
+        status: savedStatus,
         photo,
       });
     } catch (cause) {
@@ -1137,9 +1147,12 @@ function VehicleForm({
             type="number"
             min="0"
             value={mileage}
-            onChange={(event) => setMileage(Number(event.target.value))}
+            onChange={(event) => setMileage(event.target.value)}
+            onFocus={(event) => event.currentTarget.select()}
+            placeholder="Enter actual mileage"
             required
           />
+          <small className="field-help">Select the saved value and type the vehicle's actual odometer reading.</small>
         </label>
         <label className="field">
           <span>Next service at (km)</span>
@@ -1147,9 +1160,13 @@ function VehicleForm({
             type="number"
             min="0"
             value={serviceAt}
-            onChange={(event) => setServiceAt(Number(event.target.value))}
+            onChange={(event) => setServiceAt(event.target.value)}
+            onFocus={(event) => event.currentTarget.select()}
             required
           />
+          {mileage !== "" && serviceAt !== "" && Number(mileage) >= Number(serviceAt) && status === "AVAILABLE" && (
+            <small className="field-help">This mileage has reached the service limit, so saving will mark the vehicle as Service due.</small>
+          )}
         </label>
         <label className="field span-2">
           <span>Operational status</span>
