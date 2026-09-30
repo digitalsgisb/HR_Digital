@@ -24,10 +24,10 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-registry" | "administration";
+  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-registry" | "usage-history" | "administration";
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
-  overview: { title: "Dashboard", eyebrow: "Human Resource Digital" },
+  overview: { title: "Dashboard", eyebrow: "HR Digital" },
   employees: { title: "Employee database", eyebrow: "People" },
   "training-overview": { title: "Training overview", eyebrow: "Learning & development" },
   "training-calendar": { title: "Training calendar", eyebrow: "Learning & development" },
@@ -37,6 +37,7 @@ const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   "notes-library": { title: "Training notes library", eyebrow: "Learning & development" },
   fleet: { title: "Company car usage", eyebrow: "Mobility" },
   "fleet-registry": { title: "Vehicle registry", eyebrow: "Mobility" },
+  "usage-history": { title: "Usage history", eyebrow: "Company car / audit" },
   administration: { title: "Administration", eyebrow: "System controls" }
 };
 
@@ -51,7 +52,8 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
 
 const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "fleet", label: "Usage tracker", icon: Route },
-  { id: "fleet-registry", label: "Vehicle registry", icon: CarFront }
+  { id: "fleet-registry", label: "Vehicle registry", icon: CarFront },
+  { id: "usage-history", label: "Usage history", icon: Clock3 }
 ];
 
 const formatLongDate = (value: string) =>
@@ -127,6 +129,7 @@ function App() {
   const [calendarSessions, setCalendarSessions] = useState<CalendarSession[]>(initialTrainingSessions);
   const [selectedDate, setSelectedDate] = useState("2026-09-21");
   const [notice, setNotice] = useState("");
+  const [historyVehicleId, setHistoryVehicleId] = useState<string | null>(null);
 
   useEffect(() => { api.getDashboard().then(setDashboard); }, []);
   useEffect(() => {
@@ -139,8 +142,13 @@ function App() {
     setActiveView(view);
     setMobileNavOpen(false);
     if (view.startsWith("training") || view === "email-automation" || view === "notes-library") setTrainingOpen(true);
-    if (view === "fleet" || view === "fleet-registry") setFleetOpen(true);
+    if (view === "fleet" || view === "fleet-registry" || view === "usage-history") setFleetOpen(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const openHistory = (vehicleId: string) => {
+    setHistoryVehicleId(vehicleId);
+    navigate("usage-history");
   };
 
   return (
@@ -162,8 +170,9 @@ function App() {
           {activeView === "training-records" && <TrainingRecords />}
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}
           {activeView === "notes-library" && <NotesLibrary showNotice={setNotice} />}
-          {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} />}
-          {activeView === "fleet-registry" && <VehicleRegistryPage showNotice={setNotice} />}
+          {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
+          {activeView === "fleet-registry" && <VehicleRegistryPage showNotice={setNotice} onOpenHistory={openHistory} />}
+          {activeView === "usage-history" && <UsageHistory initialVehicleId={historyVehicleId} />}
           {activeView === "administration" && <Administration showNotice={setNotice} />}
         </div>
       </main>
@@ -183,15 +192,15 @@ function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingTo
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="brand-lockup">
         <img className="company-brand" src="/sugihara-mark.png" alt="Sugihara Grand Industries" />
-        <div className="product-name"><strong>Human Resource Digital</strong><span>HR operations workspace</span></div>
+        <div className="product-name"><strong>HR Digital</strong><span>HR operations workspace</span></div>
         <button className="sidebar-close" onClick={onClose} aria-label="Close navigation"><X size={20} /></button>
       </div>
-      <div className="environment-pill">Internal operations platform</div>
       <nav className="primary-nav" aria-label="Primary navigation">
+        <p className="nav-section-label">Overview</p>
         <NavButton icon={LayoutDashboard} label="Dashboard" active={activeView === "overview"} onClick={() => onNavigate("overview")} />
         <p className="nav-section-label">People</p>
         <NavButton icon={UsersRound} label="Employee database" active={activeView === "employees"} onClick={() => onNavigate("employees")} />
-        <p className="nav-section-label">Services</p>
+        <p className="nav-section-label">Workspaces</p>
         <button className={`nav-item nav-parent ${inTraining ? "active-parent" : ""}`} onClick={onTrainingToggle}>
           <span className="nav-icon"><BookOpenCheck size={18} /></span><span>Training</span><ChevronDown className={trainingOpen ? "rotate" : ""} size={16} />
         </button>
@@ -210,7 +219,7 @@ function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingTo
         <NavButton icon={Settings2} label="Settings" active={activeView === "administration"} onClick={() => onNavigate("administration")} />
       </nav>
       <div className="sidebar-footer">
-        <div className="server-status"><span>AI PC server</span><strong>Online</strong></div>
+        <div className="sidebar-message"><span className="sidebar-message-icon"><ShieldCheck size={21} /></span><div><strong>People, learning & mobility</strong><span>One workspace for HR.</span></div></div>
         <span className="copyright">© 2026 Digital Transformation Unit</span>
       </div>
     </aside>
@@ -247,7 +256,7 @@ function Topbar({ meta, onMenu, onSettings, showNotice }: {
 
   const sendTestNotification = async () => {
     if (permission !== "granted") return enableNotifications();
-    const delivered = await showSystemNotification("Human Resource Digital", "Notifications are working on this device.");
+    const delivered = await showSystemNotification("HR Digital", "Notifications are working on this device.");
     showNotice(delivered ? "Test notification sent successfully." : "The browser could not display the test notification.");
   };
 
@@ -401,7 +410,7 @@ const emailBodyCopy: Record<string, string> = {
 
 function EmailAutomation({ showNotice }: { showNotice: (message: string) => void }) {
   const [selected, setSelected] = useState(emailAutomations[0]);
-  return <section className="page-stack"><div className="module-intro email-intro"><div><span className="module-kicker"><MailCheck size={15} /> Automated communication</span><h2>The right message, at the right moment.</h2><p>Keep employees and managers informed from enrolment through post-training effectiveness review.</p></div><button className="button button-light" onClick={() => showNotice("A new email workflow draft has been created.")}><Plus size={17} /> New automation</button></div><div className="email-layout"><section className="card automation-list"><SectionHeader kicker="Active workflows" title="Email journey" />{emailAutomations.map((automation) => <button key={automation.id} className={selected.id === automation.id ? "selected" : ""} onClick={() => setSelected(automation)}><span className="automation-order"><MailCheck size={18} /></span><div><strong>{automation.title}</strong><p>{automation.trigger}</p><small>{automation.audience}</small></div><span className={`status-badge ${automation.status.toLowerCase()}`}>{automation.status}</span><em>{automation.sent} sent</em></button>)}</section><section className="card email-preview-card"><div className="preview-toolbar"><div><p>Email preview</p><h2>{selected.title}</h2></div><button className="button button-secondary" onClick={() => showNotice("Preview prepared. Connect SMTP credentials on the Linux server to deliver test emails.")}><Send size={15} /> Send test</button></div><div className="email-window"><div className="email-meta"><div><span className="email-logo">SGI</span><span><strong>Human Resource Digital</strong><small>training@sugiharagrand.com</small></span></div><dl><div><dt>To</dt><dd>Employee name</dd></div><div><dt>Subject</dt><dd>{selected.title}: GMP Refresher 2026</dd></div></dl></div><div className="email-body"><div className="email-brand"><img src="/sgi-logo.png" alt="Sugihara Grand Industries" /></div><span className="email-tag">Training & development</span><h3>{selected.id === "email-3" ? "How has your training helped?" : selected.id === "email-2" ? "Share your training notes" : "Your training is coming up"}</h3><p>Hi Muhammad,</p><p>{emailBodyCopy[selected.id]}</p><div className="email-detail-box"><CalendarDays size={19} /><span><strong>GMP Refresher 2026</strong><small>Monday, 21 September · 9:00 AM<br />Main Conference Room</small></span></div><button>{selected.id === "email-3" ? "Complete effectiveness form" : selected.id === "email-2" ? "Upload training notes" : "View training details"}</button><p className="email-signoff">Thank you,<br /><strong>Human Resources · Sugihara Grand Industries</strong></p></div><footer>This is an automated message from Human Resource Digital.</footer></div><div className="delivery-note"><ShieldCheck size={18} /><div><strong>Delivery-ready template</strong><span>Responsive HTML, branded sender identity and tracked action link. SMTP credentials are required on deployment.</span></div></div></section></div></section>;
+  return <section className="page-stack"><div className="module-intro email-intro"><div><span className="module-kicker"><MailCheck size={15} /> Automated communication</span><h2>The right message, at the right moment.</h2><p>Keep employees and managers informed from enrolment through post-training effectiveness review.</p></div><button className="button button-light" onClick={() => showNotice("A new email workflow draft has been created.")}><Plus size={17} /> New automation</button></div><div className="email-layout"><section className="card automation-list"><SectionHeader kicker="Active workflows" title="Email journey" />{emailAutomations.map((automation) => <button key={automation.id} className={selected.id === automation.id ? "selected" : ""} onClick={() => setSelected(automation)}><span className="automation-order"><MailCheck size={18} /></span><div><strong>{automation.title}</strong><p>{automation.trigger}</p><small>{automation.audience}</small></div><span className={`status-badge ${automation.status.toLowerCase()}`}>{automation.status}</span><em>{automation.sent} sent</em></button>)}</section><section className="card email-preview-card"><div className="preview-toolbar"><div><p>Email preview</p><h2>{selected.title}</h2></div><button className="button button-secondary" onClick={() => showNotice("Preview prepared. Connect SMTP credentials on the Linux server to deliver test emails.")}><Send size={15} /> Send test</button></div><div className="email-window"><div className="email-meta"><div><span className="email-logo">SGI</span><span><strong>HR Digital</strong><small>training@sugiharagrand.com</small></span></div><dl><div><dt>To</dt><dd>Employee name</dd></div><div><dt>Subject</dt><dd>{selected.title}: GMP Refresher 2026</dd></div></dl></div><div className="email-body"><div className="email-brand"><img src="/sgi-logo.png" alt="Sugihara Grand Industries" /></div><span className="email-tag">Training & development</span><h3>{selected.id === "email-3" ? "How has your training helped?" : selected.id === "email-2" ? "Share your training notes" : "Your training is coming up"}</h3><p>Hi Muhammad,</p><p>{emailBodyCopy[selected.id]}</p><div className="email-detail-box"><CalendarDays size={19} /><span><strong>GMP Refresher 2026</strong><small>Monday, 21 September · 9:00 AM<br />Main Conference Room</small></span></div><button>{selected.id === "email-3" ? "Complete effectiveness form" : selected.id === "email-2" ? "Upload training notes" : "View training details"}</button><p className="email-signoff">Thank you,<br /><strong>Human Resources · Sugihara Grand Industries</strong></p></div><footer>This is an automated message from HR Digital.</footer></div><div className="delivery-note"><ShieldCheck size={18} /><div><strong>Delivery-ready template</strong><span>Responsive HTML, branded sender identity and tracked action link. SMTP credentials are required on deployment.</span></div></div></section></div></section>;
 }
 
 function NotesLibrary({ showNotice }: { showNotice: (message: string) => void }) {
@@ -450,10 +459,12 @@ function FleetTracker({
   showNotice,
   initialVehicleId,
   onOpenRegistry,
+  onOpenHistory,
 }: {
   showNotice: (message: string) => void;
   initialVehicleId?: string;
   onOpenRegistry: () => void;
+  onOpenHistory: (vehicleId: string) => void;
 }) {
   const fallback = makeFallbackFleet();
   const [fleetVehicles, setFleetVehicles] = useState<Vehicle[]>(
@@ -786,6 +797,7 @@ function FleetTracker({
                     </small>
                   </div>
                   <footer className="vehicle-actions">
+                    <button onClick={() => onOpenHistory(vehicle.id)}><Clock3 size={15} /> History</button>
                     <button
                       onClick={() => {
                         setSelectedVehicleId(vehicle.id);
@@ -927,7 +939,7 @@ function FleetTracker({
   );
 }
 
-function VehicleRegistryPage({ showNotice }: { showNotice: (message: string) => void }) {
+function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (message: string) => void; onOpenHistory: (vehicleId: string) => void }) {
   const fallback = makeFallbackFleet();
   const [vehicles, setVehicles] = useState<Vehicle[]>(fallback.vehicles);
   const [query, setQuery] = useState("");
@@ -1005,7 +1017,7 @@ function VehicleRegistryPage({ showNotice }: { showNotice: (message: string) => 
         <div className="registry-card-grid">
           {visible.map((vehicle) => <article className="registry-vehicle-card" key={vehicle.id}>
             <div className="registry-vehicle-photo">{vehicle.photo ? <img src={vehicle.photo} alt={`${vehicle.plate} ${vehicle.model}`} /> : <span><CarFront size={34} /><small>Photo not added</small></span>}<em className={vehicle.status.toLowerCase().replaceAll("_", "-")}>{fleetStatusLabel(vehicle.status)}</em></div>
-            <div className="registry-vehicle-copy"><div><span>{vehicle.category}</span><h3>{vehicle.plate}</h3><p>{vehicle.model}</p></div><dl><div><dt>Current odometer</dt><dd>{formatNumber(vehicle.mileage)} km</dd></div><div><dt>Next service</dt><dd>{formatNumber(vehicle.serviceAt)} km</dd></div><div><dt>Pool / owner</dt><dd>{vehicle.assigned}</dd></div></dl><footer><button className="button button-secondary" onClick={() => setEditing(vehicle)}><Pencil size={15} /> Edit details</button><button className="button button-danger-outline" onClick={() => { setError(""); setRemoving(vehicle); }}><Trash2 size={15} /> Remove</button></footer></div>
+            <div className="registry-vehicle-copy"><div><span>{vehicle.category}</span><h3>{vehicle.plate}</h3><p>{vehicle.model}</p></div><dl><div><dt>Current odometer</dt><dd>{formatNumber(vehicle.mileage)} km</dd></div><div><dt>Next service</dt><dd>{formatNumber(vehicle.serviceAt)} km</dd></div><div><dt>Pool / owner</dt><dd>{vehicle.assigned}</dd></div></dl><footer><button className="button button-secondary" onClick={() => onOpenHistory(vehicle.id)}><Clock3 size={15} /> Usage history</button><button className="button button-secondary" onClick={() => setEditing(vehicle)}><Pencil size={15} /> Edit details</button><button className="button button-danger-outline" onClick={() => { setError(""); setRemoving(vehicle); }}><Trash2 size={15} /> Remove</button></footer></div>
           </article>)}
           {!visible.length && <div className="registry-empty"><Search size={27} /><strong>No vehicle matched that search</strong><p>Try a plate number, model, category or assigned pool.</p></div>}
         </div>
@@ -1014,6 +1026,83 @@ function VehicleRegistryPage({ showNotice }: { showNotice: (message: string) => 
     {editor}
     {removalDialog}
   </>;
+}
+
+function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null }) {
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [trips, setTrips] = useState<VehicleTrip[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState(initialVehicleId ?? "");
+  const [loading, setLoading] = useState(true);
+  const [preview, setPreview] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([api.getVehicles(), api.getVehicleTrips()])
+      .then(([vehicleRows, tripRows]) => {
+        if (!mounted) return;
+        const allVehicles = new Map(vehicleRows.map((vehicle) => [vehicle.id, vehicle]));
+        tripRows.forEach((trip) => {
+          if (trip.vehicle && !allVehicles.has(trip.vehicleId)) allVehicles.set(trip.vehicleId, trip.vehicle);
+        });
+        const available = [...allVehicles.values()].sort((a, b) => a.plate.localeCompare(b.plate));
+        setVehicles(available);
+        setTrips(tripRows);
+        setSelectedVehicleId((current) => current || available[0]?.id || "");
+        setPreview(false);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        const fallback = makeFallbackFleet();
+        setVehicles(fallback.vehicles);
+        setTrips(fallback.trips);
+        setSelectedVehicleId((current) => current || fallback.vehicles[0]?.id || "");
+        setPreview(true);
+      })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, []);
+
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+  const history = trips.filter((trip) => trip.vehicleId === selectedVehicleId)
+    .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+  const completed = history.filter((trip) => trip.status === "COMPLETED");
+  const totalDistance = completed.reduce((sum, trip) => sum + Math.max(0, (trip.odometerEnd ?? trip.odometerStart) - trip.odometerStart), 0);
+  const localDate = (value: string) => new Date(value).toLocaleString("en-MY", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kuala_Lumpur"
+  });
+
+  return <section className="page-stack usage-history-page">
+    <div className="module-intro history-intro"><div><span className="module-kicker"><Clock3 size={15} /> Company car / audit</span><h2>Usage history for every vehicle.</h2><p>Select a car to review its drivers, journeys, odometer readings, inspections and saved evidence.</p></div></div>
+    {preview && <div className="history-preview" role="status">The fleet API is unavailable. Showing sample records until the server is connected.</div>}
+    <div className="history-selector card">
+      <div><span className="history-kicker">Vehicle record</span><h3>{selectedVehicle?.plate ?? (loading ? "Loading vehicles…" : "No vehicle selected")}</h3><p>{selectedVehicle?.model ?? "Choose a vehicle to inspect its history."}{selectedVehicle?.archivedAt ? " · Archived" : ""}</p></div>
+      <label><span>Select company car</span><select value={selectedVehicleId} onChange={(event) => setSelectedVehicleId(event.target.value)} disabled={loading || vehicles.length === 0}>
+        {vehicles.length === 0 && <option value="">No vehicles available</option>}
+        {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} · {vehicle.model}{vehicle.archivedAt ? " (archived)" : ""}</option>)}
+      </select></label>
+    </div>
+    <div className="history-summary">
+      <div><span>Total journeys</span><strong>{history.length}</strong><small>Recorded check-outs</small></div>
+      <div><span>Completed</span><strong>{completed.length}</strong><small>Returned vehicles</small></div>
+      <div><span>Distance logged</span><strong>{formatNumber(totalDistance)} <em>km</em></strong><small>Completed journeys</small></div>
+      <div><span>Latest use</span><strong className="history-last-used">{history[0] ? localDate(history[0].startedAt).split(",")[0] : "—"}</strong><small>{history[0] ? history[0].driverName : "No journeys yet"}</small></div>
+    </div>
+    <section className="card history-log"><div className="history-log-heading"><div><span className="history-kicker">Audit trail</span><h3>{selectedVehicle?.plate ?? "Vehicle"} usage log</h3><p>{history.length} journey{history.length === 1 ? "" : "s"} · newest first</p></div><ShieldCheck size={24} /></div>
+      {loading && <div className="history-empty">Loading usage history…</div>}
+      {!loading && history.length === 0 && <div className="history-empty"><Clock3 size={28} /><strong>No usage recorded for this car</strong><p>Trips will appear here after a driver starts using it.</p></div>}
+      {history.map((trip) => <article className="history-entry" key={trip.id}>
+        <div className="history-entry-top"><span className="history-entry-icon"><Route size={18} /></span><div><strong>{trip.destination}</strong><small>{trip.purpose} · {trip.id.startsWith("TRIP-") ? trip.id : trip.id.slice(-8).toUpperCase()}</small></div><span className={`status-badge ${trip.status.toLowerCase().replaceAll("_", "-")}`}>{fleetStatusLabel(trip.status)}</span></div>
+        <div className="history-entry-grid">
+          <div><span>Driver</span><strong>{trip.driverName}</strong><small>{trip.driverEmployeeId} · {trip.passengers} passenger{trip.passengers === 1 ? "" : "s"}</small></div>
+          <div><span>Checked out</span><strong>{localDate(trip.startedAt)}</strong><small>Fuel {trip.fuelBefore}% · {fleetStatusLabel(trip.conditionBefore)}</small></div>
+          <div><span>Returned</span><strong>{trip.endedAt ? localDate(trip.endedAt) : "Still in use"}</strong><small>{trip.fuelAfter == null ? "Return inspection pending" : `Fuel ${trip.fuelAfter}% · ${fleetStatusLabel(trip.conditionAfter ?? trip.conditionBefore)}`}</small></div>
+          <div><span>Odometer</span><strong>{formatNumber(trip.odometerStart)} → {trip.odometerEnd == null ? "Pending" : formatNumber(trip.odometerEnd)} km</strong><small>{trip.odometerEnd == null ? "Distance pending" : `${formatNumber(Math.max(0, trip.odometerEnd - trip.odometerStart))} km travelled`}</small></div>
+        </div>
+        <div className="history-entry-footer"><div className="history-evidence">{trip.odometerPhotoBefore && <a href={trip.odometerPhotoBefore} target="_blank" rel="noreferrer"><Gauge size={14} /> Before photo</a>}{trip.odometerPhotoAfter && <a href={trip.odometerPhotoAfter} target="_blank" rel="noreferrer"><Gauge size={14} /> After photo</a>}{!trip.odometerPhotoBefore && !trip.odometerPhotoAfter && <span>No odometer photos saved</span>}</div>{(trip.notesBefore || trip.notesAfter) && <div className="history-notes">{trip.notesBefore && <p><strong>Before:</strong> {trip.notesBefore}</p>}{trip.notesAfter && <p><strong>After:</strong> {trip.notesAfter}</p>}</div>}</div>
+        <details className="history-inspection"><summary>Inspection checklist</summary><div><div><strong>Before departure</strong>{Object.entries(trip.checksBefore).map(([check, passed]) => <span key={check}>{check.replace(/([A-Z])/g, " $1")} · {passed ? "Yes" : "No"}</span>)}</div><div><strong>After return</strong>{trip.checksAfter ? Object.entries(trip.checksAfter).map(([check, passed]) => <span key={check}>{check.replace(/([A-Z])/g, " $1")} · {passed ? "Yes" : "No"}</span>) : <span>Pending return</span>}</div></div></details>
+      </article>)}
+    </section>
+  </section>;
 }
 
 function VehicleForm({

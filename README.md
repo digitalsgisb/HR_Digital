@@ -1,6 +1,6 @@
-# Human Resource Digital
+# HR Digital
 
-Human Resource Digital is the internal HR operations platform for Sugihara Grand Industries Sdn Bhd. It provides one workspace for employee records, training operations, automated learning follow-up, employee training notes, and company car usage.
+HR Digital is the internal HR operations platform for Sugihara Grand Industries Sdn Bhd. It provides one workspace for employee records, training operations, automated learning follow-up, employee training notes, and company car usage.
 
 ## Current modules
 
@@ -14,6 +14,7 @@ Human Resource Digital is the internal HR operations platform for Sugihara Grand
 - Employee profile management with create/edit controls, employment statuses, and audit-safe removal that retains training history
 - Separate vehicle registry with car photos, create/edit controls, and audit-safe removal that retains trip history
 - Company-car usage tracking with per-vehicle QR access, before/after inspections, odometer-photo evidence, local OCR, mileage, utilisation, servicing, and trip tracking
+- Dedicated usage history for each company car, with drivers, journeys, odometer evidence, inspection checklists, and retained records for archived vehicles
 - System administration for platform preferences, feature controls, access, sessions, and server status
 - Installable Progressive Web App (PWA) shell with offline access to previously loaded interface assets
 
@@ -135,7 +136,7 @@ Open `https://hr.sugidigital.org`. Do not use the AI PC's LAN IP for normal acce
 
 ### PWA installation
 
-The production build includes a web app manifest, SGI browser/install icon, standalone display metadata, and a service worker. PWA installation and service workers require HTTPS, except when using `localhost` during testing. After HTTPS is configured, open the application in Chrome or Edge and use **Install Human Resource Digital** from the browser menu.
+The production build includes a web app manifest, SGI browser/install icon, standalone display metadata, and a service worker. PWA installation and service workers require HTTPS, except when using `localhost` during testing. After HTTPS is configured, open the application in Chrome or Edge and use **Install HR Digital** from the browser menu.
 
 The cached application shell helps the interface reopen after a temporary connection interruption. Live employee, training, email, and vehicle data still requires the AI PC API and database to be reachable.
 
@@ -216,7 +217,7 @@ SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=
 SMTP_PASSWORD=
-SMTP_FROM="Human Resource Digital <training@sugiharagrand.com>"
+SMTP_FROM="HR Digital <training@sugiharagrand.com>"
 ```
 
 Never commit `.env`, passwords, API keys, database exports, or employee-uploaded documents.

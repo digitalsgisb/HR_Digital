@@ -1,5 +1,5 @@
-const CACHE_NAME = "hr-digital-v2";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/favicon.svg", "/sgi-logo.png"];
+const CACHE_NAME = "hr-digital-v3";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/sugihara-mark.png", "/sgi-logo.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -54,7 +54,7 @@ self.addEventListener("push", (event) => {
     payload = { body: event.data?.text() };
   }
 
-  event.waitUntil(self.registration.showNotification(payload.title || "Human Resource Digital", {
+  event.waitUntil(self.registration.showNotification(payload.title || "HR Digital", {
     body: payload.body || "You have a new HR Digital update.",
     icon: "/sgi-logo.png",
     badge: "/favicon.svg",
