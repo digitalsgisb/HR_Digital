@@ -11,6 +11,7 @@
   "theme_color": "#101112",
   "categories": ["business", "productivity"],
   "icons": [
-    { "src": "/sugihara-mark.png?v=6", "sizes": "2000x2000", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/favicon.svg?v=7", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/favicon.svg?v=7", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
   ]
 }

@@ -1,5 +1,5 @@
-const CACHE_NAME = "hr-digital-v3";
-const APP_SHELL = ["/", "/manifest.webmanifest", "/sugihara-mark.png", "/sgi-logo.png"];
+const CACHE_NAME = "hr-digital-v4";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/favicon.svg", "/sugihara-mark.png", "/sgi-logo.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
