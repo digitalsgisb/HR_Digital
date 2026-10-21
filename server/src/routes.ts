@@ -1,5 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   completionStatuses,
@@ -12,6 +13,9 @@ import { prisma } from "./prisma.js";
 import { env } from "./env.js";
 import { parseEmployeeImport } from "./importer.js";
 import { parseEmployeeEmails } from "./email-importer.js";
+import { trainingPlanSchema } from "./training-plan.js";
+import { emailTestService, emailTestInput } from "./email-test.js";
+import { emailTestTemplates } from "@hr-training/shared";
 import { summarizeCourseHours, summarizeDepartmentHours, type CompletionRecordForSummary } from "./dashboard-summary.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -201,7 +205,13 @@ const upsertDepartment = (name: string) =>
   });
 
 export const createRouter = () => {
+  // This router is served behind the workspace's existing access controls.
   const router = Router();
+  router.get("/email-test/status", (_req, res) => { res.json(emailTestService.status()); });
+  router.get("/email-test/inbox", (_req, res) => { res.json(emailTestService.inbox()); });
+  router.get("/email-test/preview/:templateId", (req, res) => { res.json(emailTestService.preview(z.enum(emailTestTemplates).parse(req.params.templateId))); });
+  router.post("/email-test/verify", asyncHandler(async (_req, res) => { res.json(await emailTestService.verify()); }));
+  router.post("/email-test/send", asyncHandler(async (req, res) => { res.json(await emailTestService.send(emailTestInput.parse(req.body))); }));
 
   router.get("/health", (_req, res) => {
     res.json({ ok: true, service: "hr-training-tracker", timestamp: new Date().toISOString() });
@@ -543,11 +553,30 @@ export const createRouter = () => {
     "/training-sessions",
     asyncHandler(async (_req, res) => {
       const sessions = await prisma.trainingSession.findMany({
-        include: { course: true, _count: { select: { completions: true } } },
+        include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } },
         orderBy: { dateStart: "desc" },
-        take: 100
       });
       res.json(sessions);
+    })
+  );
+
+  router.post(
+    "/training-plans",
+    asyncHandler(async (req, res) => {
+      const input = trainingPlanSchema.parse(req.body);
+      const session = await prisma.$transaction(async (tx) => {
+        const employees = await tx.employee.count({ where: { id: { in: input.participantEmployeeIds }, status: "ACTIVE" } });
+        if (employees !== input.participantEmployeeIds.length) throw new HttpError(400, "Some participants are no longer active. Refresh the employee list.");
+        const course = await tx.trainingCourse.findFirst({ where: { name: input.title, category: input.category, status: "ACTIVE" } }) ??
+          await tx.trainingCourse.create({ data: { code: `TRN-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`, name: input.title, category: input.category } });
+        const created = await tx.trainingSession.create({ data: {
+          courseId: course.id, dateStart: new Date(input.dateStart), dateEnd: new Date(input.dateEnd),
+          trainerName: input.trainerName, venue: input.venue, capacity: input.capacity, deliveryMethod: input.deliveryMethod,
+          completions: { create: input.participantEmployeeIds.map((employeeId) => ({ employeeId, status: "REQUIRED" })) }
+        }, include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } } });
+        return created;
+      });
+      res.status(201).json(session);
     })
   );
 

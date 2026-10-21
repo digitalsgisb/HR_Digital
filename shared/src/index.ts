@@ -1,4 +1,10 @@
 export const employeeStatuses = ["ACTIVE", "INACTIVE", "ON_LEAVE", "RESIGNED", "TERMINATED"] as const;
+export const emailTestTemplates = ["email-1", "email-2", "email-3", "email-4"] as const;
+export type EmailTestTemplate = (typeof emailTestTemplates)[number];
+export type EmailTestPreview = { templateId: EmailTestTemplate; subject: string; html: string; text: string };
+export type EmailTestStatus = { mode: "preview" | "smtp"; ready: boolean; from: string; allowedRecipients: string[]; issues: string[] };
+export type EmailTestMessage = EmailTestPreview & { id: string; recipient: string; createdAt: string; mode: "preview" | "smtp"; messageId: string };
+export type EmailTestResult = { id: string; recipient: string; subject: string; mode: "preview" | "smtp"; status: "captured" | "accepted"; messageId: string };
 export type EmployeeStatus = (typeof employeeStatuses)[number];
 
 export const courseStatuses = ["ACTIVE", "ARCHIVED"] as const;

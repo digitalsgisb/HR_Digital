@@ -33,6 +33,10 @@ export type SessionListItem = {
   dateStart: string;
   dateEnd?: string | null;
   trainerName?: string | null;
+  venue?: string | null;
+  capacity?: number | null;
+  deliveryMethod?: string | null;
+  completions?: Array<{ id: string; status: string; hours: number; employee: Employee }>;
   scopeType: string;
   scopeValue?: string | null;
   course: Course;

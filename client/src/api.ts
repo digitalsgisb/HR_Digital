@@ -1,7 +1,6 @@
 import type {
   DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, Vehicle, VehicleCondition, VehicleStatus, VehicleTrip
 } from "@hr-training/shared";
-import { sampleCourses, sampleDashboard, sampleEmployees, sampleSessions } from "./sample-data";
 import type { Course, Employee, SessionListItem } from "./types";
 
 export type EmployeeInput = {
@@ -35,6 +34,11 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+export type TrainingPlanInput = {
+  title: string; category: string; dateStart: string; dateEnd: string; trainerName: string; venue: string;
+  capacity: number; deliveryMethod: string; participantEmployeeIds: string[];
+};
+
 export type VehicleInput = {
   plate: string;
   model: string;
@@ -47,20 +51,17 @@ export type VehicleInput = {
 };
 
 export const api = {
+  emailTestStatus: () => request<import("@hr-training/shared").EmailTestStatus>("/api/email-test/status"),
+  emailTestPreview: (id: string) => request<import("@hr-training/shared").EmailTestPreview>(`/api/email-test/preview/${id}`),
+  emailTestInbox: () => request<import("@hr-training/shared").EmailTestMessage[]>("/api/email-test/inbox"),
+  emailTestVerify: () => request<{ message: string }>("/api/email-test/verify", { method: "POST" }),
+  emailTestSend: (templateId: string, recipient: string) => request<import("@hr-training/shared").EmailTestResult>("/api/email-test/send", { method: "POST", body: JSON.stringify({ templateId, recipient }) }),
   async getDashboard(): Promise<DashboardSummary> {
-    try {
-      return await request<DashboardSummary>("/api/dashboard/summary");
-    } catch {
-      return sampleDashboard;
-    }
+    return request<DashboardSummary>("/api/dashboard/summary");
   },
 
   async getEmployees(): Promise<Employee[]> {
-    try {
-      return await request<Employee[]>("/api/employees");
-    } catch {
-      return sampleEmployees;
-    }
+    return request<Employee[]>("/api/employees");
   },
 
   createEmployee(input: EmployeeInput) {
@@ -76,19 +77,15 @@ export const api = {
   },
 
   async getCourses(): Promise<Course[]> {
-    try {
-      return await request<Course[]>("/api/training-courses");
-    } catch {
-      return sampleCourses;
-    }
+    return request<Course[]>("/api/training-courses");
   },
 
   async getSessions(): Promise<SessionListItem[]> {
-    try {
-      return await request<SessionListItem[]>("/api/training-sessions");
-    } catch {
-      return sampleSessions;
-    }
+    return request<SessionListItem[]>("/api/training-sessions");
+  },
+
+  createTrainingPlan(input: TrainingPlanInput) {
+    return request<SessionListItem>("/api/training-plans", { method: "POST", body: JSON.stringify(input) });
   },
 
   previewEmployeeImport(file: File) {

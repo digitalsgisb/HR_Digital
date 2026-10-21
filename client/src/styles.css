@@ -608,3 +608,35 @@ html[data-department-transition]::view-transition-new(root) { animation: none; m
 .email-import-dialog button:disabled { opacity: .5; cursor: not-allowed; }
 @media (max-width: 1200px) { .department-groups, .employee-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .department-groups, .employee-card-grid { grid-template-columns: 1fr; }.directory-filters label { width: 100%; }.directory-filters > span { margin-left: 0; }.department-body { padding: 0 12px 12px; }.email-import-footer { flex-wrap: wrap; } }
+/* Summary cards are real filter buttons with keyboard and selected states. */
+.metric-card-button { width: 100%; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.metric-card-button[aria-pressed="true"] { border-color: #555; box-shadow: 0 0 0 1px #555; }
+.employee-directory-anchor { scroll-margin-top: 110px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.calendar-month-picker { display: flex; justify-content: center; gap: 6px; min-width: 0; }
+.calendar-month-picker select { min-width: 0; max-width: 100%; min-height: 39px; border: 1px solid var(--line); border-radius: 8px; background: white; padding: 7px; color: var(--ink); font-size: 14px; font-weight: 750; }
+.calendar-agenda { display: grid; gap: 10px; padding: 20px; }
+.calendar-agenda button { display: grid; gap: 7px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--ink); text-align: left; }
+.calendar-agenda small, .calendar-empty-month, .training-empty { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.calendar-empty-month { margin: 0; padding: 15px 20px; border-top: 1px solid var(--line); }
+.participant-picker { max-height: 520px; overflow-y: auto; }
+@media (max-width: 760px) { .calendar-toolbar { display: flex; flex-wrap: wrap; gap: 10px; }.calendar-month-picker select { font-size: 12px; }.employee-directory-anchor { scroll-margin-top: 85px; } }
+
+.email-test-controls { padding: 24px; }
+.email-test-controls form { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.email-test-controls label { display: grid; gap: 8px; flex: 1; min-width: 220px; }
+.email-test-controls input { padding: 14px; border: 1px solid #d8d5d2; border-radius: 10px; width: 100%; }
+.email-test-frame { width: 100%; min-height: 520px; border: 0; }
+.email-test-history { padding: 0; list-style: none; display: grid; gap: 16px; }
+.email-test-history li { padding: 16px; background: #f7f6f5; border-radius: 12px; overflow-wrap: anywhere; }
+.email-test-history span { display: block; margin: 8px 0; }
+.email-test-history pre { white-space: pre-wrap; font: inherit; }
+.developer-email .automation-list > p { padding: 16px; }
+.developer-email .automation-list { padding: 20px; }
+.developer-email .automation-list > button { display: block; padding: 16px; }
+.developer-email .automation-list button strong { font-size: 15px; }
+.developer-email .automation-list button p { font-size: 12px; color: var(--muted); }
+.developer-email .automation-list > h3 { margin: 0 0 12px; }
+.developer-email .automation-list > p { padding: 0; font-size: 13px; line-height: 1.5; }
+.developer-email .preview-toolbar h3 { margin: 0; font-size: 17px; }
+.email-test-controls > p { line-height: 1.5; overflow-wrap: anywhere; }

@@ -112,6 +112,9 @@ model TrainingSession {
   dateStart   DateTime
   dateEnd     DateTime?
   trainerName String?
+  venue       String?
+  capacity    Int?
+  deliveryMethod String?
   scopeType   ScopeType            @default(CUSTOM)
   scopeValue  String?
   notes       String?

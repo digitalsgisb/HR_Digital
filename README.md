@@ -37,7 +37,6 @@ Requirements: Node.js 22+, npm, and PostgreSQL 16 or newer.
    npm.cmd install
    npm.cmd run prisma:generate
    npm.cmd run prisma:migrate
-   npm.cmd run prisma:seed
    ```
 
 4. Start the development servers:
@@ -238,6 +237,16 @@ The Employees page groups people into collapsible department cards. Open a depar
 
 After importing employee records, choose **Import emails** and upload the account export (`Display name`, `User principal name`). Unique full names are matched after normalising case, spaces and punctuation. Review every match, manually assign unmatched accounts, or leave shared/unrelated accounts out. Saving changes only employee email fields. Existing email addresses are retained unless **Replace existing email addresses** is selected. Duplicate employee selections, repeated addresses, invalid addresses and addresses owned by another employee are rejected or left for review. No emails are sent by importing addresses.
 
+## Training calendar and planning
+
+Employee summary cards filter the directory by active status or email availability. The Departments card resets those filters and focuses department selection.
+
+The calendar starts on today's Malaysia date. Choose a month and year directly, use Previous/Next, or return with Today. Agenda and CSV export use the selected month. The built-in demo training sessions, employee training rows, training notes and fabricated summary counts have been removed. Existing saved training history is not deleted.
+
+Training plans load active employees from the directory and save the course, schedule and participant records in one API transaction. Employees without email can be included. Venue, capacity and delivery method are stored on the session. Saving a plan does not send invitations.
+
+Apply the updated Prisma schema before deploying this change. Production Docker startup applies it through the documented backup/update procedure above; local development can use `npm.cmd run prisma:migrate`. Demo seeding is disabled by default. Populate an isolated development database with examples only by explicitly setting `SEED_DEMO_DATA=true` when running `prisma:seed`.
+
 ## Quality checks
 
 Run before merging or deploying:
@@ -256,5 +265,25 @@ GitHub Actions runs the same type checking, tests, and production build for ever
 - PostgreSQL data lives in the Docker named volume `hr_training_data`.
 - Before/after odometer photos are compressed in the browser and stored with their vehicle trip records; include the database in retention sizing and backups.
 - Employee notes should be moved to durable object or network storage before production uploads are enabled.
-- The interface uses demonstration fallback data when `DATABASE_URL` is unavailable.
+- Employee and training views use saved API records and report connection errors instead of substituting demonstration records.
 - Real authentication, SMTP delivery, and document storage must be configured before exposing the platform outside the trusted company network.
+
+### Developer email tests
+
+Open Training → Email automation. Choose a template, enter your test recipient, then use **Check connection** and **Capture test email**. The default EMAIL_TRANSPORT=preview generates a message in the local test inbox without contacting a mail server. The preview uses sample details and does not change employee records or enable scheduled sending. The most recent 20 tests are kept in memory and reset when the server restarts.
+
+To deliver to your own mailbox, configure the server environment (server/.env for local development or the root .env for Docker):
+
+```dotenv
+EMAIL_TRANSPORT=smtp
+SMTP_HOST=smtp.your-provider.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_REQUIRE_TLS=true
+SMTP_USER=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM="HR Digital <your-verified-sender@company.com>"
+SMTP_TEST_RECIPIENTS=your-name@company.com
+```
+
+Restart the server after changing settings (recreate the app container for Docker). For port 465 use SMTP_SECURE=true. Use your provider's verified sender and credentials. Multiple permitted test addresses may be separated by commas; each test sends to one address. Credentials stay on the server. SMTP acceptance does not guarantee inbox delivery; check spam and your provider's logs. The test endpoints use the same workspace access controls as the rest of the app, so keep the app behind the existing authenticated tunnel.

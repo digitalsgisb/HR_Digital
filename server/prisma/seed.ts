@@ -20,6 +20,10 @@ const departmentCode = (name: string) =>
     .slice(0, 32);
 
 const main = async () => {
+  if (process.env.SEED_DEMO_DATA !== "true") {
+    console.log("Demo seed skipped. Set SEED_DEMO_DATA=true only when you explicitly want sample data in a development database.");
+    return;
+  }
   const departmentRows = await Promise.all(
     departments.map((name) =>
       prisma.department.upsert({

@@ -56,11 +56,13 @@ function DepartmentEmployees({ name, members, open, transitionName, onOpen, anim
   </div>;
 }
 
-export function EmployeeDirectory({ employees, query, onOpen }: {
+export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter = "all", initialStatus = "all" }: {
   employees: Employee[]; query: string; onOpen: (employee: Employee) => void;
+  initialEmailFilter?: string; initialStatus?: string;
 }) {
   const [department, setDepartment] = useState("");
-  const [emailFilter, setEmailFilter] = useState("all");
+  const [emailFilter, setEmailFilter] = useState(initialEmailFilter);
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const transitionRef = useRef<ViewTransition | null>(null);
   useEffect(() => () => {
@@ -86,14 +88,16 @@ export function EmployeeDirectory({ employees, query, onOpen }: {
   };
   const departments = [...new Set(employees.map((person) => person.department.name))].sort((a, b) => a.localeCompare(b));
   const visible = employees.filter((person) => (!department || person.department.name === department) &&
+    (statusFilter === "all" || person.status === statusFilter) &&
     (emailFilter === "all" || (emailFilter === "with" ? !!person.email : !person.email)) &&
     `${person.name ?? ""} ${person.employeeId} ${person.department.name} ${person.role ?? ""} ${person.email ?? ""} ${person.base ?? ""} ${person.status}`.toLowerCase().includes(query.toLowerCase()));
   const shownDepartments = departments.filter((name) => visible.some((person) => person.department.name === name));
-  const filtering = !!query.trim() || !!department || emailFilter !== "all";
+  const filtering = !!query.trim() || !!department || emailFilter !== "all" || statusFilter !== "all";
   return <section className="employee-directory" aria-label="Employees by department">
     <div className="directory-filters">
       <label>Department<select aria-label="Department" value={department} onChange={(event) => setDepartment(event.target.value)}><option value="">All departments</option>{departments.map((name) => <option key={name}>{name}</option>)}</select></label>
       <label>Email<select aria-label="Email availability" value={emailFilter} onChange={(event) => setEmailFilter(event.target.value)}><option value="all">All employees</option><option value="with">With email</option><option value="without">Without email</option></select></label>
+      <label>Employment<select aria-label="Employment status filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select></label>
       <span>{visible.length} employees · {shownDepartments.length} departments</span>
     </div>
     {visible.length === 0 && <div className="card directory-empty">No employees match these filters.</div>}
@@ -105,7 +109,7 @@ export function EmployeeDirectory({ employees, query, onOpen }: {
         <button className="department-heading" aria-expanded={open} aria-controls={`department-content-${index}`} onClick={() => animateChange(() => setExpanded((current) => ({ ...current, [name]: !open })))}>
           <span className="department-icon"><UsersRound size={22} /></span><span><strong>{name}</strong><small>{members.length} employees · {withEmail} with email · {members.length - withEmail} without email</small></span><ChevronDown size={18} />
         </button>
-        <div id={`department-content-${index}`}><DepartmentEmployees key={JSON.stringify([name, query, department, emailFilter])} name={name} members={members} open={open} transitionName={`department-employees-${index}`} onOpen={onOpen} animateChange={animateChange} /></div>
+        <div id={`department-content-${index}`}><DepartmentEmployees key={JSON.stringify([name, query, department, emailFilter, statusFilter])} name={name} members={members} open={open} transitionName={`department-employees-${index}`} onOpen={onOpen} animateChange={animateChange} /></div>
       </section>;
     })}</div>
   </section>;
