@@ -76,6 +76,8 @@ model Employee {
   employeeId   String               @unique
   name         String?
   email        String?
+  company      String?
+  base         String?
   departmentId String
   department   Department           @relation(fields: [departmentId], references: [id])
   line         String?

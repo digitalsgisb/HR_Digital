@@ -48,6 +48,8 @@ const employeeInputSchema = z.object({
   employeeId: z.string().trim().min(1),
   name: nullableText,
   email: nullableText,
+  company: nullableText,
+  base: nullableText,
   department: z.string().trim().min(1),
   line: nullableText,
   role: nullableText,
@@ -59,6 +61,8 @@ const employeeImportCommitSchema = z.object({
     z.object({
       employeeId: z.string().trim().min(1),
       name: nullableText,
+      company: nullableText,
+      base: nullableText,
       department: z.string().trim().min(1),
       line: nullableText,
       role: nullableText,
@@ -335,6 +339,8 @@ export const createRouter = () => {
           employeeId: input.employeeId,
           name: input.name,
           email: input.email,
+          company: input.company,
+          base: input.base,
           departmentId: department.id,
           line: input.line,
           role: input.role,
@@ -358,6 +364,8 @@ export const createRouter = () => {
           employeeId: input.employeeId,
           name: input.name,
           email: input.email,
+          company: input.company,
+          base: input.base,
           departmentId: department.id,
           line: input.line,
           role: input.role,
@@ -390,7 +398,11 @@ export const createRouter = () => {
         return;
       }
 
-      res.json(await parseEmployeeImport(req.file.buffer, req.file.originalname));
+      try {
+        res.json(await parseEmployeeImport(req.file.buffer, req.file.originalname));
+      } catch (error) {
+        throw new HttpError(400, error instanceof Error && "status" in error ? error.message : "This spreadsheet could not be read. Upload a valid .xlsx or .csv file.");
+      }
     })
   );
 
@@ -413,6 +425,8 @@ export const createRouter = () => {
             where: { employeeId: row.employeeId },
             update: {
               name: row.name,
+              company: row.company,
+              base: row.base,
               departmentId: department.id,
               line: row.line,
               role: row.role,
@@ -421,6 +435,8 @@ export const createRouter = () => {
             create: {
               employeeId: row.employeeId,
               name: row.name,
+              company: row.company,
+              base: row.base,
               departmentId: department.id,
               line: row.line,
               role: row.role,

@@ -74,6 +74,8 @@ export type Vehicle = {
 export type EmployeeImportRow = {
   employeeId: string;
   department: string;
+  company?: string;
+  base?: string;
   name?: string;
   line?: string;
   role?: string;
@@ -93,6 +95,7 @@ export type EmployeeImportPreview = {
     totalRows: number;
     validRows: number;
     invalidRows: number;
+    sheet?: string;
   };
 };
 

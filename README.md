@@ -222,6 +222,16 @@ SMTP_FROM="HR Digital <training@sugiharagrand.com>"
 
 Never commit `.env`, passwords, API keys, database exports, or employee-uploaded documents.
 
+## Employee spreadsheet import
+
+Open **Employees → Import spreadsheet** and choose an `.xlsx` or `.csv` file. The SGI employment export is accepted directly: `Employee#` maps to Employee ID, `Name` to name, `Job Type` to role, and `Company`, `Base` and `Department` retain their values. Employee ID and Department are required. Save older `.xls` files as `.xlsx` first.
+
+Review the sample rows and validation issues, then choose **Import employees**. Blank rows are ignored. Rows with missing required values, invalid statuses or duplicate IDs are excluded. Existing employees are updated by employee ID. Without a Status column, imported employees are marked Active. Supported statuses: `ACTIVE`, `INACTIVE`, `ON_LEAVE`, `RESIGNED`, `TERMINATED`.
+
+The importer finds the header beneath optional title rows and locates the employee worksheet even when a cover sheet comes first. If multiple employee worksheets are found, upload a workbook containing only the intended employee sheet.
+
+Company and Base require the updated Prisma schema. Existing production deployments apply it through the normal Docker startup (`prisma db push`); follow the backup and update steps above before deploying. Local development can apply it with `npm.cmd run prisma:migrate`. Preview works without a database; saving requires the API and PostgreSQL.
+
 ## Quality checks
 
 Run before merging or deploying:

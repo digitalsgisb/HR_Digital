@@ -480,6 +480,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .sidebar-footer > * { animation: none; }
 .copyright { color: #85898c; font-size: 9px; text-align: left; }
 
+.employee-import-preview > p, .employee-import-preview details > p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.employee-import-preview .import-banner { margin: 0; }
+.employee-import-preview details { margin-top: 16px; }
+.employee-import-preview summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.employee-import-preview .table-wrap { max-height: 300px; margin-top: 12px; overflow: auto; }
+.employee-import-preview .import-banner { flex-wrap: wrap; }
+.employee-import-preview button:disabled { cursor: not-allowed; opacity: .55; }
+
 .usage-history-page { gap: 19px; }
 .history-intro { background: linear-gradient(115deg, #0a0b0c, #292b2e); }
 .history-selector { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 26px; }
