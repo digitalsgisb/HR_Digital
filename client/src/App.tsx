@@ -28,17 +28,17 @@ type View = "overview" | "employees" | "training-overview" | "training-calendar"
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   overview: { title: "Dashboard", eyebrow: "HR Digital" },
-  employees: { title: "Employee database", eyebrow: "People" },
+  employees: { title: "Employees", eyebrow: "People" },
   "training-overview": { title: "Training overview", eyebrow: "Learning & development" },
   "training-calendar": { title: "Training calendar", eyebrow: "Learning & development" },
   "training-planner": { title: "Plan training", eyebrow: "Learning & development" },
   "training-records": { title: "Employee training records", eyebrow: "Learning & development" },
   "email-automation": { title: "Email automation", eyebrow: "Learning & development" },
   "notes-library": { title: "Training notes library", eyebrow: "Learning & development" },
-  fleet: { title: "Company car usage", eyebrow: "Mobility" },
-  "fleet-registry": { title: "Vehicle registry", eyebrow: "Mobility" },
-  "usage-history": { title: "Usage history", eyebrow: "Company car / audit" },
-  administration: { title: "Administration", eyebrow: "System controls" }
+  fleet: { title: "Car usage", eyebrow: "Company cars" },
+  "fleet-registry": { title: "Manage cars", eyebrow: "Company cars" },
+  "usage-history": { title: "Trip history", eyebrow: "Company cars" },
+  administration: { title: "Settings", eyebrow: "HR Digital" }
 };
 
 const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
@@ -51,9 +51,9 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
 ];
 
 const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
-  { id: "fleet", label: "Usage tracker", icon: Route },
-  { id: "fleet-registry", label: "Vehicle registry", icon: CarFront },
-  { id: "usage-history", label: "Usage history", icon: Clock3 }
+  { id: "fleet", label: "Car usage", icon: Route },
+  { id: "fleet-registry", label: "Manage cars", icon: CarFront },
+  { id: "usage-history", label: "Trip history", icon: Clock3 }
 ];
 
 const formatLongDate = (value: string) =>
@@ -192,34 +192,29 @@ function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingTo
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
       <div className="brand-lockup">
         <img className="company-brand" src="/sugihara-mark.png" alt="Sugihara Grand Industries" />
-        <div className="product-name"><strong>HR Digital</strong><span>HR operations workspace</span></div>
+        <div className="product-name"><strong>HR Digital</strong><span>HR management</span></div>
         <button className="sidebar-close" onClick={onClose} aria-label="Close navigation"><X size={20} /></button>
       </div>
       <nav className="primary-nav" aria-label="Primary navigation">
-        <p className="nav-section-label">Overview</p>
         <NavButton icon={LayoutDashboard} label="Dashboard" active={activeView === "overview"} onClick={() => onNavigate("overview")} />
-        <p className="nav-section-label">People</p>
-        <NavButton icon={UsersRound} label="Employee database" active={activeView === "employees"} onClick={() => onNavigate("employees")} />
-        <p className="nav-section-label">Workspaces</p>
-        <button className={`nav-item nav-parent ${inTraining ? "active-parent" : ""}`} onClick={onTrainingToggle}>
+        <NavButton icon={UsersRound} label="Employees" active={activeView === "employees"} onClick={() => onNavigate("employees")} />
+        <button className={`nav-item nav-parent ${inTraining ? "active-parent" : ""}`} onClick={onTrainingToggle} aria-expanded={trainingOpen} aria-controls="training-navigation">
           <span className="nav-icon"><BookOpenCheck size={18} /></span><span>Training</span><ChevronDown className={trainingOpen ? "rotate" : ""} size={16} />
         </button>
-        <div className={`nav-children ${trainingOpen ? "open" : ""}`}>
+        <div id="training-navigation" className={`nav-children ${trainingOpen ? "open" : ""}`} inert={!trainingOpen}>
           {trainingNav.map((item) => <button key={item.id} className={`nav-child ${activeView === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
             <item.icon size={15} /><span>{item.label}</span></button>)}
         </div>
-        <button className={`nav-item nav-parent ${inFleet ? "active-parent" : ""}`} onClick={onFleetToggle}>
-          <span className="nav-icon"><CarFront size={18} /></span><span>Company car</span><ChevronDown className={fleetOpen ? "rotate" : ""} size={16} />
+        <button className={`nav-item nav-parent ${inFleet ? "active-parent" : ""}`} onClick={onFleetToggle} aria-expanded={fleetOpen} aria-controls="car-navigation">
+          <span className="nav-icon"><CarFront size={18} /></span><span>Company cars</span><ChevronDown className={fleetOpen ? "rotate" : ""} size={16} />
         </button>
-        <div className={`nav-children fleet-children ${fleetOpen ? "open" : ""}`}>
+        <div id="car-navigation" className={`nav-children fleet-children ${fleetOpen ? "open" : ""}`} inert={!fleetOpen}>
           {fleetNav.map((item) => <button key={item.id} className={`nav-child ${activeView === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
             <item.icon size={15} /><span>{item.label}</span></button>)}
         </div>
-        <p className="nav-section-label">Administration</p>
         <NavButton icon={Settings2} label="Settings" active={activeView === "administration"} onClick={() => onNavigate("administration")} />
       </nav>
       <div className="sidebar-footer">
-        <div className="sidebar-message"><span className="sidebar-message-icon"><ShieldCheck size={21} /></span><div><strong>People, learning & mobility</strong><span>One workspace for HR.</span></div></div>
         <span className="copyright">© 2026 Digital Transformation Unit</span>
       </div>
     </aside>
@@ -275,7 +270,7 @@ function Administration({ showNotice }: { showNotice: (message: string) => void 
   };
 
   return <form className="page-stack admin-page" onSubmit={save}>
-    <div className="module-intro admin-intro"><div><span className="module-kicker"><LockKeyhole size={15} /> Restricted administration</span><h2>Control the platform from one secure workspace.</h2><p>System Admin access is active. Manage communication, security, file handling and server behaviour here.</p></div><span className="admin-access"><ShieldCheck size={17} /> Full access</span></div>
+    <div className="module-intro admin-intro"><div><span className="module-kicker"><LockKeyhole size={15} /> Restricted administration</span><h2>Manage HR Digital settings</h2><p>Update company details, email reminders, uploads and access settings.</p></div><span className="admin-access"><ShieldCheck size={17} /> Full access</span></div>
     <div className="admin-grid">
       <section className="card admin-panel"><SectionHeader kicker="Platform" title="System preferences" />
         <label className="field"><span>Organisation name</span><input value={settings.organisation} onChange={(event) => update("organisation", event.target.value)} /></label>
@@ -309,10 +304,10 @@ function Overview({ dashboard, sessions, navigate }: { dashboard: DashboardSumma
   const stats = dashboard?.stats;
   const upcoming = sessions.filter((session) => session.date >= "2026-09-21").slice(0, 4);
   return <section className="page-stack">
-    <article className="hero-card"><div className="hero-glow" /><div className="hero-copy"><p className="live-label"><span /> HR operations · Monday, 21 September</p><h2>Good day, <em>HR team.</em></h2><p>Training readiness, people records and company mobility—one clear operational picture.</p><div className="hero-actions"><button className="button button-light" onClick={() => navigate("training-planner")}><Plus size={17} /> Plan training</button><button className="button button-ghost" onClick={() => navigate("training-calendar")}><CalendarDays size={17} /> Open calendar</button></div></div><div className="hero-signals"><div><span className="signal-icon amber"><CircleAlert size={18} /></span><small>Needs attention</small><strong>7</strong><em>training actions</em></div><div><span className="signal-icon blue"><MailCheck size={18} /></span><small>Emails queued</small><strong>24</strong><em>next 7 days</em></div><div><span className="signal-icon green"><ShieldCheck size={18} /></span><small>Readiness</small><strong>89%</strong><em>company-wide</em></div></div></article>
+    <article className="hero-card"><div className="hero-glow" /><div className="hero-copy"><p className="live-label"><span /> HR operations · Monday, 21 September</p><h2>Good day, <em>HR team.</em></h2><p>Manage employees, training and company cars.</p><div className="hero-actions"><button className="button button-light" onClick={() => navigate("training-planner")}><Plus size={17} /> Plan training</button><button className="button button-ghost" onClick={() => navigate("training-calendar")}><CalendarDays size={17} /> Open calendar</button></div></div><div className="hero-signals"><div><span className="signal-icon amber"><CircleAlert size={18} /></span><small>Needs attention</small><strong>7</strong><em>training actions</em></div><div><span className="signal-icon blue"><MailCheck size={18} /></span><small>Emails queued</small><strong>24</strong><em>next 7 days</em></div><div><span className="signal-icon green"><ShieldCheck size={18} /></span><small>Readiness</small><strong>89%</strong><em>company-wide</em></div></div></article>
     <div className="metric-grid"><MetricCard icon={UsersRound} label="Active employees" value={stats ? formatNumber(stats.activeEmployees) : "—"} detail="Across 12 departments" tone="burgundy" /><MetricCard icon={GraduationCap} label="Training hours" value={stats ? formatNumber(stats.totalTrainingHours) : "—"} detail="+8.4% from last month" tone="blue" trend /><MetricCard icon={CalendarCheck2} label="Sessions this month" value={stats?.sessions ?? "—"} detail="5 scheduled this week" tone="violet" /><MetricCard icon={CarFront} label="Fleet availability" value="75%" detail="3 of 4 vehicles ready" tone="green" /></div>
-    <div className="content-grid overview-grid"><section className="card readiness-card"><SectionHeader kicker="Workforce assurance" title="Training readiness" action="View records" onAction={() => navigate("training-records")} /><div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><BarChart data={departmentReadiness} layout="vertical" margin={{ top: 4, right: 22, bottom: 0, left: 12 }}><CartesianGrid horizontal={false} stroke="#ece8e6" /><XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} axisLine={false} tickLine={false} tick={{ fill: "#827876", fontSize: 11 }} /><YAxis type="category" dataKey="department" width={86} axisLine={false} tickLine={false} tick={{ fill: "#4d4645", fontSize: 11 }} /><Tooltip formatter={(value) => [`${value}%`, "Readiness"]} cursor={{ fill: "#f8f5f3" }} /><Bar dataKey="readiness" fill="#17181a" radius={[0, 6, 6, 0]} barSize={16} animationDuration={1400} /></BarChart></ResponsiveContainer></div><div className="chart-summary"><strong>89%</strong><span>Overall compliance</span><i /><b>+3.2%</b><span>vs. August</span></div></section><section className="card schedule-card"><SectionHeader kicker="Next on the calendar" title="Upcoming training" action="Full calendar" onAction={() => navigate("training-calendar")} /><div className="timeline-list">{upcoming.map((session) => <SessionTimeline key={session.id} session={session} />)}</div></section></div>
-    <div className="content-grid bottom-grid"><section className="card action-centre"><SectionHeader kicker="Action centre" title="What needs attention" /><div className="action-list"><ActionRow icon={MailCheck} tone="amber" title="12 effectiveness forms due" copy="Completions from June have reached the 3-month review point." button="Review queue" onClick={() => navigate("email-automation")} /><ActionRow icon={CircleAlert} tone="red" title="7 training requirements expiring" copy="Four employees are due within 14 days; three are already overdue." button="View employees" onClick={() => navigate("training-records")} /><ActionRow icon={Upload} tone="blue" title="9 notes awaiting upload" copy="Follow-up requests are ready for sessions completed this week." button="Open library" onClick={() => navigate("notes-library")} /></div></section><section className="card fleet-glance"><SectionHeader kicker="Mobility" title="Company car snapshot" action="Open tracker" onAction={() => navigate("fleet")} /><div className="fleet-number"><span><CarFront size={22} /></span><div><strong>4</strong><small>registered vehicles</small></div><em>1 in use</em></div><div className="mileage-line"><div><span>Monthly mileage</span><strong>1,284 km</strong></div><div className="progress-track"><i style={{ width: "64%" }} /></div><small>64% of normal monthly range</small></div><div className="service-warning"><Wrench size={17} /><span><strong>VFY 6620</strong> is due for service in 560 km.</span><ChevronRight size={16} /></div></section></div>
+    <div className="content-grid overview-grid"><section className="card readiness-card"><SectionHeader kicker="Training" title="Training readiness" action="View records" onAction={() => navigate("training-records")} /><div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><BarChart data={departmentReadiness} layout="vertical" margin={{ top: 4, right: 22, bottom: 0, left: 12 }}><CartesianGrid horizontal={false} stroke="#ece8e6" /><XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${value}%`} axisLine={false} tickLine={false} tick={{ fill: "#827876", fontSize: 11 }} /><YAxis type="category" dataKey="department" width={86} axisLine={false} tickLine={false} tick={{ fill: "#4d4645", fontSize: 11 }} /><Tooltip formatter={(value) => [`${value}%`, "Readiness"]} cursor={{ fill: "#f8f5f3" }} /><Bar dataKey="readiness" fill="#17181a" radius={[0, 6, 6, 0]} barSize={16} animationDuration={1400} /></BarChart></ResponsiveContainer></div><div className="chart-summary"><strong>89%</strong><span>Overall compliance</span><i /><b>+3.2%</b><span>vs. August</span></div></section><section className="card schedule-card"><SectionHeader kicker="Next on the calendar" title="Upcoming training" action="Full calendar" onAction={() => navigate("training-calendar")} /><div className="timeline-list">{upcoming.map((session) => <SessionTimeline key={session.id} session={session} />)}</div></section></div>
+    <div className="content-grid bottom-grid"><section className="card action-centre"><SectionHeader kicker="Action centre" title="What needs attention" /><div className="action-list"><ActionRow icon={MailCheck} tone="amber" title="12 effectiveness forms due" copy="Completions from June have reached the 3-month review point." button="Review queue" onClick={() => navigate("email-automation")} /><ActionRow icon={CircleAlert} tone="red" title="7 training requirements expiring" copy="Four employees are due within 14 days; three are already overdue." button="View employees" onClick={() => navigate("training-records")} /><ActionRow icon={Upload} tone="blue" title="9 notes awaiting upload" copy="Follow-up requests are ready for sessions completed this week." button="Open library" onClick={() => navigate("notes-library")} /></div></section><section className="card fleet-glance"><SectionHeader kicker="Company cars" title="Company car snapshot" action="Open tracker" onAction={() => navigate("fleet")} /><div className="fleet-number"><span><CarFront size={22} /></span><div><strong>4</strong><small>registered vehicles</small></div><em>1 in use</em></div><div className="mileage-line"><div><span>Monthly mileage</span><strong>1,284 km</strong></div><div className="progress-track"><i style={{ width: "64%" }} /></div><small>64% of normal monthly range</small></div><div className="service-warning"><Wrench size={17} /><span><strong>VFY 6620</strong> is due for service in 560 km.</span><ChevronRight size={16} /></div></section></div>
   </section>;
 }
 
@@ -336,7 +331,7 @@ const featureDescription: Partial<Record<View, string>> = {
 };
 
 function TrainingOverview({ dashboard, sessions, navigate }: { dashboard: DashboardSummary | null; sessions: CalendarSession[]; navigate: (view: View) => void }) {
-  return <section className="page-stack"><div className="module-intro training-intro"><div><span className="module-kicker"><GraduationCap size={15} /> Learning & development</span><h2>Build a capable, compliant workforce.</h2><p>Plan training, monitor requirements and keep every learning record, note and follow-up in one place.</p></div><button className="button button-primary" onClick={() => navigate("training-planner")}><Plus size={17} /> Plan a training</button></div><div className="metric-grid"><MetricCard icon={ShieldCheck} label="Compliance rate" value="89%" detail="Target 95%" tone="green" /><MetricCard icon={CalendarDays} label="Upcoming sessions" value={sessions.filter((s) => s.status === "Scheduled").length} detail="Next 30 days" tone="blue" /><MetricCard icon={Clock3} label="Learning hours" value={dashboard?.stats.totalTrainingHours ?? "—"} detail="Year to date" tone="violet" /><MetricCard icon={CircleAlert} label="Overdue actions" value="7" detail="Needs HR review" tone="burgundy" /></div><section className="card feature-hub"><SectionHeader kicker="Training workspace" title="Everything your team needs" /><div className="feature-grid">{trainingNav.slice(1).map((item, index) => <button key={item.id} onClick={() => navigate(item.id)} style={{ "--delay": `${index * 65}ms` } as React.CSSProperties}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><p>{featureDescription[item.id]}</p></div><ArrowRight size={17} /></button>)}</div></section><div className="content-grid split-even"><section className="card"><SectionHeader kicker="This month" title="Delivery progress" action="Calendar" onAction={() => navigate("training-calendar")} /><div className="delivery-ring-row"><div className="donut-ring"><strong>14</strong><span>of 18<br />sessions</span></div><div className="delivery-stats"><div><strong>78%</strong><span>delivered</span></div><div><strong>428</strong><span>attendance records</span></div><div><strong>96%</strong><span>attendance rate</span></div></div></div></section><section className="card"><SectionHeader kicker="Automation" title="Follow-up journey" action="Manage" onAction={() => navigate("email-automation")} /><div className="journey-mini"><span><Check size={14} /> Invite sent</span><i /><span><Check size={14} /> Day reminder</span><i /><span><Upload size={14} /> Notes request</span><i /><span><MessageSquareText size={14} /> 3-month form</span></div><div className="queue-summary"><MailCheck size={19} /><div><strong>24 messages queued</strong><span>All automations are running normally.</span></div><span className="status-badge active">Healthy</span></div></section></div></section>;
+  return <section className="page-stack"><div className="module-intro training-intro"><div><span className="module-kicker"><GraduationCap size={15} /> Learning & development</span><h2>Manage employee training</h2><p>Plan sessions, check training requirements and view employee records.</p></div><button className="button button-primary" onClick={() => navigate("training-planner")}><Plus size={17} /> Plan training</button></div><div className="metric-grid"><MetricCard icon={ShieldCheck} label="Compliance rate" value="89%" detail="Target 95%" tone="green" /><MetricCard icon={CalendarDays} label="Upcoming sessions" value={sessions.filter((s) => s.status === "Scheduled").length} detail="Next 30 days" tone="blue" /><MetricCard icon={Clock3} label="Learning hours" value={dashboard?.stats.totalTrainingHours ?? "—"} detail="Year to date" tone="violet" /><MetricCard icon={CircleAlert} label="Overdue actions" value="7" detail="Needs HR review" tone="burgundy" /></div><section className="card feature-hub"><SectionHeader kicker="Training workspace" title="Training tools" /><div className="feature-grid">{trainingNav.slice(1).map((item, index) => <button key={item.id} onClick={() => navigate(item.id)} style={{ "--delay": `${index * 65}ms` } as React.CSSProperties}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><p>{featureDescription[item.id]}</p></div><ArrowRight size={17} /></button>)}</div></section><div className="content-grid split-even"><section className="card"><SectionHeader kicker="This month" title="Delivery progress" action="Calendar" onAction={() => navigate("training-calendar")} /><div className="delivery-ring-row"><div className="donut-ring"><strong>14</strong><span>of 18<br />sessions</span></div><div className="delivery-stats"><div><strong>78%</strong><span>delivered</span></div><div><strong>428</strong><span>attendance records</span></div><div><strong>96%</strong><span>attendance rate</span></div></div></div></section><section className="card"><SectionHeader kicker="Automation" title="Follow-up journey" action="Manage" onAction={() => navigate("email-automation")} /><div className="journey-mini"><span><Check size={14} /> Invite sent</span><i /><span><Check size={14} /> Day reminder</span><i /><span><Upload size={14} /> Notes request</span><i /><span><MessageSquareText size={14} /> 3-month form</span></div><div className="queue-summary"><MailCheck size={19} /><div><strong>24 messages queued</strong><span>All automations are running normally.</span></div><span className="status-badge active">Healthy</span></div></section></div></section>;
 }
 
 function TrainingCalendar({ sessions, selectedDate, setSelectedDate, navigate }: { sessions: CalendarSession[]; selectedDate: string; setSelectedDate: (date: string) => void; navigate: (view: View) => void }) {
@@ -410,7 +405,7 @@ const emailBodyCopy: Record<string, string> = {
 
 function EmailAutomation({ showNotice }: { showNotice: (message: string) => void }) {
   const [selected, setSelected] = useState(emailAutomations[0]);
-  return <section className="page-stack"><div className="module-intro email-intro"><div><span className="module-kicker"><MailCheck size={15} /> Automated communication</span><h2>The right message, at the right moment.</h2><p>Keep employees and managers informed from enrolment through post-training effectiveness review.</p></div><button className="button button-light" onClick={() => showNotice("A new email workflow draft has been created.")}><Plus size={17} /> New automation</button></div><div className="email-layout"><section className="card automation-list"><SectionHeader kicker="Active workflows" title="Email journey" />{emailAutomations.map((automation) => <button key={automation.id} className={selected.id === automation.id ? "selected" : ""} onClick={() => setSelected(automation)}><span className="automation-order"><MailCheck size={18} /></span><div><strong>{automation.title}</strong><p>{automation.trigger}</p><small>{automation.audience}</small></div><span className={`status-badge ${automation.status.toLowerCase()}`}>{automation.status}</span><em>{automation.sent} sent</em></button>)}</section><section className="card email-preview-card"><div className="preview-toolbar"><div><p>Email preview</p><h2>{selected.title}</h2></div><button className="button button-secondary" onClick={() => showNotice("Preview prepared. Connect SMTP credentials on the Linux server to deliver test emails.")}><Send size={15} /> Send test</button></div><div className="email-window"><div className="email-meta"><div><span className="email-logo">SGI</span><span><strong>HR Digital</strong><small>training@sugiharagrand.com</small></span></div><dl><div><dt>To</dt><dd>Employee name</dd></div><div><dt>Subject</dt><dd>{selected.title}: GMP Refresher 2026</dd></div></dl></div><div className="email-body"><div className="email-brand"><img src="/sgi-logo.png" alt="Sugihara Grand Industries" /></div><span className="email-tag">Training & development</span><h3>{selected.id === "email-3" ? "How has your training helped?" : selected.id === "email-2" ? "Share your training notes" : "Your training is coming up"}</h3><p>Hi Muhammad,</p><p>{emailBodyCopy[selected.id]}</p><div className="email-detail-box"><CalendarDays size={19} /><span><strong>GMP Refresher 2026</strong><small>Monday, 21 September · 9:00 AM<br />Main Conference Room</small></span></div><button>{selected.id === "email-3" ? "Complete effectiveness form" : selected.id === "email-2" ? "Upload training notes" : "View training details"}</button><p className="email-signoff">Thank you,<br /><strong>Human Resources · Sugihara Grand Industries</strong></p></div><footer>This is an automated message from HR Digital.</footer></div><div className="delivery-note"><ShieldCheck size={18} /><div><strong>Delivery-ready template</strong><span>Responsive HTML, branded sender identity and tracked action link. SMTP credentials are required on deployment.</span></div></div></section></div></section>;
+  return <section className="page-stack"><div className="module-intro email-intro"><div><span className="module-kicker"><MailCheck size={15} /> Automated communication</span><h2>Manage training emails</h2><p>Send invitations, reminders and follow-up emails to employees and managers.</p></div><button className="button button-light" onClick={() => showNotice("A new email workflow draft has been created.")}><Plus size={17} /> New automation</button></div><div className="email-layout"><section className="card automation-list"><SectionHeader kicker="Active workflows" title="Email schedule" />{emailAutomations.map((automation) => <button key={automation.id} className={selected.id === automation.id ? "selected" : ""} onClick={() => setSelected(automation)}><span className="automation-order"><MailCheck size={18} /></span><div><strong>{automation.title}</strong><p>{automation.trigger}</p><small>{automation.audience}</small></div><span className={`status-badge ${automation.status.toLowerCase()}`}>{automation.status}</span><em>{automation.sent} sent</em></button>)}</section><section className="card email-preview-card"><div className="preview-toolbar"><div><p>Email preview</p><h2>{selected.title}</h2></div><button className="button button-secondary" onClick={() => showNotice("Preview prepared. Connect SMTP credentials on the Linux server to deliver test emails.")}><Send size={15} /> Send test</button></div><div className="email-window"><div className="email-meta"><div><span className="email-logo">SGI</span><span><strong>HR Digital</strong><small>training@sugiharagrand.com</small></span></div><dl><div><dt>To</dt><dd>Employee name</dd></div><div><dt>Subject</dt><dd>{selected.title}: GMP Refresher 2026</dd></div></dl></div><div className="email-body"><div className="email-brand"><img src="/sgi-logo.png" alt="Sugihara Grand Industries" /></div><span className="email-tag">Training & development</span><h3>{selected.id === "email-3" ? "How has your training helped?" : selected.id === "email-2" ? "Share your training notes" : "Your training is coming up"}</h3><p>Hi Muhammad,</p><p>{emailBodyCopy[selected.id]}</p><div className="email-detail-box"><CalendarDays size={19} /><span><strong>GMP Refresher 2026</strong><small>Monday, 21 September · 9:00 AM<br />Main Conference Room</small></span></div><button>{selected.id === "email-3" ? "Complete effectiveness form" : selected.id === "email-2" ? "Upload training notes" : "View training details"}</button><p className="email-signoff">Thank you,<br /><strong>Human Resources · Sugihara Grand Industries</strong></p></div><footer>This is an automated message from HR Digital.</footer></div><div className="delivery-note"><ShieldCheck size={18} /><div><strong>Delivery-ready template</strong><span>Responsive HTML, branded sender identity and tracked action link. SMTP credentials are required on deployment.</span></div></div></section></div></section>;
 }
 
 function NotesLibrary({ showNotice }: { showNotice: (message: string) => void }) {
@@ -664,12 +659,11 @@ function FleetTracker({
         <div className="module-intro fleet-intro">
           <div>
             <span className="module-kicker">
-              <CarFront size={15} /> Company mobility
+              <CarFront size={15} /> Company cars
             </span>
-            <h2>Scan. Inspect. Drive. Return.</h2>
+            <h2>Track company car trips</h2>
             <p>
-              Record every journey from the before-drive inspection to the
-              final odometer photo and vehicle return.
+              Start a trip, complete the car checks and record the odometer reading when you return.
             </p>
           </div>
           <div className="fleet-hero-actions">
@@ -677,7 +671,7 @@ function FleetTracker({
               className="button button-light"
               onClick={onOpenRegistry}
             >
-              <Settings2 size={17} /> Manage vehicle registry
+              <Settings2 size={17} /> Manage cars
             </button>
             <button
               className="button button-ghost-light"
@@ -966,7 +960,7 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
 
   const editor = editing !== undefined ? createPortal(
     <div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(undefined); }}>
-      <section className="fleet-dialog" role="dialog" aria-modal="true" aria-label={editing ? "Edit vehicle" : "Register vehicle"}>
+      <section className="fleet-dialog" role="dialog" aria-modal="true" aria-label={editing ? "Edit vehicle" : "Add car"}>
         <header><div><span>{editing?.plate ?? "Fleet registry"}</span><strong>{editing ? "Edit vehicle details" : "Register a new vehicle"}</strong></div><button onClick={() => setEditing(undefined)} aria-label="Close"><X size={19} /></button></header>
         <VehicleForm vehicle={editing ?? undefined} onSubmit={async (input) => {
           const saved = editing ? await api.updateVehicle(editing.id, input) : await api.createVehicle(input);
@@ -1005,7 +999,7 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
 
   return <>
     <section className="page-stack">
-      <div className="module-intro fleet-intro registry-intro"><div><span className="module-kicker"><CarFront size={15} /> Vehicle registry</span><h2>Every company car, properly documented.</h2><p>Maintain vehicle identity, photos, ownership, odometer readings, service limits and operational availability in one place.</p></div><button className="button button-light" onClick={() => setEditing(null)}><Plus size={17} /> Register vehicle</button></div>
+      <div className="module-intro fleet-intro registry-intro"><div><span className="module-kicker"><CarFront size={15} /> Vehicle registry</span><h2>Manage company cars</h2><p>Add cars and update their photos, mileage, service dates and availability.</p></div><button className="button button-light" onClick={() => setEditing(null)}><Plus size={17} /> Add car</button></div>
       <div className="metric-grid compact-metrics">
         <MetricCard icon={CarFront} label="Active registry" value={String(vehicles.length)} detail="Company vehicles" tone="burgundy" />
         <MetricCard icon={CheckCircle2} label="Available" value={String(vehicles.filter((item) => item.status === "AVAILABLE").length)} detail="Ready for a trip" tone="green" />
@@ -1072,7 +1066,7 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
   });
 
   return <section className="page-stack usage-history-page">
-    <div className="module-intro history-intro"><div><span className="module-kicker"><Clock3 size={15} /> Company car / audit</span><h2>Usage history for every vehicle.</h2><p>Select a car to review its drivers, journeys, odometer readings, inspections and saved evidence.</p></div></div>
+    <div className="module-intro history-intro"><div><span className="module-kicker"><Clock3 size={15} /> Company cars</span><h2>Review past trips</h2><p>Select a car to see drivers, trips, mileage, inspections and photos.</p></div></div>
     {preview && <div className="history-preview" role="status">The fleet API is unavailable. Showing sample records until the server is connected.</div>}
     <div className="history-selector card">
       <div><span className="history-kicker">Vehicle record</span><h3>{selectedVehicle?.plate ?? (loading ? "Loading vehicles…" : "No vehicle selected")}</h3><p>{selectedVehicle?.model ?? "Choose a vehicle to inspect its history."}{selectedVehicle?.archivedAt ? " · Archived" : ""}</p></div>
@@ -1299,7 +1293,7 @@ function VehicleForm({
           ) : (
             <>
               <CheckCircle2 size={16} />{" "}
-              {vehicle ? "Save vehicle changes" : "Register vehicle"}
+              {vehicle ? "Save vehicle changes" : "Add car"}
             </>
           )}
         </button>
