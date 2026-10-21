@@ -1,5 +1,5 @@
 import type {
-  DashboardSummary, EmployeeImportPreview, Vehicle, VehicleCondition, VehicleStatus, VehicleTrip
+  DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, Vehicle, VehicleCondition, VehicleStatus, VehicleTrip
 } from "@hr-training/shared";
 import { sampleCourses, sampleDashboard, sampleEmployees, sampleSessions } from "./sample-data";
 import type { Course, Employee, SessionListItem } from "./types";
@@ -98,6 +98,15 @@ export const api = {
       method: "POST",
       body: formData
     });
+  },
+
+  previewEmployeeEmails(file: File) {
+    const formData = new FormData(); formData.append("file", file);
+    return request<EmployeeEmailImportPreview>("/api/employees/emails/preview", { method: "POST", body: formData });
+  },
+
+  commitEmployeeEmails(rows: Array<{ employeeId: string; email: string }>, replaceExisting: boolean) {
+    return request<{ imported: number; skipped: number }>("/api/employees/emails/commit", { method: "POST", body: JSON.stringify({ rows, replaceExisting }) });
   },
 
   commitEmployeeImport(rows: EmployeeImportPreview["rows"]) {

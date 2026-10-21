@@ -541,3 +541,46 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 @media (max-width: 1050px) { .app-shell { padding-left: 0; } .sidebar { width: min(300px,86vw); } }
 @media (max-width: 850px) { .history-summary, .history-entry-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 600px) { .history-selector { align-items: stretch; flex-direction: column; } .history-summary, .history-entry-grid { grid-template-columns: 1fr 1fr; } .history-entry, .history-log-heading { padding: 18px; } .history-notes { max-width: 100%; } .history-summary strong { font-size: 22px; } }
+/* Department groups keep the directory compact, with employee cards on demand. */
+.directory-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.directory-filters label { display: grid; gap: 7px; font-size: 12px; font-weight: 700; }
+.directory-filters select { min-height: 42px; max-width: 100%; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); }
+.directory-filters > span { margin-left: auto; padding-bottom: 10px; color: var(--muted); font-size: 12px; }
+.department-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.department-group { min-width: 0; border: 1px solid var(--line); border-radius: 15px; background: white; overflow: hidden; }
+.department-group.is-open { grid-column: 1 / -1; }
+.department-heading { width: 100%; min-height: 105px; display: flex; align-items: center; gap: 12px; padding: 20px; border: 0; background: transparent; text-align: left; color: var(--ink); }
+.department-heading > span:nth-child(2) { flex: 1; min-width: 0; }
+.department-heading strong, .department-heading small { display: block; }
+.department-heading strong { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.department-heading small { margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--muted); }
+.department-icon, .employee-card-avatar { flex-shrink: 0; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; color: #333; background: #f1f2f3; }
+.department-heading > svg { flex-shrink: 0; transition: transform .2s; }
+.is-open .department-heading > svg { transform: rotate(180deg); }
+.department-body { padding: 0 20px 20px; }
+.employee-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.employee-card { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: start; gap: 10px; min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #fff; text-align: left; }
+.employee-card:hover { border-color: #888; background: #fafafa; }
+.employee-card-identity strong, .employee-card-identity small { display: block; overflow-wrap: anywhere; }
+.employee-card-identity strong { font-size: 13px; line-height: 1.5; }
+.employee-card-identity small { margin-top: 5px; color: var(--muted); font-size: 11px; }
+.employee-card > .employment-status, .employee-card-role, .employee-card-email, .employee-card-action { grid-column: 1/-1; }
+.employee-card > .employment-status { justify-self: start; text-transform: capitalize; }
+.employee-card-role { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.employee-card-email { display: flex; align-items: center; gap: 7px; font-size: 12px; overflow-wrap: anywhere; word-break: break-word; }
+.employee-card-email svg { flex-shrink: 0; }
+.employee-card-email.missing { color: var(--muted); }
+.employee-card-action { font-size: 11px; font-weight: 700; padding-top: 4px; }
+.department-more { margin-top: 16px; }
+.directory-empty { color: var(--muted); }
+.email-import-dialog { width: min(1180px, calc(100vw - 32px)); max-width: 1180px; }
+.email-import-body { padding: 22px; overflow-y: auto; }
+.email-import-body > p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.email-import-body .table-wrap { max-height: 48vh; overflow: auto; }
+.email-import-body select { width: 100%; min-width: 240px; max-width: 390px; min-height: 40px; border: 1px solid var(--line); border-radius: 7px; padding: 7px; background: white; color: var(--ink); }
+.email-import-body td { white-space: normal; min-width: 150px; }
+.email-replace-option { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 13px; line-height: 1.5; }
+.email-import-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-top: 1px solid var(--line); font-size: 12px; }
+.email-import-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 1200px) { .department-groups, .employee-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .department-groups, .employee-card-grid { grid-template-columns: 1fr; }.directory-filters label { width: 100%; }.directory-filters > span { margin-left: 0; }.department-body { padding: 0 12px 12px; }.email-import-footer { flex-wrap: wrap; } }

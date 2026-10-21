@@ -11,6 +11,7 @@ import {
 import { prisma } from "./prisma.js";
 import { env } from "./env.js";
 import { parseEmployeeImport } from "./importer.js";
+import { parseEmployeeEmails } from "./email-importer.js";
 import { summarizeCourseHours, summarizeDepartmentHours, type CompletionRecordForSummary } from "./dashboard-summary.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -61,6 +62,7 @@ const employeeImportCommitSchema = z.object({
     z.object({
       employeeId: z.string().trim().min(1),
       name: nullableText,
+      email: z.string().trim().email().optional(),
       company: nullableText,
       base: nullableText,
       department: z.string().trim().min(1),
@@ -323,7 +325,6 @@ export const createRouter = () => {
         },
         include: { department: true },
         orderBy: { employeeId: "asc" },
-        take: 250
       });
       res.json(employees);
     })
@@ -390,6 +391,49 @@ export const createRouter = () => {
   );
 
   router.post(
+    "/employees/emails/preview",
+    upload.single("file"),
+    asyncHandler(async (req, res) => {
+      if (!req.file) throw new HttpError(400, "Upload an email .xlsx or .csv file.");
+      const employees = await prisma.employee.findMany({ select: { employeeId: true, name: true, email: true } });
+      try {
+        res.json(await parseEmployeeEmails(req.file.buffer, req.file.originalname, employees));
+      } catch (error) {
+        throw new HttpError(400, error instanceof Error && "status" in error ? error.message : "The email file could not be read. Choose a valid .xlsx or .csv file.");
+      }
+    })
+  );
+
+  router.post(
+    "/employees/emails/commit",
+    asyncHandler(async (req, res) => {
+      const input = z.object({
+        rows: z.array(z.object({ employeeId: z.string().trim().min(1), email: z.string().trim().email().transform((value) => value.toLowerCase()) })).min(1).max(5000),
+        replaceExisting: z.boolean().default(false)
+      }).parse(req.body);
+      if (new Set(input.rows.map((row) => row.employeeId)).size !== input.rows.length || new Set(input.rows.map((row) => row.email)).size !== input.rows.length) {
+        throw new HttpError(400, "Choose one unique email address per employee.");
+      }
+      const result = await prisma.$transaction(async (tx) => {
+        let imported = 0; let skipped = 0;
+        for (const row of input.rows) {
+          const employee = await tx.employee.findUnique({ where: { employeeId: row.employeeId } });
+          if (!employee) throw new HttpError(400, `Employee ${row.employeeId} no longer exists. Refresh the preview.`);
+          if (employee.email && employee.email.toLowerCase() !== row.email && !input.replaceExisting) { skipped++; continue; }
+          const owner = await tx.employee.findFirst({ where: { email: { equals: row.email, mode: "insensitive" }, employeeId: { not: row.employeeId } } });
+          if (owner) throw new HttpError(400, "An email address is already assigned to a different employee. Review the matches before saving.");
+          // Conditional update protects existing addresses if they change after preview.
+          const saved = await tx.employee.updateMany({ where: { employeeId: row.employeeId, email: employee.email }, data: { email: row.email } });
+          if (!saved.count) throw new HttpError(409, "An employee email changed while importing. Refresh the preview and try again.");
+          imported++;
+        }
+        return { imported, skipped };
+      });
+      res.json(result);
+    })
+  );
+
+  router.post(
     "/employees/import/preview",
     upload.single("file"),
     asyncHandler(async (req, res) => {
@@ -425,6 +469,7 @@ export const createRouter = () => {
             where: { employeeId: row.employeeId },
             update: {
               name: row.name,
+              email: row.email,
               company: row.company,
               base: row.base,
               departmentId: department.id,
@@ -435,6 +480,7 @@ export const createRouter = () => {
             create: {
               employeeId: row.employeeId,
               name: row.name,
+              email: row.email,
               company: row.company,
               base: row.base,
               departmentId: department.id,

@@ -73,6 +73,7 @@ export type Vehicle = {
 
 export type EmployeeImportRow = {
   employeeId: string;
+  email?: string;
   department: string;
   company?: string;
   base?: string;
@@ -97,6 +98,20 @@ export type EmployeeImportPreview = {
     invalidRows: number;
     sheet?: string;
   };
+};
+
+export type EmployeeEmailImportPreview = {
+  rows: Array<{
+    row: number;
+    name: string;
+    email: string;
+    employeeId?: string;
+    existingEmail?: string | null;
+    issue?: string;
+    invalid?: boolean;
+  }>;
+  matched: number;
+  needsReview: number;
 };
 
 export type DashboardSummary = {

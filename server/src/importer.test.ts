@@ -3,6 +3,13 @@ import { describe, it } from "node:test";
 import { parseEmployeeImport } from "./importer.js";
 
 describe("parseEmployeeImport", () => {
+  it("allows blank emails and imports valid email columns", async () => {
+    const result = await parseEmployeeImport(Buffer.from('Employee#,Name,Department,Email\n001,Sample,Production,\n002,Other,Production,OTHER@example.com\n003,Invalid,Production,bad-address'));
+    assert.equal(result.meta.validRows, 2);
+    assert.equal(result.rows[0].email, undefined);
+    assert.equal(result.rows[1].email, "other@example.com");
+    assert.equal(result.errors[0].field, "email");
+  });
   it("reads SGI employment columns without losing company or base", async () => {
     const preview = await parseEmployeeImport(Buffer.from(
       '\uFEFFEmployee#,Name,Company,Base,Department,Job Type\n007001,Sample Employee,Example Industries,Port Klang,Maintenance,"TECH, MAINT"'

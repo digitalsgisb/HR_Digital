@@ -1,5 +1,6 @@
 import { parse as parseCsv } from "csv-parse/sync";
 import readXlsxFile, { readSheetNames } from "read-excel-file/node";
+import { z } from "zod";
 import {
   employeeStatuses, type EmployeeImportError, type EmployeeImportPreview,
   type EmployeeImportRow, type EmployeeStatus
@@ -10,39 +11,43 @@ const aliases: Record<string, string> = {
   employee: "employee_id", employee_number: "employee_id", employee_no: "employee_id",
   employeeid: "employee_id", staff_id: "employee_id", staff_no: "employee_id",
   full_name: "name", employee_name: "name", job_type: "role", job_title: "role",
-  position: "role", employment_status: "status"
+  position: "role", employment_status: "status", email_address: "email"
 };
 const normalizeHeader = (value: unknown) => {
   const header = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_").replace(/[^a-z0-9_]/g, "");
   return aliases[header] ?? header;
 };
 const text = (value: unknown) => String(value ?? "").trim();
-type ImportTable = { headers: string[]; rows: unknown[][]; headerRow: number; sheet?: string };
+export type ImportTable = { headers: string[]; rows: unknown[][]; headerRow: number; sheet?: string };
 
-function findTable(rows: unknown[][], sheet?: string): ImportTable {
+function findTable(rows: unknown[][], sheet?: string, required = requiredHeaders): ImportTable {
   const headerIndex = rows.findIndex((row) => {
     const headers = row.map(normalizeHeader);
-    return requiredHeaders.every((header) => headers.includes(header));
+    return required.every((header) => headers.includes(header));
   });
   const index = headerIndex < 0 ? 0 : headerIndex;
   return { headers: (rows[index] ?? []).map(normalizeHeader), rows: rows.slice(index + 1), headerRow: index + 1, sheet };
 }
 
-export const parseEmployeeImport = async (buffer: Buffer, filename = "employees.csv"): Promise<EmployeeImportPreview> => {
+export const readImportTable = async (buffer: Buffer, filename: string, required = requiredHeaders): Promise<ImportTable> => {
   let table: ImportTable;
   if (/\.xlsx$/i.test(filename)) {
     const sheets = await readSheetNames(buffer);
     const tables: ImportTable[] = [];
-    for (const sheet of sheets) tables.push(findTable(await readXlsxFile(buffer, { sheet }), sheet));
-    const matches = tables.filter((candidate) => requiredHeaders.every((header) => candidate.headers.includes(header)));
-    if (matches.length > 1) throw Object.assign(new Error("More than one employee sheet was found. Upload a workbook containing just the employee sheet you want to import."), { status: 400 });
+    for (const sheet of sheets) tables.push(findTable(await readXlsxFile(buffer, { sheet }), sheet, required));
+    const matches = tables.filter((candidate) => required.every((header) => candidate.headers.includes(header)));
+    if (matches.length > 1) throw Object.assign(new Error("More than one matching sheet was found. Upload a workbook containing just the sheet you want to import."), { status: 400 });
     table = matches[0] ?? tables[0] ?? findTable([]);
   } else if (/\.csv$/i.test(filename)) {
-    table = findTable(parseCsv(buffer.toString("utf8"), { bom: true, relax_column_count: true, skip_empty_lines: false, trim: true }) as unknown[][]);
+    table = findTable(parseCsv(buffer.toString("utf8"), { bom: true, relax_column_count: true, skip_empty_lines: false, trim: true }) as unknown[][], undefined, required);
   } else {
     throw Object.assign(new Error("Choose an .xlsx or .csv file. For older .xls files, save as .xlsx in Excel first."), { status: 400 });
   }
+  return table;
+};
 
+export const parseEmployeeImport = async (buffer: Buffer, filename = "employees.csv"): Promise<EmployeeImportPreview> => {
+  const table = await readImportTable(buffer, filename);
   const errors: EmployeeImportError[] = [];
   const validRows: EmployeeImportRow[] = [];
   const rows = table.rows.map((values, index) => ({ values, rowNumber: table.headerRow + index + 1 }))
@@ -67,12 +72,13 @@ export const parseEmployeeImport = async (buffer: Buffer, filename = "employees.
     if (!employeeId) rowErrors.push({ row: rowNumber, field: "employee_id", message: "Employee ID is required." });
     if (!department) rowErrors.push({ row: rowNumber, field: "department", message: "Department is required." });
     if (!employeeStatuses.includes(status)) rowErrors.push({ row: rowNumber, field: "status", message: `Status must be ${employeeStatuses.join(", ")}.` });
+    if (row.email && !z.string().email().safeParse(row.email).success) rowErrors.push({ row: rowNumber, field: "email", message: "Enter a valid email address or leave it blank." });
     if (seenIds.has(employeeId)) rowErrors.push({ row: rowNumber, field: "employee_id", message: "Duplicate employee ID in this file. Keep one row per employee." });
     if (employeeId) seenIds.add(employeeId);
     if (rowErrors.length) { errors.push(...rowErrors); continue; }
     validRows.push({ employeeId, department, name: row.name || undefined,
       line: row.line || undefined, role: row.role || undefined, status,
-      ...(row.company ? { company: row.company } : {}), ...(row.base ? { base: row.base } : {}) });
+      ...(row.company ? { company: row.company } : {}), ...(row.base ? { base: row.base } : {}), ...(row.email ? { email: row.email.toLowerCase() } : {}) });
   }
   return { rows: validRows, errors, meta: meta() };
 };
