@@ -19,6 +19,7 @@ import { VehiclePhotoField } from "./VehiclePhotoField";
 import { EmployeeImportPreview as ImportPreview } from "./EmployeeImportPreview";
 import { EmployeeDirectory } from "./EmployeeDirectory";
 import { EmployeeEmailImport } from "./EmployeeEmailImport";
+import { TrainingDeleteButton } from "./TrainingDeleteButton";
 import { TrainingCalendar } from "./TrainingCalendar";
 import { EmailAutomation } from "./EmailAutomation";
 import { TrainingPlanner } from "./TrainingPlanner";
@@ -162,6 +163,13 @@ function App() {
     if (view === "fleet" || view === "fleet-registry" || view === "usage-history") setFleetOpen(true);
   };
 
+  const deleteTraining = async (id: string) => {
+    await api.deleteTrainingSession(id);
+    setCalendarSessions(current => current.filter(session => session.id !== id));
+    setNotice("Training deleted. Pending emails were cancelled.");
+    api.getDashboard().then(setDashboard).catch(() => setDashboard(null));
+  };
+
   const openHistory = (vehicleId: string) => {
     setHistoryVehicleId(vehicleId);
     navigate("usage-history");
@@ -179,12 +187,12 @@ function App() {
           {activeView === "overview" && <Overview dashboard={dashboard} sessions={calendarSessions} navigate={navigate} />}
           {activeView === "employees" && <EmployeesDatabase showNotice={setNotice} />}
           {activeView === "training-overview" && <TrainingOverview dashboard={dashboard} sessions={calendarSessions} navigate={navigate} />}
-          {activeView === "training-calendar" && <TrainingCalendar sessions={calendarSessions} selectedDate={selectedDate} setSelectedDate={setSelectedDate} navigate={navigate} />}
-          {activeView === "training-planner" && <TrainingPlanner initialDate={selectedDate} onCreate={(session) => {
+          {activeView === "training-calendar" && <TrainingCalendar sessions={calendarSessions} selectedDate={selectedDate} setSelectedDate={setSelectedDate} navigate={navigate} onDelete={deleteTraining} />}
+          {activeView === "training-planner" && <TrainingPlanner initialDate={selectedDate} onCreate={(session, message) => {
             setCalendarSessions((current) => [...current, session]); setSelectedDate(session.date);
-            setNotice(`${session.title} was saved to the training calendar.`); setTrainingError(""); api.getDashboard().then(setDashboard).catch(() => {}); navigate("training-calendar");
+            setNotice(message); setTrainingError(""); api.getDashboard().then(setDashboard).catch(() => {}); navigate("training-calendar");
           }} />}
-          {activeView === "training-records" && <TrainingRecords sessions={calendarSessions} />}
+          {activeView === "training-records" && <TrainingRecords sessions={calendarSessions} onDelete={deleteTraining} />}
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}
           {activeView === "notes-library" && <NotesLibrary showNotice={setNotice} />}
           {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
@@ -408,10 +416,10 @@ function EmployeeForm({ employee, onSubmit }: { employee?: Employee; onSubmit: (
   return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, company, base, department, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="registry-note"><UserRound size={22} /><div><strong>{employee ? "Maintain the master employee record" : "Create a master employee record"}</strong><small>Status controls whether the employee appears in active workforce workflows; historical training records are always retained.</small></div></div><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / job type</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label><label className="field"><span>Base</span><input value={base} onChange={(event) => setBase(event.target.value)} /></label><label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label><label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Changes are saved to the central people directory.</span><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
 }
 
-function TrainingRecords({ sessions }: { sessions: CalendarSession[] }) {
+function TrainingRecords({ sessions, onDelete }: { sessions: CalendarSession[]; onDelete: (id: string) => Promise<void> }) {
   const [query, setQuery] = useState("");
   const records = sessions.flatMap((session) => session.attendees.map((employee) => ({ session, employee }))).filter(({session,employee}) => (session.title + " " + employee.name + " " + employee.department).toLowerCase().includes(query.toLowerCase()));
-  return <section className="page-stack"><label className="search-field"><Search size={17} /><input placeholder="Search training records" value={query} onChange={(event) => setQuery(event.target.value)} /></label><section className="card data-card"><SectionHeader kicker="Training" title="Employee training records" />{records.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Employee</th><th>Department</th><th>Training</th><th>Date</th><th>Status</th><th>Hours</th></tr></thead><tbody>{records.map(({session,employee}) => <tr key={session.id + employee.id}><td>{employee.name}</td><td>{employee.department}</td><td>{session.title}</td><td>{session.date}</td><td>{employee.status}</td><td>{employee.hours ?? 0}</td></tr>)}</tbody></table></div> : <p className="training-empty">No training records found. Saved training plans and attendance records will appear here.</p>}</section></section>;
+  return <section className="page-stack"><label className="search-field"><Search size={17} /><input placeholder="Search training records" value={query} onChange={(event) => setQuery(event.target.value)} /></label><section className="card data-card"><SectionHeader kicker="Training" title="Employee training records" />{records.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Employee</th><th>Department</th><th>Training</th><th>Date</th><th>Status</th><th>Hours</th><th>Manage</th></tr></thead><tbody>{records.map(({session,employee}) => <tr key={session.id + employee.id}><td>{employee.name}</td><td>{employee.department}</td><td>{session.title}</td><td>{session.date}</td><td>{employee.status}</td><td>{employee.hours ?? 0}</td><td><TrainingDeleteButton session={session} onDelete={onDelete} /></td></tr>)}</tbody></table></div> : <p className="training-empty">No training records found. Saved training plans and attendance records will appear here.</p>}</section></section>;
 }
 
 function NotesLibrary({ showNotice }: { showNotice: (message: string) => void }) {

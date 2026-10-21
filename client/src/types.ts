@@ -29,6 +29,7 @@ export type Course = {
 };
 
 export type SessionListItem = {
+  emailDelivery?: { queued: number; recipients: number; withoutEmail: number; enabled: boolean; historical: boolean; requested: boolean };
   id: string;
   dateStart: string;
   dateEnd?: string | null;

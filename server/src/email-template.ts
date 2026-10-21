@@ -18,8 +18,8 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": 
 export type TrainingEmailDetails = { name: string; training: string; date: string; time: string; venue: string; trainer: string };
 export const developerTrainingDetails: TrainingEmailDetails = { name: "Developer", training: "Developer training", date: "Sample training date", time: "09:00–12:00 · Malaysia time", venue: "Sample training room", trainer: "HR Learning & Development" };
 
-export function renderTrainingEmail(templateId: EmailTestTemplate, details: TrainingEmailDetails, portalUrl: string, test = true): EmailTestPreview {
-  const template = templates[templateId];
+export function renderTrainingEmail(templateId: EmailTestTemplate, details: TrainingEmailDetails, portalUrl: string, test = true, invitation = false): EmailTestPreview {
+  const template = invitation ? { title: "You are invited to training", intro: "You have been selected for the training below. Please review the details and make arrangements to attend. Contact Human Resources if you are unable to join.", action: "Open HR Digital" } : templates[templateId];
   const url = new URL(portalUrl);
   if (!["https:", "http:"].includes(url.protocol)) throw new Error("Email portal URL must use HTTP or HTTPS.");
   const href = escapeHtml(url.origin);

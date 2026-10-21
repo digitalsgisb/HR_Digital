@@ -36,7 +36,7 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
 
 export type TrainingPlanInput = {
   title: string; category: string; dateStart: string; dateEnd: string; trainerName: string; venue: string;
-  capacity: number; deliveryMethod: string; participantEmployeeIds: string[];
+  capacity: number; deliveryMethod: string; participantEmployeeIds: string[]; notifyParticipants?: boolean;
 };
 
 export type VehicleInput = {
@@ -51,6 +51,8 @@ export type VehicleInput = {
 };
 
 export const api = {
+  trainingEmailStatus: () => request<{ enabled: boolean; ready: boolean; counts: Record<string, number>; failures: Array<{id: string; recipient: string; lastError: string | null; session: {course: {name: string}}}> }>("/api/training-email/status"),
+  retryTrainingEmails: () => request<{queued: number}>("/api/training-email/retry", {method: "POST"}),
   emailTestStatus: () => request<import("@hr-training/shared").EmailTestStatus>("/api/email-test/status"),
   emailTestPreview: (id: string) => request<import("@hr-training/shared").EmailTestPreview>(`/api/email-test/preview/${id}`),
   emailTestInbox: () => request<import("@hr-training/shared").EmailTestMessage[]>("/api/email-test/inbox"),
@@ -83,6 +85,8 @@ export const api = {
   async getSessions(): Promise<SessionListItem[]> {
     return request<SessionListItem[]>("/api/training-sessions");
   },
+
+  deleteTrainingSession: (id: string) => request<{deleted: boolean}>(`/api/training-sessions/${encodeURIComponent(id)}`, {method: "DELETE"}),
 
   createTrainingPlan(input: TrainingPlanInput) {
     return request<SessionListItem>("/api/training-plans", { method: "POST", body: JSON.stringify(input) });

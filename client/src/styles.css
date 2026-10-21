@@ -640,3 +640,11 @@ html[data-department-transition]::view-transition-new(root) { animation: none; m
 .developer-email .automation-list > p { padding: 0; font-size: 13px; line-height: 1.5; }
 .developer-email .preview-toolbar h3 { margin: 0; font-size: 17px; }
 .email-test-controls > p { line-height: 1.5; overflow-wrap: anywhere; }
+
+.training-delete { color: #9d1d28; margin: 8px 0; }
+.training-delete-dialog { width: min(520px, calc(100% - 32px)); padding: 28px; border: 1px solid var(--line); border-radius: 18px; color: var(--text); box-shadow: 0 24px 100px #0004; }
+.training-delete-dialog::backdrop { background: #0008; }
+.training-delete-dialog p { line-height: 1.6; }
+.training-delete-dialog .toolbar-actions { justify-content: end; margin-top: 24px; }
+.training-email-option { display: flex; gap: 10px; align-items: center; margin-top: 20px; font-weight: 700; }
+.training-email-option input { width: 18px; height: 18px; flex: 0 0 auto; }

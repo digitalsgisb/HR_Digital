@@ -243,7 +243,7 @@ Employee summary cards filter the directory by active status or email availabili
 
 The calendar starts on today's Malaysia date. Choose a month and year directly, use Previous/Next, or return with Today. Agenda and CSV export use the selected month. The built-in demo training sessions, employee training rows, training notes and fabricated summary counts have been removed. Existing saved training history is not deleted.
 
-Training plans load active employees from the directory and save the course, schedule and participant records in one API transaction. Employees without email can be included. Venue, capacity and delivery method are stored on the session. Saving a plan does not send invitations.
+Training plans load active employees from the directory and save the course, schedule and participant records in one API transaction. Employees without email can be included. Venue, capacity and delivery method are stored on the session. New future plans queue invitations, training-day reminders and post-training follow-ups when participant emails are enabled.
 
 Apply the updated Prisma schema before deploying this change. Production Docker startup applies it through the documented backup/update procedure above; local development can use `npm.cmd run prisma:migrate`. Demo seeding is disabled by default. Populate an isolated development database with examples only by explicitly setting `SEED_DEMO_DATA=true` when running `prisma:seed`.
 
@@ -305,3 +305,19 @@ The wizard asks for a sender, a test recipient (defaults to the sender), and a h
 The templates use the existing Sugihara logo as a CID inline attachment in sent messages and a data image in browser previews. The HTML uses tables and inline styles, and includes a plain-text alternative. Developer tests use sample details and link to the HR Digital home page; no employee action is submitted.
 
 Google references: [SMTP setup](https://support.google.com/a/answer/176600?hl=en) · [App Passwords](https://support.google.com/accounts/answer/185833?hl=en).
+
+### Automatic training emails and deleting training
+
+Future plans created after this update have **Send participant emails automatically** enabled by default. Invitations are queued as part of the same database transaction that saves the plan. Each participant with a valid email gets their own message; employees without email remain in the plan. Turn the checkbox off to save without sending.
+
+- Invitation: after saving (processed immediately or on the next worker tick).
+- Reminder: 08:00 Asia/Kuala_Lumpur on the training day; for earlier sessions, 30 minutes before the start. Plans created after reminder time get only the invitation immediately.
+- Follow-up: two hours after the recorded end time, requesting training notes. Employees marked absent, excused, not required, or no longer active are skipped at delivery time.
+
+The API worker checks every minute and handles up to 50 queued messages per pass. It runs on the AI PC; the browser can be closed. Jobs survive restarts. Delivery requires EMAIL_TRANSPORT=smtp and valid SMTP settings. EMAIL_AUTOMATION_ENABLED defaults to true; set it to false to pause sending. SMTP_TEST_RECIPIENTS restricts manual developer tests only; automatic emails go to the selected employees. Existing plans are not backfilled. Invitations/reminders expire at the start; follow-ups expire seven days after the end to avoid stale mail after a prolonged outage.
+
+Failures retry with backoff, up to five attempts. HR can inspect counts and retry failed messages under **Training → Email automation**. A stable Message-ID and atomic job lease prevent normal duplicate claims; SMTP cannot guarantee exactly-once delivery after an interrupted handoff, so a rare duplicate remains possible after a process/network failure. SMTP acceptance does not guarantee inbox delivery. Changing a participant’s saved email affects future pending messages.
+
+Use **Delete training** on a calendar session or training-record row for either upcoming or past training. The confirmation removes the session from active calendars, attendance views and training-hour reports, and cancels pending/failed emails. The database retains the session, attendance and email history with archivedAt for administrative recovery. Sent or in-flight SMTP messages cannot be recalled. This uses the app’s existing workspace access controls; restrict tunnel access to authorised HR staff. A date change through the legacy session API is rejected for plans with email schedules; delete and recreate the plan so participants receive a fresh invitation.
+
+For the Linux AI PC: follow the database backup/update procedure above, then rebuild the app with `docker compose up -d --build app`. Startup applies the new TrainingEmailJob table and TrainingSession.archivedAt field before starting the worker. Keep the existing working Gmail credentials. No separate cron service or n8n workflow is required.

@@ -84,6 +84,7 @@ model Employee {
   role         String?
   status       EmployeeStatus       @default(ACTIVE)
   completions  TrainingCompletion[]
+  emailJobs    TrainingEmailJob[]
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 
@@ -119,11 +120,37 @@ model TrainingSession {
   scopeValue  String?
   notes       String?
   completions TrainingCompletion[]
+  emailJobs   TrainingEmailJob[]
+  archivedAt  DateTime?
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
   @@index([courseId])
   @@index([dateStart])
+  @@index([archivedAt])
+}
+
+model TrainingEmailJob {
+  id          String   @id @default(cuid())
+  sessionId   String
+  session     TrainingSession @relation(fields: [sessionId], references: [id])
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  kind        String
+  recipient   String
+  dueAt       DateTime
+  expiresAt   DateTime
+  status      String   @default("PENDING")
+  attempts    Int      @default(0)
+  claimToken  String?
+  lockedAt    DateTime?
+  sentAt      DateTime?
+  lastError   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([sessionId, employeeId, kind])
+  @@index([status, dueAt])
 }
 
 model TrainingCompletion {

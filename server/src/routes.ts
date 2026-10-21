@@ -14,6 +14,7 @@ import { env } from "./env.js";
 import { parseEmployeeImport } from "./importer.js";
 import { parseEmployeeEmails } from "./email-importer.js";
 import { trainingPlanSchema } from "./training-plan.js";
+import { queueTrainingEmails, processTrainingEmails, trainingEmailReady, trainingEmailEnabled } from "./training-email.js";
 import { emailTestService, emailTestInput } from "./email-test.js";
 import { emailTestTemplates } from "@hr-training/shared";
 import { summarizeCourseHours, summarizeDepartmentHours, type CompletionRecordForSummary } from "./dashboard-summary.js";
@@ -207,6 +208,17 @@ const upsertDepartment = (name: string) =>
 export const createRouter = () => {
   // This router is served behind the workspace's existing access controls.
   const router = Router();
+  router.get("/training-email/status", asyncHandler(async (_req, res) => {
+    const groups = await prisma.trainingEmailJob.groupBy({ by: ["status"], _count: true, where: { session: { archivedAt: null } } });
+    const failures = await prisma.trainingEmailJob.findMany({ where: { status: "FAILED", session: { archivedAt: null } }, select: { id: true, recipient: true, lastError: true, session: { select: { course: { select: { name: true } } } } }, orderBy: { updatedAt: "desc" }, take: 10 });
+    res.json({ enabled: trainingEmailEnabled(), ready: trainingEmailReady(), counts: Object.fromEntries(groups.map(group => [group.status, group._count])), failures });
+  }));
+  router.post("/training-email/retry", asyncHandler(async (_req, res) => {
+    if (!trainingEmailReady()) throw new HttpError(503, "Configure SMTP and enable training emails before retrying.");
+    const result = await prisma.trainingEmailJob.updateMany({ where: { status: "FAILED", expiresAt: { gt: new Date() }, session: { archivedAt: null } }, data: { status: "PENDING", attempts: 0, dueAt: new Date(), lastError: null } });
+    res.json({ queued: result.count });
+    void processTrainingEmails().catch(() => {});
+  }));
   router.get("/email-test/status", (_req, res) => { res.json(emailTestService.status()); });
   router.get("/email-test/inbox", (_req, res) => { res.json(emailTestService.inbox()); });
   router.get("/email-test/preview/:templateId", (req, res) => { res.json(emailTestService.preview(z.enum(emailTestTemplates).parse(req.params.templateId))); });
@@ -232,21 +244,22 @@ export const createRouter = () => {
         prisma.employee.count({ where: { status: "ACTIVE" } }),
         prisma.department.count(),
         prisma.trainingCourse.count({ where: { status: "ACTIVE" } }),
-        prisma.trainingSession.count(),
+        prisma.trainingSession.count({ where: { archivedAt: null } }),
         prisma.trainingCompletion.findMany({
+          where: { session: { archivedAt: null } },
           include: {
             employee: { include: { department: true } },
             session: { include: { course: true } }
           }
         }),
         prisma.trainingSession.findMany({
-          where: { dateStart: { gte: new Date() } },
+          where: { archivedAt: null, dateStart: { gte: new Date() } },
           include: { course: true, _count: { select: { completions: true } } },
           orderBy: { dateStart: "asc" },
           take: 5
         }),
         prisma.trainingCompletion.findMany({
-          where: { completedAt: { not: null } },
+          where: { session: { archivedAt: null }, completedAt: { not: null } },
           include: {
             employee: { include: { department: true } },
             session: { include: { course: true } }
@@ -553,6 +566,7 @@ export const createRouter = () => {
     "/training-sessions",
     asyncHandler(async (_req, res) => {
       const sessions = await prisma.trainingSession.findMany({
+        where: { archivedAt: null },
         include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } },
         orderBy: { dateStart: "desc" },
       });
@@ -574,9 +588,11 @@ export const createRouter = () => {
           trainerName: input.trainerName, venue: input.venue, capacity: input.capacity, deliveryMethod: input.deliveryMethod,
           completions: { create: input.participantEmployeeIds.map((employeeId) => ({ employeeId, status: "REQUIRED" })) }
         }, include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } } });
-        return created;
+        const emailDelivery = await queueTrainingEmails(tx, created, input.notifyParticipants);
+        return { ...created, emailDelivery };
       });
       res.status(201).json(session);
+      void processTrainingEmails().catch(() => {});
     })
   );
 
@@ -608,6 +624,7 @@ export const createRouter = () => {
           });
         }
 
+        await queueTrainingEmails(tx, created);
         return tx.trainingSession.findUniqueOrThrow({
           where: { id: created.id },
           include: { course: true, _count: { select: { completions: true } } }
@@ -622,8 +639,8 @@ export const createRouter = () => {
     "/training-sessions/:id",
     asyncHandler(async (req, res) => {
       const id = routeParam(req.params.id);
-      const session = await prisma.trainingSession.findUniqueOrThrow({
-        where: { id },
+      const session = await prisma.trainingSession.findFirst({
+        where: { id, archivedAt: null },
         include: {
           course: true,
           completions: {
@@ -632,6 +649,7 @@ export const createRouter = () => {
           }
         }
       });
+      if (!session) throw new HttpError(404, "Training was not found.");
       res.json(session);
     })
   );
@@ -641,8 +659,12 @@ export const createRouter = () => {
     asyncHandler(async (req, res) => {
       const input = sessionInputSchema.parse(req.body);
       const id = routeParam(req.params.id);
+      const existing = await prisma.trainingSession.findFirst({ where: { id, archivedAt: null } });
+      if (!existing) throw new HttpError(404, "Training was not found.");
+      const datesChanged = existing.dateStart.toISOString() !== new Date(input.dateStart).toISOString() || (existing.dateEnd?.toISOString() ?? null) !== (input.dateEnd ? new Date(input.dateEnd).toISOString() : null);
+      if (datesChanged && await prisma.trainingEmailJob.count({ where: { sessionId: id } })) throw new HttpError(409, "This training has email schedules. Delete it and create a new plan with the revised date so participants receive the correct invitation.");
       const session = await prisma.trainingSession.update({
-        where: { id },
+        where: { id, archivedAt: null },
         data: {
           courseId: input.courseId,
           dateStart: new Date(input.dateStart),
@@ -662,9 +684,13 @@ export const createRouter = () => {
     "/training-sessions/:id",
     asyncHandler(async (req, res) => {
       const id = routeParam(req.params.id);
-      await prisma.trainingCompletion.deleteMany({ where: { sessionId: id } });
-      await prisma.trainingSession.delete({ where: { id } });
-      res.status(204).send();
+      await prisma.$transaction(async tx => {
+        const found = await tx.trainingSession.findUnique({ where: { id } });
+        if (!found) throw new HttpError(404, "Training was not found.");
+        await tx.trainingSession.update({ where: { id }, data: { archivedAt: found.archivedAt || new Date() } });
+        await tx.trainingEmailJob.updateMany({ where: { sessionId: id, status: { in: ["PENDING", "SENDING", "FAILED"] } }, data: { status: "CANCELLED", claimToken: null, lockedAt: null, lastError: "Training was deleted by HR." } });
+      });
+      res.json({ deleted: true });
     })
   );
 
@@ -673,6 +699,7 @@ export const createRouter = () => {
     asyncHandler(async (req, res) => {
       const input = bulkCompletionSchema.parse(req.body);
       const id = routeParam(req.params.id);
+      if (!(await prisma.trainingSession.count({ where: { id, archivedAt: null } }))) throw new HttpError(404, "Training was not found.");
 
       await prisma.$transaction(
         input.employeeIds.map((employeeId) =>
