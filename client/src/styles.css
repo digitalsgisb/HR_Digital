@@ -455,26 +455,29 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .profile-actions .button { width: 100%; }
 }
 
-/* HR Digital navigation follows the supplied workspace reference in black. */
-.app-shell { padding-left: 300px; }
-.sidebar { width: 300px; padding: 28px 22px 20px; background: linear-gradient(160deg, #18191b 0%, #101112 55%, #08090a 100%); background-size: auto; animation: none; }
-.sidebar::before { left: -45%; right: -45%; bottom: 9%; height: 48%; background: radial-gradient(ellipse at center, rgba(255,255,255,.065), transparent 68%); animation: none; }
-.sidebar::after { top: 18%; left: 58%; width: 110%; height: 46%; border: 1px solid rgba(255,255,255,.07); border-radius: 50%; background: none; transform: rotate(-18deg); animation: none; }
-.brand-lockup { min-height: 82px; gap: 12px; padding: 0 0 24px; border-bottom: 0; }
-.brand-lockup img.company-brand { width: 62px; height: 62px; flex-basis: 62px; }
-.product-name strong { font-size: 20px; letter-spacing: -.04em; }
-.product-name span { color: #aeb1b4; font-size: 11px; }
+/* Compact navigation with a slow glow and curved background, inspired by the workspace reference. */
+:root { --sidebar-width: 240px; }
+.app-shell { padding-left: var(--sidebar-width); }
+.sidebar { width: var(--sidebar-width); padding: 22px 16px 16px; background: radial-gradient(ellipse at 12% 85%, rgba(255,255,255,.055), transparent 55%), linear-gradient(160deg, #18191b 0%, #101112 55%, #08090a 100%); background-size: 170% 170%, 220% 220%; animation: sidebarGradientShift 18s ease-in-out infinite; }
+.sidebar::before { left: -45%; right: -45%; bottom: 9%; height: 48%; background: radial-gradient(ellipse at center, rgba(255,255,255,.085), transparent 68%); animation: sidebarAura 9s ease-in-out infinite alternate; }
+.sidebar::after { top: 18%; left: 48%; width: 135%; height: 46%; border: 1px solid rgba(255,255,255,.085); border-radius: 50%; background: none; transform: rotate(-18deg); animation: sidebarOrbit 20s ease-in-out infinite alternate; }
+@keyframes sidebarOrbit { from { transform: translate3d(0, 0, 0) rotate(-18deg); opacity: .55; } to { transform: translate3d(-12%, 14%, 0) rotate(-7deg) scale(1.08); opacity: 1; } }
+.brand-lockup { min-height: 64px; gap: 10px; padding: 0 0 16px; border-bottom: 0; }
+.brand-lockup img.company-brand { width: 44px; height: 44px; flex-basis: 44px; }
+.product-name strong { font-size: 18px; letter-spacing: -.04em; }
+.product-name span { color: #aeb1b4; font-size: 10px; }
 .primary-nav { display: block; flex: 1; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #484b4e transparent; padding: 4px 3px 10px 0; }
 .primary-nav > * { animation: none; }
 .nav-section-label { margin: 24px 10px 11px; color: #858a8e; font-size: 10px; letter-spacing: .16em; }
-.nav-item { width: 100%; min-height: 48px; grid-template-columns: 42px 1fr auto; padding: 6px 11px; color: #bfc2c4; border-radius: 12px; font-size: 14px; font-weight: 650; }
-.nav-icon { width: 32px; height: 32px; }
+.nav-item { width: 100%; min-height: 42px; grid-template-columns: 32px 1fr auto; padding: 5px 9px; color: #bfc2c4; border-radius: 10px; font-size: 13px; font-weight: 650; }
+.nav-icon { width: 28px; height: 28px; }
 .nav-item:hover, .nav-item.active, .nav-item.active-parent { background: rgba(255,255,255,.09); }
 .nav-item.active { animation: none; }
+.nav-item.active { box-shadow: inset 3px 0 0 #dedfe1; }
 .nav-item.active .nav-icon, .nav-item.active-parent .nav-icon { color: #fff; background: transparent; box-shadow: none; }
 .nav-parent > svg:last-child { color: #a2a7aa; }
 .nav-children.open { max-height: 280px; }
-.nav-child { width: calc(100% - 29px); min-height: 35px; margin-left: 29px; padding: 6px 9px 6px 17px; color: #aeb2b5; border-left-color: #55595c; font-size: 11px; }
+.nav-child { width: calc(100% - 24px); min-height: 32px; margin-left: 24px; padding: 5px 7px 5px 13px; color: #aeb2b5; border-left-color: #55595c; font-size: 11px; }
 .nav-child.active { color: #fff; background: rgba(255,255,255,.07); border-radius: 0 8px 8px 0; }
 .sidebar-footer { gap: 17px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.12); }
 .sidebar-footer > * { animation: none; }
@@ -538,7 +541,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .registry-vehicle-copy footer { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .registry-vehicle-copy footer .button:first-child { grid-column: 1/-1; }
 .vehicle-section .vehicle-actions { grid-template-columns: repeat(3,minmax(0,1fr)); }
-@media (max-width: 1050px) { .app-shell { padding-left: 0; } .sidebar { width: min(300px,86vw); } }
+@media (max-width: 1050px) { .app-shell { padding-left: 0; } .sidebar { width: min(var(--sidebar-width),86vw); } }
 @media (max-width: 850px) { .history-summary, .history-entry-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 600px) { .history-selector { align-items: stretch; flex-direction: column; } .history-summary, .history-entry-grid { grid-template-columns: 1fr 1fr; } .history-entry, .history-log-heading { padding: 18px; } .history-notes { max-width: 100%; } .history-summary strong { font-size: 22px; } }
 /* Department groups keep the directory compact, with employee cards on demand. */
