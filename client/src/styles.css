@@ -66,7 +66,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .environment-pill { display: flex; align-items: center; gap: 8px; margin: 18px 4px 12px; color: #999b9f; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .primary-nav { display: grid; gap: 4px; }
 .nav-section-label { margin: 18px 12px 7px; color: #64676b; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-.nav-item, .nav-child { border: 0; color: #b6b7ba; background: transparent; text-align: left; transition: .2s ease; }
+.nav-item, .nav-child { border: 0; color: #b6b7ba; background: transparent; text-align: left; transition: color .2s ease, background-color .2s ease, border-color .2s ease, box-shadow .2s ease; }
 .nav-item { position: relative; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; min-height: 43px; overflow: hidden; padding: 5px 10px; border-radius: 10px; font-size: 13px; font-weight: 650; }
 .nav-item > * { position: relative; z-index: 1; }
 .nav-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; }
@@ -74,8 +74,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .nav-item.active .nav-icon, .nav-item.active-parent .nav-icon { color: #101112; background: #fff; box-shadow: 0 8px 22px rgba(255,255,255,.16); }
 .nav-parent svg:last-child { transition: transform .22s ease; }
 .nav-parent svg.rotate { transform: rotate(180deg); }
-.nav-children { display: grid; max-height: 0; overflow: hidden; opacity: 0; transform: translateY(-6px); transition: max-height .38s cubic-bezier(.16,1,.3,1), opacity .25s ease, transform .3s ease; }
-.nav-children.open { max-height: 240px; opacity: 1; transform: translateY(0); }
+.nav-children { display: grid; grid-template-rows: 0fr; overflow: hidden; opacity: 0; transition: grid-template-rows .32s cubic-bezier(.2,.7,.2,1), opacity .24s ease; }
+.nav-children.open { grid-template-rows: 1fr; opacity: 1; }
+.nav-children-content { min-height: 0; overflow: hidden; }
 .nav-child { position: relative; display: flex; align-items: center; gap: 9px; min-height: 36px; margin-left: 30px; padding: 7px 10px 7px 16px; border-left: 1px solid #343639; font-size: 12px; }
 .nav-child:hover, .nav-child.active { color: #fff; border-color: #fff; }
 .nav-child.active::before { content: ""; position: absolute; left: -2px; width: 3px; height: 18px; border-radius: 4px; background: #fff; }
@@ -247,7 +248,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .sidebar-footer > :nth-child(2) { animation-delay: .76s; }
 .sidebar-footer > :nth-child(3) { animation-delay: .84s; }
 .workspace { height: 100vh; overflow-y: auto; }
-.page-stage { animation: stageReveal .62s cubic-bezier(.16,1,.3,1) both; }
+.page-stage { animation: stageReveal .32s cubic-bezier(.2,.7,.2,1) both; }
+/* Keep the page entrance unified instead of stacking delayed animations. */
+.page-stage :is(.hero-card, .hero-signals > div, .metric-card, .module-intro, .feature-grid button, .note-card) { animation: none; }
 .hero-card { background: linear-gradient(128deg, #090a0b 0%, #151618 56%, #242529 100%); box-shadow: 0 22px 50px rgba(0,0,0,.2); animation: heroReveal .8s cubic-bezier(.16,1,.3,1) both; }
 .hero-glow { background: radial-gradient(circle at 18% 20%, rgba(255,255,255,.1), transparent 30%), linear-gradient(115deg, transparent 50%, rgba(255,255,255,.04)); }
 .hero-copy h2 em { color: #dedfe1; }
@@ -374,7 +377,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .ocr-result, .ocr-warning { display: flex; align-items: center; gap: 7px; padding: 9px 10px; border-radius: 8px; font-size: 8px; font-weight: 750; }.ocr-result { color: #176346; background: #e9f5ef; }.ocr-warning { color: #7a5517; background: #fff4df; }.odometer-photo > p { margin: 0; color: var(--muted); font-size: 7px; line-height: 1.45; }
 .trip-evidence { display: flex !important; gap: 5px; margin-top: 5px !important; }.trip-evidence a { padding: 3px 5px; border: 1px solid var(--line); border-radius: 5px; color: #333; background: #fff; font-size: 7px; font-weight: 800; text-decoration: none; }
 
-@keyframes stageReveal { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes stageReveal { from { opacity: 0; transform: translate3d(0, 6px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
 @keyframes heroReveal { from { opacity: 0; transform: translateY(24px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes signalPop { from { opacity: 0; transform: translateY(22px) scale(.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes cardRise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
@@ -476,7 +479,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .nav-item.active { box-shadow: inset 3px 0 0 #dedfe1; }
 .nav-item.active .nav-icon, .nav-item.active-parent .nav-icon { color: #fff; background: transparent; box-shadow: none; }
 .nav-parent > svg:last-child { color: #a2a7aa; }
-.nav-children.open { max-height: 280px; }
+.nav-children.open .nav-child { animation: none; }
 .nav-child { width: calc(100% - 24px); min-height: 32px; margin-left: 24px; padding: 5px 7px 5px 13px; color: #aeb2b5; border-left-color: #55595c; font-size: 11px; }
 .nav-child.active { color: #fff; background: rgba(255,255,255,.07); border-radius: 0 8px 8px 0; }
 .sidebar-footer { gap: 17px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.12); }

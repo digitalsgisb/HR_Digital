@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity, ArrowRight, Bell, BookOpenCheck, CalendarCheck2, CalendarDays, CarFront, Check,
@@ -133,6 +133,11 @@ function App() {
   const [selectedDate, setSelectedDate] = useState("2026-09-21");
   const [notice, setNotice] = useState("");
   const [historyVehicleId, setHistoryVehicleId] = useState<string | null>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    if (workspaceRef.current) workspaceRef.current.scrollTop = 0;
+  }, [activeView]);
 
   useEffect(() => { api.getDashboard().then(setDashboard); }, []);
   useEffect(() => {
@@ -146,7 +151,6 @@ function App() {
     setMobileNavOpen(false);
     if (view.startsWith("training") || view === "email-automation" || view === "notes-library") setTrainingOpen(true);
     if (view === "fleet" || view === "fleet-registry" || view === "usage-history") setFleetOpen(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const openHistory = (vehicleId: string) => {
@@ -158,7 +162,7 @@ function App() {
     <div className="app-shell">
       <Sidebar activeView={activeView} trainingOpen={trainingOpen} fleetOpen={fleetOpen} mobileOpen={mobileNavOpen}
         onTrainingToggle={() => setTrainingOpen((open) => !open)} onFleetToggle={() => setFleetOpen((open) => !open)} onNavigate={navigate} onClose={() => setMobileNavOpen(false)} />
-      <main className="workspace">
+      <main className="workspace" ref={workspaceRef}>
         <Topbar meta={viewMeta[activeView]} onMenu={() => setMobileNavOpen(true)}
           onSettings={() => navigate("administration")} showNotice={setNotice} />
         <div className="page-stage" key={activeView}>
@@ -205,15 +209,19 @@ function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingTo
           <span className="nav-icon"><BookOpenCheck size={18} /></span><span>Training</span><ChevronDown className={trainingOpen ? "rotate" : ""} size={16} />
         </button>
         <div id="training-navigation" className={`nav-children ${trainingOpen ? "open" : ""}`} inert={!trainingOpen}>
+          <div className="nav-children-content">
           {trainingNav.map((item) => <button key={item.id} className={`nav-child ${activeView === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
             <item.icon size={15} /><span>{item.label}</span></button>)}
+          </div>
         </div>
         <button className={`nav-item nav-parent ${inFleet ? "active-parent" : ""}`} onClick={onFleetToggle} aria-expanded={fleetOpen} aria-controls="car-navigation">
           <span className="nav-icon"><CarFront size={18} /></span><span>Company cars</span><ChevronDown className={fleetOpen ? "rotate" : ""} size={16} />
         </button>
         <div id="car-navigation" className={`nav-children fleet-children ${fleetOpen ? "open" : ""}`} inert={!fleetOpen}>
+          <div className="nav-children-content">
           {fleetNav.map((item) => <button key={item.id} className={`nav-child ${activeView === item.id ? "active" : ""}`} onClick={() => onNavigate(item.id)}>
             <item.icon size={15} /><span>{item.label}</span></button>)}
+          </div>
         </div>
         <NavButton icon={Settings2} label="Settings" active={activeView === "administration"} onClick={() => onNavigate("administration")} />
       </nav>
