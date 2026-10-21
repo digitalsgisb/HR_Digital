@@ -218,7 +218,7 @@ function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingTo
         <NavButton icon={Settings2} label="Settings" active={activeView === "administration"} onClick={() => onNavigate("administration")} />
       </nav>
       <div className="sidebar-footer">
-        <span className="copyright">© 2026 Digital Transformation Unit</span>
+        <span className="copyright"><span className="copyright-badge">©</span><span>Digital Transformation Unit</span></span>
       </div>
     </aside>
   </>;
