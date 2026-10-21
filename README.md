@@ -234,7 +234,7 @@ Company and Base require the updated Prisma schema. Existing production deployme
 
 ### Department cards and email lists
 
-The Employees page groups people into collapsible department cards. Open a department to browse employee cards in batches of 12. Search by name, ID, role, base or email, and filter by department or email availability. Employees without email remain visible and editable.
+The Employees page groups people into collapsible department cards. Open a department to browse employee cards in pages of 12 using Previous and Next. Department expansion and employee page changes animate smoothly, and the page area keeps its height when the last page has fewer employees. Search by name, ID, role, base or email, and filter by department or email availability. Employees without email remain visible and editable.
 
 After importing employee records, choose **Import emails** and upload the account export (`Display name`, `User principal name`). Unique full names are matched after normalising case, spaces and punctuation. Review every match, manually assign unmatched accounts, or leave shared/unrelated accounts out. Saving changes only employee email fields. Existing email addresses are retained unless **Replace existing email addresses** is selected. Duplicate employee selections, repeated addresses, invalid addresses and addresses owned by another employee are rejected or left for review. No emails are sent by importing addresses.
 

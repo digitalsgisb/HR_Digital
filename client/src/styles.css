@@ -554,7 +554,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .directory-filters select { min-height: 42px; max-width: 100%; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); }
 .directory-filters > span { margin-left: auto; padding-bottom: 10px; color: var(--muted); font-size: 12px; }
 .department-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
-.department-group { min-width: 0; border: 1px solid var(--line); border-radius: 15px; background: white; overflow: hidden; }
+.department-group { min-width: 0; border: 1px solid var(--line); border-radius: 15px; background: white; overflow: hidden; overflow-anchor: none; }
 .department-group.is-open { grid-column: 1 / -1; }
 .department-heading { width: 100%; min-height: 105px; display: flex; align-items: center; gap: 12px; padding: 20px; border: 0; background: transparent; text-align: left; color: var(--ink); }
 .department-heading > span:nth-child(2) { flex: 1; min-width: 0; }
@@ -565,6 +565,23 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .department-heading > svg { flex-shrink: 0; transition: transform .2s; }
 .is-open .department-heading > svg { transform: rotate(180deg); }
 .department-body { padding: 0 20px 20px; }
+.department-expansion { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows .32s cubic-bezier(.2,.7,.2,1), opacity .22s ease, visibility 0s .32s; }
+.is-open .department-expansion { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition-delay: 0s; }
+.department-expansion-inner { min-height: 0; overflow: hidden; }
+.department-page-grid { animation: departmentCardsIn .24s ease both; }
+.department-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.department-pagination > span { color: var(--muted); font-size: 12px; }
+.department-pagination > div { display: flex; gap: 8px; }
+.department-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+@keyframes departmentCardsIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+/* The browser interpolates card geometry and surrounding cards as the grid reflows. */
+html[data-department-transition] .department-expansion,
+html[data-department-transition] .department-page-grid { transition: none; animation: none; }
+html[data-department-transition]::view-transition-group(*) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2,.7,.2,1); }
+html[data-department-transition]::view-transition-old(*),
+html[data-department-transition]::view-transition-new(*) { animation-duration: .24s; }
+html[data-department-transition]::view-transition-old(root),
+html[data-department-transition]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 .employee-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .employee-card { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: start; gap: 10px; min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #fff; text-align: left; }
 .employee-card:hover { border-color: #888; background: #fafafa; }
