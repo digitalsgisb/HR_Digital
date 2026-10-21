@@ -14,7 +14,9 @@
     "typecheck": "npm --workspaces --if-present run typecheck",
     "prisma:generate": "npm --workspace server run prisma:generate",
     "prisma:migrate": "npm --workspace server run prisma:migrate",
-    "prisma:seed": "npm --workspace server run prisma:seed"
+    "prisma:seed": "npm --workspace server run prisma:seed",
+    "smtp:setup:gmail": "powershell -NoProfile -File scripts/setup-gmail-smtp.ps1",
+    "smtp:check": "npm --workspace server run smtp:check"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

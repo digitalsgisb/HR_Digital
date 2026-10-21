@@ -287,3 +287,21 @@ SMTP_TEST_RECIPIENTS=your-name@company.com
 ```
 
 Restart the server after changing settings (recreate the app container for Docker). For port 465 use SMTP_SECURE=true. Use your provider's verified sender and credentials. Multiple permitted test addresses may be separated by commas; each test sends to one address. Credentials stay on the server. SMTP acceptance does not guarantee inbox delivery; check spam and your provider's logs. The test endpoints use the same workspace access controls as the rest of the app, so keep the app behind the existing authenticated tunnel.
+
+### Gmail / Google Workspace setup
+
+1. Turn on 2-Step Verification for the sending Google account. Create an App Password named **HR Digital** at https://myaccount.google.com/apppasswords. Use this App Password instead of the normal account password. If the option is unavailable for your Workspace account, ask the Workspace administrator about the permitted SMTP authentication or relay method.
+2. From the project directory on Windows, run:
+
+```powershell
+npm run smtp:setup:gmail
+```
+
+The wizard asks for a sender, a test recipient (defaults to the sender), and a hidden App Password. It sets smtp.gmail.com:587 with STARTTLS, and writes only SMTP keys to the ignored server/.env file, preserving other settings. To prepare the Docker root .env instead, run `npm run smtp:setup:gmail -- -Target docker` on the deployment checkout. Keep environment files private and out of Git.
+
+3. Restart the API and run `npm run smtp:check` to check authentication without sending mail. For Docker, recreate the app with `docker compose up -d --build app` and use the **Check connection** button instead.
+4. Open **Training → Email automation**, check the preview, and send one test to the configured address.
+
+The templates use the existing Sugihara logo as a CID inline attachment in sent messages and a data image in browser previews. The HTML uses tables and inline styles, and includes a plain-text alternative. Developer tests use sample details and link to the HR Digital home page; no employee action is submitted.
+
+Google references: [SMTP setup](https://support.google.com/a/answer/176600?hl=en) · [App Passwords](https://support.google.com/accounts/answer/185833?hl=en).
