@@ -10,3 +10,4 @@ coverage/
 .codex/
 backups/
 *.sql
+!server/prisma/attendance-token.sql

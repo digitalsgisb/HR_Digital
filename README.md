@@ -195,7 +195,7 @@ curl http://localhost:4000/api/health
 curl --head https://hr.sugidigital.org/api/health
 ```
 
-The application container applies the checked-in Prisma schema with `prisma db push` before starting. For later high-risk database changes, replace this with reviewed Prisma migrations.
+The application container first applies the additive `server/prisma/attendance-token.sql` upgrade, then applies the checked-in Prisma schema with `prisma db push` before starting. The upgrade adds the nullable QR-token column and unique index to existing installations without deleting records; it is repeatable and skips fresh databases where Prisma has not created the tables yet. Duplicate non-null tokens stop the upgrade for review. Startup does not use `--accept-data-loss`. For later high-risk database changes, replace schema push with reviewed Prisma migrations.
 
 ### Rollback
 
