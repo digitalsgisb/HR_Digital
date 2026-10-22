@@ -121,6 +121,10 @@ export const api = {
     return request<Vehicle[]>("/api/vehicles");
   },
 
+  getVehicle(id: string) {
+    return request<Vehicle>(`/api/vehicles/${encodeURIComponent(id)}`);
+  },
+
   createVehicle(input: VehicleInput) {
     return request<Vehicle>("/api/vehicles", {
       method: "POST",

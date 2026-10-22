@@ -125,6 +125,11 @@ function loadAdminSettings(): AdminSettings {
 }
 
 function App() {
+  const vehicleId = new URLSearchParams(window.location.search).get("vehicle");
+  return vehicleId ? <VehicleUsagePage vehicleId={vehicleId} /> : <AdminApp />;
+}
+
+function AdminApp() {
   const initialVehicleId = new URLSearchParams(window.location.search).get("vehicle") ?? undefined;
   const [activeView, setActiveView] = useState<View>(initialVehicleId ? "fleet" : "overview");
   const [trainingOpen, setTrainingOpen] = useState(false);
@@ -488,8 +493,12 @@ function FleetTracker({
   >(null);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [fleetError, setFleetError] = useState("");
 
   const refreshFleet = async () => {
+    setLoading(true);
+    setFleetError("");
     try {
       const [vehicleRows, tripRows] = await Promise.all([
         api.getVehicles(),
@@ -499,9 +508,12 @@ function FleetTracker({
       setTrips(tripRows);
       return vehicleRows;
     } catch {
-      setFleetVehicles(fallback.vehicles);
-      setTrips(fallback.trips);
-      return fallback.vehicles;
+      setFleetVehicles([]);
+      setTrips([]);
+      setFleetError("Vehicle data could not be loaded. Check the connection and retry.");
+      return [];
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -689,12 +701,27 @@ function FleetTracker({
             </button>
             <button
               className="button button-ghost-light"
-              onClick={() => openStart()}
+              disabled={loading || !selectedVehicle || selectedVehicle.status !== "AVAILABLE"}
+              onClick={() => selectedVehicle && openStart(selectedVehicle)}
             >
-              <CarFront size={17} /> Start vehicle use
+              <CarFront size={17} /> Start trip
             </button>
           </div>
         </div>
+        <section className="card trip-launcher" aria-label="Choose a car and start a trip">
+          <div><span className="module-kicker"><Route size={16} /> Ready to drive?</span><h2>Choose your car & start a trip</h2><p>Record the driver, destination and starting mileage before leaving.</p></div>
+          <div className="trip-launcher-controls">
+            <label className="field"><span>Company car</span><select value={selectedVehicle?.id ?? ""} disabled={loading || !fleetVehicles.length} onChange={(event) => setSelectedVehicleId(event.target.value)}>
+              {!fleetVehicles.length && <option value="">{loading ? "Loading cars…" : "No cars available"}</option>}
+              {fleetVehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} · {vehicle.model} · {fleetStatusLabel(vehicle.status)}</option>)}
+            </select></label>
+            <button className="button button-primary" disabled={loading || !selectedVehicle || (!activeTrip && selectedVehicle.status !== "AVAILABLE")} onClick={() => { if (activeTrip) setDialog("complete"); else if (selectedVehicle) openStart(selectedVehicle); }}><CarFront size={18} />{activeTrip ? "Return car" : "Start trip"}<ArrowRight size={16} /></button>
+            <button className="button button-secondary" disabled={loading || !selectedVehicle} onClick={() => setDialog("qr")}><QrCode size={17} /> Print car QR</button>
+          </div>
+          {selectedVehicle && selectedVehicle.status !== "AVAILABLE" && !activeTrip && <p role="status">This car is {fleetStatusLabel(selectedVehicle.status).toLowerCase()}. Choose an available car to start a trip.</p>}
+          <small><QrCode size={15} /> Driving as a guest? Scan the QR inside the car to open its usage form.</small>
+          {fleetError && <div className="form-error" role="alert">{fleetError}<button type="button" onClick={() => { void refreshFleet(); }}>Retry</button></div>}
+        </section>
         <div className="metric-grid">
           <MetricCard
             icon={CarFront}
@@ -1330,9 +1357,8 @@ function StartTripForm({
   ) => Promise<void>;
 }) {
   const vehicle = vehicles.find((item) => item.id === selectedVehicleId)!;
-  const [employeeId, setEmployeeId] = useState(
-    employeeTrainingRows[0]?.id ?? "",
-  );
+  const [driverName, setDriverName] = useState("");
+  const [driverReference, setDriverReference] = useState("");
   const [destination, setDestination] = useState("");
   const [purpose, setPurpose] = useState("");
   const [passengers, setPassengers] = useState(1);
@@ -1351,6 +1377,8 @@ function StartTripForm({
   });
   useEffect(() => {
     setOdometer(vehicle.mileage);
+    setOdometerPhoto("");
+    setChecks({ exterior: false, tyres: false, lights: false, documents: false });
   }, [vehicle.id, vehicle.mileage]);
 
   const submit = async (event: FormEvent) => {
@@ -1366,16 +1394,16 @@ function StartTripForm({
       setError("Complete every required before-drive check.");
       return;
     }
-    const employee = employeeTrainingRows.find(
-      (person) => person.id === employeeId,
-    );
-    if (!employee) return;
+    if (vehicle.status !== "AVAILABLE") {
+      setError("This car is no longer available. Refresh its status before starting.");
+      return;
+    }
     try {
       setBusy(true);
       await onSubmit({
         vehicleId: vehicle.id,
-        driverEmployeeId: employee.id,
-        driverName: employee.name,
+        driverEmployeeId: driverReference.trim() || "GUEST",
+        driverName: driverName.trim(),
         destination,
         purpose,
         passengers,
@@ -1423,17 +1451,12 @@ function StartTripForm({
           </select>
         </label>
         <label className="field">
-          <span>Driver</span>
-          <select
-            value={employeeId}
-            onChange={(event) => setEmployeeId(event.target.value)}
-          >
-            {employeeTrainingRows.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name} · {person.id}
-              </option>
-            ))}
-          </select>
+          <span>Driver full name</span>
+          <input value={driverName} onChange={(event) => setDriverName(event.target.value)} autoComplete="name" placeholder="Enter your full name" minLength={2} required />
+        </label>
+        <label className="field">
+          <span>Employee ID / company (optional for guests)</span>
+          <input value={driverReference} onChange={(event) => setDriverReference(event.target.value)} placeholder="Employee ID or guest company" />
         </label>
         <label className="field">
           <span>Destination</span>
@@ -1843,11 +1866,45 @@ function CompleteTripForm({
   );
 }
 
+function VehicleUsagePage({ vehicleId }: { vehicleId: string }) {
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [recording, setRecording] = useState(false);
+  const load = async () => {
+    setLoading(true); setError("");
+    try { setVehicle(await api.getVehicle(vehicleId)); }
+    catch (cause) { setVehicle(null); setError(cause instanceof Error ? cause.message : "Unable to load this car."); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, [vehicleId]);
+  return <main className="vehicle-usage-page"><div className="vehicle-usage-container">
+    <header className="vehicle-usage-brand"><img src="/sgi-logo.png" alt="Sugihara Grand Industries" /><span>Company car usage</span></header>
+    {loading ? <section className="card" role="status">Loading your car…</section> : error ? <section className="card"><h1>Unable to open this car</h1><p role="alert">{error}</p><button className="button button-primary" onClick={() => { void load(); }}>Retry</button></section> : vehicle && <>
+      <section className="card vehicle-usage-heading"><span className="module-kicker"><QrCode size={17} /> Your scanned car</span><h1>{vehicle.plate}</h1><p>{vehicle.model}</p><span className="status-badge">{fleetStatusLabel(vehicle.status)}</span><p>Current odometer: <strong>{formatNumber(vehicle.mileage)} km</strong></p></section>
+      {message && <section className="card vehicle-usage-message" role="status"><CheckCircle2 size={24} /><div><strong>{message}</strong><p>{vehicle.activeTrip ? "Scan this same QR when you return to record the ending mileage and car condition." : "Your usage record has been saved. Thank you for returning the car."}</p></div></section>}
+      <section className="card vehicle-usage-form">
+        <header><h2>{vehicle.activeTrip ? "Return this car" : "Start your trip"}</h2><p>{vehicle.activeTrip ? "Complete the return check and enter the final odometer reading." : "Enter your details, destination and car checks before driving."}</p></header>
+        {vehicle.activeTrip ? recording ? <CompleteTripForm key={vehicle.activeTrip.id} vehicle={vehicle} trip={vehicle.activeTrip} onSubmit={async (input) => {
+          await api.completeVehicleTrip(vehicle.activeTrip!.id, input);
+          setMessage("Car returned successfully."); setRecording(false); await load(); window.scrollTo(0, 0);
+        }} /> : <div className="vehicle-usage-prompt"><p>This car has a trip in progress. Only submit a return check when the car has been returned.</p><button className="button button-primary" onClick={() => setRecording(true)}><ClipboardCheck size={17} /> Record return</button></div> : vehicle.status === "AVAILABLE" ? <StartTripForm key={vehicle.id} vehicles={[vehicle]} selectedVehicleId={vehicle.id} onVehicleChange={() => {}} onSubmit={async (input) => {
+          await api.startVehicleTrip(input);
+          setMessage("Trip started. Drive safely."); setRecording(false); await load(); window.scrollTo(0, 0);
+        }} /> : <div className="vehicle-usage-prompt" role="status"><CircleAlert size={24} /><p>This car is {fleetStatusLabel(vehicle.status).toLowerCase()} and cannot start a trip. Please contact the fleet administrator.</p></div>}
+      </section>
+    </>}
+    <footer className="vehicle-usage-footer">HR Digital · Scan this car’s QR before driving and again when returning.</footer>
+  </div></main>;
+}
+
 function VehicleQr({ vehicle }: { vehicle: Vehicle }) {
   const [image, setImage] = useState("");
-  const url = `${window.location.origin}/?vehicle=${encodeURIComponent(vehicle.id)}&action=start`;
-  useEffect(() => { void QRCode.toDataURL(url, { width: 420, margin: 2, color: { dark: "#101112", light: "#ffffff" }, errorCorrectionLevel: "H" }).then(setImage); }, [url]);
-  return <div className="vehicle-qr"><div className="qr-sheet"><img className="qr-company" src="/sgi-logo.png" alt="Sugihara Grand Industries" /><span>Company vehicle access</span><strong>{vehicle.plate}</strong><small>{vehicle.model}</small>{image ? <img className="qr-code" src={image} alt={`QR code for ${vehicle.plate}`} /> : <div className="qr-loading">Generating QR…</div>}<p>Scan before taking this vehicle.<br />Complete the return check after driving.</p><em>{vehicle.id}</em></div><div className="qr-actions"><a className="button button-primary" href={image} download={`HR-Digital-${vehicle.plate.replaceAll(" ", "-")}-QR.png`}><Download size={16} /> Download QR</a><button className="button button-secondary" onClick={() => navigator.clipboard?.writeText(url)}><QrCode size={16} /> Copy link</button></div><p className="qr-help"><ShieldCheck size={16} /> Print and place this QR inside the vehicle. It always opens the secured HR Digital trip form for this vehicle.</p></div>;
+  const [feedback, setFeedback] = useState("");
+  const url = `${window.location.origin}/?vehicle=${encodeURIComponent(vehicle.id)}`;
+  useEffect(() => { setImage(""); void QRCode.toDataURL(url, { width: 420, margin: 2, color: { dark: "#101112", light: "#ffffff" }, errorCorrectionLevel: "H" }).then(setImage).catch(() => setFeedback("Unable to generate QR. Please reopen this label.")); }, [url]);
+  return <div className="vehicle-qr"><div className="qr-sheet"><img className="qr-company" src="/sgi-logo.png" alt="Sugihara Grand Industries" /><span>Company vehicle access</span><strong>{vehicle.plate}</strong><small>{vehicle.model}</small>{image ? <img className="qr-code" src={image} alt={`QR code for ${vehicle.plate}`} /> : <div className="qr-loading">Generating QR…</div>}<p>Scan before taking this vehicle.<br />Complete the return check after driving.</p><em>{vehicle.id}</em></div><div className="qr-actions"><button className="button button-primary" disabled={!image} onClick={() => window.print()}><QrCode size={16} /> Print label</button>{image && <a className="button button-secondary" href={image} download={`HR-Digital-${vehicle.plate.replaceAll(" ", "-")}-QR.png`}><Download size={16} /> Download QR</a>}<button className="button button-secondary" onClick={async () => { try { await navigator.clipboard.writeText(url); setFeedback("Link copied."); } catch { setFeedback("Copy the car link below."); } }}><QrCode size={16} /> Copy link</button></div>{feedback && <p role="status">{feedback}</p>}<a className="qr-car-link" href={url} target="_blank" rel="noreferrer">{url}</a><p className="qr-help"><QrCode size={16} /> Print and place this label inside the car. Guests scan to record usage and scan again to return it. Generate labels from the address guests use to access HR Digital.</p></div>;
 }
 
 function Avatar({ initials }: { initials: string }) { return <span className="avatar">{initials}</span>; }

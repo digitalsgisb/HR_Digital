@@ -744,6 +744,19 @@ export const createRouter = () => {
     })
   );
 
+  router.get(
+    "/vehicles/:id",
+    asyncHandler(async (req, res) => {
+      const vehicle = await prisma.vehicle.findFirst({
+        where: { id: String(req.params.id), archivedAt: null },
+        include: { trips: { where: { status: "IN_PROGRESS" }, orderBy: { startedAt: "desc" }, take: 1 } }
+      });
+      if (!vehicle) throw new HttpError(404, "This vehicle QR is no longer available. Please contact the fleet administrator.");
+      const { trips, ...details } = vehicle;
+      res.json({ ...details, activeTrip: trips[0] ?? null });
+    })
+  );
+
   router.post(
     "/ocr/odometer",
     asyncHandler(async (req, res) => {
@@ -866,6 +879,7 @@ export const createRouter = () => {
       await ensureFleetData();
       const trip = await prisma.$transaction(async (tx) => {
         const vehicle = await tx.vehicle.findUniqueOrThrow({ where: { id: input.vehicleId } });
+        if (vehicle.archivedAt) throw new HttpError(409, "This vehicle is no longer in the active fleet.");
         const activeTrip = await tx.vehicleTrip.findFirst({ where: { vehicleId: input.vehicleId, status: "IN_PROGRESS" } });
         if (activeTrip || vehicle.status === "IN_USE") throw new HttpError(409, "This vehicle already has an active trip.");
         if (vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE") throw new HttpError(409, "This vehicle is not cleared for use.");
