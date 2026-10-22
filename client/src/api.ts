@@ -40,7 +40,7 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
 
 export type TrainingPlanInput = {
   title: string; category: string; dateStart: string; dateEnd: string; trainerName: string; venue: string;
-  capacity: number; deliveryMethod: string; participantEmployeeIds: string[]; notifyParticipants?: boolean;
+  capacity: number; deliveryMethod: string; participantEmployeeIds: string[]; notifyParticipants?: boolean; attendanceEnabled?: boolean;
 };
 
 export type VehicleInput = {
@@ -54,7 +54,12 @@ export type VehicleInput = {
   photo?: string | null;
 };
 
+export type TrainingAttendanceData = { id:string;title:string;dateStart:string;dateEnd:string|null;enabled:boolean;url:string|null;opensAt?:string;closesAt?:string;participants:Array<{id:string;employeeId:string;name:string;department:string;checkedInAt:string|null;source:string|null;status:string;hours:number}> };
+
 export const api = {
+  getTrainingAttendance: (id:string) => request<TrainingAttendanceData>(`/api/training-sessions/${encodeURIComponent(id)}/attendance`),
+  enableTrainingAttendance: (id:string,rotate=false) => request<TrainingAttendanceData>(`/api/training-sessions/${encodeURIComponent(id)}/attendance/qr`,{method:"POST",body:JSON.stringify({rotate})}),
+  closeTrainingAttendance: (id:string) => request<{closed:boolean}>(`/api/training-sessions/${encodeURIComponent(id)}/attendance/qr`,{method:"DELETE"}),
   trainingEmailStatus: () => request<{ enabled: boolean; ready: boolean; counts: Record<string, number>; failures: Array<{id: string; recipient: string; lastError: string | null; session: {course: {name: string}}}> }>("/api/training-email/status"),
   retryTrainingEmails: () => request<{queued: number}>("/api/training-email/retry", {method: "POST"}),
   emailTestStatus: () => request<import("@hr-training/shared").EmailTestStatus>("/api/email-test/status"),

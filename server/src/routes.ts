@@ -13,6 +13,8 @@ import { prisma } from "./prisma.js";
 import { env } from "./env.js";
 import { parseEmployeeImport } from "./importer.js";
 import { parseEmployeeEmails } from "./email-importer.js";
+import { randomBytes } from "node:crypto";
+import { enableAttendance, getAttendance, isInternalTraining } from "./attendance.js";
 import { trainingPlanSchema } from "./training-plan.js";
 import { queueTrainingEmails, processTrainingEmails, trainingEmailReady, trainingEmailEnabled } from "./training-email.js";
 import { emailTestService, emailTestInput } from "./email-test.js";
@@ -208,6 +210,9 @@ const upsertDepartment = (name: string) =>
 export const createRouter = () => {
   // This router is served behind the workspace's existing access controls.
   const router = Router();
+  router.get("/training-sessions/:id/attendance", asyncHandler(async (req,res) => { res.json(await getAttendance(routeParam(req.params.id))); }));
+  router.post("/training-sessions/:id/attendance/qr", asyncHandler(async (req,res) => { const input=z.object({rotate:z.boolean().default(false)}).parse(req.body || {}); res.json(await enableAttendance(routeParam(req.params.id),input.rotate)); }));
+  router.delete("/training-sessions/:id/attendance/qr", asyncHandler(async (req,res) => { const result=await prisma.trainingSession.updateMany({where:{id:routeParam(req.params.id),archivedAt:null},data:{attendanceEnabled:false,attendanceToken:null}}); if(!result.count) throw new HttpError(404,"Training was not found."); res.json({closed:true}); }));
   router.get("/training-email/status", asyncHandler(async (_req, res) => {
     const groups = await prisma.trainingEmailJob.groupBy({ by: ["status"], _count: true, where: { session: { archivedAt: null } } });
     const failures = await prisma.trainingEmailJob.findMany({ where: { status: "FAILED", session: { archivedAt: null } }, select: { id: true, recipient: true, lastError: true, session: { select: { course: { select: { name: true } } } } }, orderBy: { updatedAt: "desc" }, take: 10 });
@@ -586,6 +591,7 @@ export const createRouter = () => {
         const created = await tx.trainingSession.create({ data: {
           courseId: course.id, dateStart: new Date(input.dateStart), dateEnd: new Date(input.dateEnd),
           trainerName: input.trainerName, venue: input.venue, capacity: input.capacity, deliveryMethod: input.deliveryMethod,
+          attendanceEnabled: input.attendanceEnabled || isInternalTraining(input.deliveryMethod), attendanceToken: input.attendanceEnabled || isInternalTraining(input.deliveryMethod) ? randomBytes(24).toString("base64url") : null,
           completions: { create: input.participantEmployeeIds.map((employeeId) => ({ employeeId, status: "REQUIRED" })) }
         }, include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } } });
         const emailDelivery = await queueTrainingEmails(tx, created, input.notifyParticipants);

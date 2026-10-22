@@ -12,7 +12,7 @@ export function toCalendarSession(session: SessionListItem, now = new Date()): C
     category: session.course.category || "Development", trainer: session.trainerName || "", venue: session.venue || "",
     capacity: session.capacity ?? 0, status: completed ? "Completed" : inProgress ? "In progress" : "Scheduled",
     attendees: completions.map((record) => ({ id: record.employee.id, name: record.employee.name || record.employee.employeeId,
-      department: record.employee.department.name, role: record.employee.role || "", hours: record.hours,
+      department: record.employee.department.name, role: record.employee.role || "", hours: record.hours, checkedInAt: record.checkedInAt,
       status: record.status.toLowerCase().replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase()) }))
   };
 }

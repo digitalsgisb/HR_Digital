@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { env } from "./env.js";
+import { createAttendancePageRouter } from "./attendance-page.js";
 import { createRouter } from "./routes.js";
 
 const isMissingDatabaseUrlError = (error: unknown) =>
@@ -18,6 +19,7 @@ export const createApp = () => {
   app.use(helmet());
   app.use(cors({ origin: env.clientOrigin }));
   app.use(express.json({ limit: "8mb" }));
+  app.use("/attendance", createAttendancePageRouter());
   app.use("/api", createRouter());
 
   if (env.nodeEnv === "production") {

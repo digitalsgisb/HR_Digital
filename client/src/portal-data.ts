@@ -5,6 +5,7 @@ export type TrainingAttendee = {
   role: string;
   status: string;
   hours?: number;
+  checkedInAt?: string | null;
 };
 
 export type CalendarSession = {

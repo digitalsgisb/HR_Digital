@@ -698,3 +698,16 @@ html[data-department-transition]::view-transition-new(root) { animation: none; m
   .qr-sheet { position: absolute; top: 20mm; left: 50%; transform: translateX(-50%); width: 95mm; padding: 8mm; box-shadow: none; break-inside: avoid; }
   .qr-sheet .qr-code { width: 65mm; }
 }
+
+.training-attendance-dialog { width: min(1100px,calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 28px; border: 1px solid #000; border-radius: 18px; color: var(--text); }
+.training-attendance-dialog::backdrop { background: #0008; }
+.training-attendance-dialog > header { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
+.training-attendance-dialog h2 { margin: 8px 0 0; }
+.training-attendance-dialog p { line-height: 1.6; }
+.training-attendance-grid { display: grid; grid-template-columns: minmax(240px,320px) minmax(0,1fr); gap: 28px; }
+.attendance-qr { border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.attendance-qr img { display: block; width: 100%; max-width: 300px; height: auto; }
+.attendance-qr input { width: 100%; padding: 10px; margin: 16px 0; border: 1px solid var(--line); border-radius: 8px; }
+.attendance-qr .toolbar-actions { flex-wrap: wrap; }
+.attendance-employee-id { display: block; margin-top: 6px; }
+@media(max-width:800px) { .training-attendance-grid { grid-template-columns: 1fr; } .training-attendance-dialog { padding: 20px; } }

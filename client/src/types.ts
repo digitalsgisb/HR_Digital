@@ -37,7 +37,8 @@ export type SessionListItem = {
   venue?: string | null;
   capacity?: number | null;
   deliveryMethod?: string | null;
-  completions?: Array<{ id: string; status: string; hours: number; employee: Employee }>;
+  attendanceEnabled?: boolean;
+  completions?: Array<{ id: string; status: string; hours: number; checkedInAt?: string | null; attendanceSource?: string | null; employee: Employee }>;
   scopeType: string;
   scopeValue?: string | null;
   course: Course;

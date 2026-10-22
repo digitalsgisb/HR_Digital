@@ -116,6 +116,8 @@ model TrainingSession {
   venue       String?
   capacity    Int?
   deliveryMethod String?
+  attendanceEnabled Boolean @default(false)
+  attendanceToken String? @unique
   scopeType   ScopeType            @default(CUSTOM)
   scopeValue  String?
   notes       String?
@@ -162,6 +164,8 @@ model TrainingCompletion {
   status      CompletionStatus @default(REQUIRED)
   hours       Float            @default(0)
   completedAt DateTime?
+  checkedInAt DateTime?
+  attendanceSource String?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
