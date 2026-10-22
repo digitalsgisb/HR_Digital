@@ -757,6 +757,17 @@ export const createRouter = () => {
     })
   );
 
+  router.get(
+    "/vehicle-drivers",
+    asyncHandler(async (_req, res) => {
+      res.json(await prisma.employee.findMany({
+        where: { status: "ACTIVE" },
+        select: { id: true, employeeId: true, name: true, role: true, department: { select: { id: true, name: true } } },
+        orderBy: [{ name: "asc" }, { employeeId: "asc" }]
+      }));
+    })
+  );
+
   router.post(
     "/ocr/odometer",
     asyncHandler(async (req, res) => {

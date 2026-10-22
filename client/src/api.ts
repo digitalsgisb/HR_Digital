@@ -15,6 +15,10 @@ export type EmployeeInput = {
   status: Employee["status"];
 };
 
+export type VehicleDriver = Pick<Employee, "id" | "employeeId" | "name" | "role"> & {
+  department: { id: string; name: string };
+};
+
 const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(path, {
     headers: options?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
@@ -123,6 +127,10 @@ export const api = {
 
   getVehicle(id: string) {
     return request<Vehicle>(`/api/vehicles/${encodeURIComponent(id)}`);
+  },
+
+  getVehicleDrivers() {
+    return request<VehicleDriver[]>("/api/vehicle-drivers");
   },
 
   createVehicle(input: VehicleInput) {

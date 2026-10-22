@@ -16,6 +16,7 @@ import type {
 import { api, type EmployeeInput, type VehicleInput } from "./api";
 import { OdometerPhotoField } from "./OdometerPhotoField";
 import { VehiclePhotoField } from "./VehiclePhotoField";
+import { VehicleDriverPicker, type TripDriver } from "./VehicleDriverPicker";
 import { EmployeeImportPreview as ImportPreview } from "./EmployeeImportPreview";
 import { EmployeeDirectory } from "./EmployeeDirectory";
 import { EmployeeEmailImport } from "./EmployeeEmailImport";
@@ -1343,22 +1344,33 @@ function VehicleForm({
   );
 }
 
+function VehicleFormPhoto({ vehicle, showIdentity = true }: { vehicle: Vehicle; showIdentity?: boolean }) {
+  const [failedPhoto, setFailedPhoto] = useState<string | null>(null);
+  return <figure className="trip-car-photo">
+    {vehicle.photo && failedPhoto !== vehicle.photo
+      ? <img src={vehicle.photo} alt={`${vehicle.plate} · ${vehicle.model}`} onError={() => setFailedPhoto(vehicle.photo ?? null)} />
+      : <div className="trip-car-photo-empty"><CarFront size={42} /><span>Car photo not added yet</span></div>}
+    {showIdentity && <figcaption><strong>{vehicle.plate}</strong><span>{vehicle.model}</span></figcaption>}
+  </figure>;
+}
+
 function StartTripForm({
   vehicles,
   selectedVehicleId,
   onVehicleChange,
   onSubmit,
+  showCarPhoto = true,
 }: {
   vehicles: Vehicle[];
   selectedVehicleId: string;
   onVehicleChange: (id: string) => void;
+  showCarPhoto?: boolean;
   onSubmit: (
     input: Parameters<typeof api.startVehicleTrip>[0],
   ) => Promise<void>;
 }) {
   const vehicle = vehicles.find((item) => item.id === selectedVehicleId)!;
-  const [driverName, setDriverName] = useState("");
-  const [driverReference, setDriverReference] = useState("");
+  const [driver, setDriver] = useState<TripDriver | null>(null);
   const [destination, setDestination] = useState("");
   const [purpose, setPurpose] = useState("");
   const [passengers, setPassengers] = useState(1);
@@ -1384,6 +1396,10 @@ function StartTripForm({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
+    if (!driver) {
+      setError("Choose the driver's department, position and name, or enter the guest's full name.");
+      return;
+    }
     if (!odometerPhoto) {
       setError(
         "Take a clear photo of the ODO display before starting the trip.",
@@ -1402,8 +1418,8 @@ function StartTripForm({
       setBusy(true);
       await onSubmit({
         vehicleId: vehicle.id,
-        driverEmployeeId: driverReference.trim() || "GUEST",
-        driverName: driverName.trim(),
+        driverEmployeeId: driver.reference,
+        driverName: driver.name,
         destination,
         purpose,
         passengers,
@@ -1425,6 +1441,7 @@ function StartTripForm({
 
   return (
     <form className="fleet-form" onSubmit={submit}>
+      {showCarPhoto && <VehicleFormPhoto vehicle={vehicle} />}
       <div className="fleet-form-step">
         <span>1</span>
         <div>
@@ -1450,14 +1467,7 @@ function StartTripForm({
               ))}
           </select>
         </label>
-        <label className="field">
-          <span>Driver full name</span>
-          <input value={driverName} onChange={(event) => setDriverName(event.target.value)} autoComplete="name" placeholder="Enter your full name" minLength={2} required />
-        </label>
-        <label className="field">
-          <span>Employee ID / company (optional for guests)</span>
-          <input value={driverReference} onChange={(event) => setDriverReference(event.target.value)} placeholder="Employee ID or guest company" />
-        </label>
+        <VehicleDriverPicker onChange={setDriver} />
         <label className="field">
           <span>Destination</span>
           <input
@@ -1627,9 +1637,11 @@ function CompleteTripForm({
   vehicle,
   trip,
   onSubmit,
+  showCarPhoto = true,
 }: {
   vehicle: Vehicle;
   trip: VehicleTrip;
+  showCarPhoto?: boolean;
   onSubmit: (
     input: Parameters<typeof api.completeVehicleTrip>[1],
   ) => Promise<void>;
@@ -1689,6 +1701,7 @@ function CompleteTripForm({
   };
   return (
     <form className="fleet-form" onSubmit={submit}>
+      {showCarPhoto && <VehicleFormPhoto vehicle={vehicle} />}
       <div className="return-summary">
         <span>
           <Route size={21} />
@@ -1882,14 +1895,14 @@ function VehicleUsagePage({ vehicleId }: { vehicleId: string }) {
   return <main className="vehicle-usage-page"><div className="vehicle-usage-container">
     <header className="vehicle-usage-brand"><img src="/sgi-logo.png" alt="Sugihara Grand Industries" /><span>Company car usage</span></header>
     {loading ? <section className="card" role="status">Loading your car…</section> : error ? <section className="card"><h1>Unable to open this car</h1><p role="alert">{error}</p><button className="button button-primary" onClick={() => { void load(); }}>Retry</button></section> : vehicle && <>
-      <section className="card vehicle-usage-heading"><span className="module-kicker"><QrCode size={17} /> Your scanned car</span><h1>{vehicle.plate}</h1><p>{vehicle.model}</p><span className="status-badge">{fleetStatusLabel(vehicle.status)}</span><p>Current odometer: <strong>{formatNumber(vehicle.mileage)} km</strong></p></section>
+      <section className="card vehicle-usage-heading"><VehicleFormPhoto vehicle={vehicle} showIdentity={false} /><span className="module-kicker"><QrCode size={17} /> Your scanned car</span><h1>{vehicle.plate}</h1><p>{vehicle.model}</p><span className="status-badge">{fleetStatusLabel(vehicle.status)}</span><p>Current odometer: <strong>{formatNumber(vehicle.mileage)} km</strong></p></section>
       {message && <section className="card vehicle-usage-message" role="status"><CheckCircle2 size={24} /><div><strong>{message}</strong><p>{vehicle.activeTrip ? "Scan this same QR when you return to record the ending mileage and car condition." : "Your usage record has been saved. Thank you for returning the car."}</p></div></section>}
       <section className="card vehicle-usage-form">
         <header><h2>{vehicle.activeTrip ? "Return this car" : "Start your trip"}</h2><p>{vehicle.activeTrip ? "Complete the return check and enter the final odometer reading." : "Enter your details, destination and car checks before driving."}</p></header>
-        {vehicle.activeTrip ? recording ? <CompleteTripForm key={vehicle.activeTrip.id} vehicle={vehicle} trip={vehicle.activeTrip} onSubmit={async (input) => {
+        {vehicle.activeTrip ? recording ? <CompleteTripForm key={vehicle.activeTrip.id} vehicle={vehicle} trip={vehicle.activeTrip} showCarPhoto={false} onSubmit={async (input) => {
           await api.completeVehicleTrip(vehicle.activeTrip!.id, input);
           setMessage("Car returned successfully."); setRecording(false); await load(); window.scrollTo(0, 0);
-        }} /> : <div className="vehicle-usage-prompt"><p>This car has a trip in progress. Only submit a return check when the car has been returned.</p><button className="button button-primary" onClick={() => setRecording(true)}><ClipboardCheck size={17} /> Record return</button></div> : vehicle.status === "AVAILABLE" ? <StartTripForm key={vehicle.id} vehicles={[vehicle]} selectedVehicleId={vehicle.id} onVehicleChange={() => {}} onSubmit={async (input) => {
+        }} /> : <div className="vehicle-usage-prompt"><p>This car has a trip in progress. Only submit a return check when the car has been returned.</p><button className="button button-primary" onClick={() => setRecording(true)}><ClipboardCheck size={17} /> Record return</button></div> : vehicle.status === "AVAILABLE" ? <StartTripForm key={vehicle.id} vehicles={[vehicle]} selectedVehicleId={vehicle.id} onVehicleChange={() => {}} showCarPhoto={false} onSubmit={async (input) => {
           await api.startVehicleTrip(input);
           setMessage("Trip started. Drive safely."); setRecording(false); await load(); window.scrollTo(0, 0);
         }} /> : <div className="vehicle-usage-prompt" role="status"><CircleAlert size={24} /><p>This car is {fleetStatusLabel(vehicle.status).toLowerCase()} and cannot start a trip. Please contact the fleet administrator.</p></div>}
