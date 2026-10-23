@@ -2,6 +2,9 @@ export type TrainingAttendee = {
   id: string;
   name: string;
   department: string;
+  section?: string | null;
+  line?: string | null;
+  group?: string | null;
   role: string;
   status: string;
   hours?: number;

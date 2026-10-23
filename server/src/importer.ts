@@ -77,6 +77,7 @@ export const parseEmployeeImport = async (buffer: Buffer, filename = "employees.
     if (employeeId) seenIds.add(employeeId);
     if (rowErrors.length) { errors.push(...rowErrors); continue; }
     validRows.push({ employeeId, department, name: row.name || undefined,
+      ...(row.section ? { section: row.section } : {}), ...(row.group ? { group: row.group } : {}),
       line: row.line || undefined, role: row.role || undefined, status,
       ...(row.company ? { company: row.company } : {}), ...(row.base ? { base: row.base } : {}), ...(row.email ? { email: row.email.toLowerCase() } : {}) });
   }

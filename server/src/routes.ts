@@ -11,6 +11,7 @@ import {
 } from "@hr-training/shared";
 import { prisma } from "./prisma.js";
 import { env } from "./env.js";
+import { parseProductionRoster } from "./production-roster.js";
 import { parseEmployeeImport } from "./importer.js";
 import { parseEmployeeEmails } from "./email-importer.js";
 import { randomBytes } from "node:crypto";
@@ -59,6 +60,8 @@ const employeeInputSchema = z.object({
   company: nullableText,
   base: nullableText,
   department: z.string().trim().min(1),
+  section: nullableText,
+  group: nullableText,
   line: nullableText,
   role: nullableText,
   status: z.enum(employeeStatuses).default("ACTIVE")
@@ -73,6 +76,8 @@ const employeeImportCommitSchema = z.object({
       company: nullableText,
       base: nullableText,
       department: z.string().trim().min(1),
+      section: nullableText,
+      group: nullableText,
       line: nullableText,
       role: nullableText,
       status: z.enum(employeeStatuses).default("ACTIVE")
@@ -371,7 +376,9 @@ export const createRouter = () => {
           company: input.company,
           base: input.base,
           departmentId: department.id,
-          line: input.line,
+          section: input.section ?? null,
+          group: input.section === "Roll Making" ? null : input.group ?? null,
+          line: input.section === "Roll Making" ? null : input.line ?? null,
           role: input.role,
           status: input.status
         },
@@ -396,7 +403,9 @@ export const createRouter = () => {
           company: input.company,
           base: input.base,
           departmentId: department.id,
-          line: input.line,
+          section: input.section ?? null,
+          group: input.section === "Roll Making" ? null : input.group ?? null,
+          line: input.section === "Roll Making" ? null : input.line ?? null,
           role: input.role,
           status: input.status
         },
@@ -462,6 +471,38 @@ export const createRouter = () => {
   );
 
   router.post(
+    "/employees/production/preview",
+    upload.single("file"),
+    asyncHandler(async (req, res) => {
+      if (!req.file || !/\.xlsx$/i.test(req.file.originalname)) throw new HttpError(400, "Choose the Conversion .xlsx workbook.");
+      let roster;
+      try { roster = await parseProductionRoster(req.file.buffer); }
+      catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "The roster could not be read."); }
+      const employees = await prisma.employee.findMany({ where: { employeeId: { in: roster.rows.map(row => row.employeeId) } }, include: { department: true } });
+      res.json({ sheet: roster.sheet, rows: roster.rows.map(row => {
+        const employee = employees.find(person => person.employeeId === row.employeeId);
+        return { ...row, matched: !!employee && /^production$/i.test(employee.department.name.trim()), currentName: employee?.name ?? null };
+      }) });
+    })
+  );
+
+  router.post(
+    "/employees/production/commit",
+    asyncHandler(async (req, res) => {
+      const input = z.object({ rows: z.array(z.object({ employeeId: z.string().regex(/^\d{7}$/), section: z.literal("Conversion"), line: z.enum(["FC1", "MF", "FC3", "LM & SA", "Supervisor"]), group: z.enum(["A", "B", "N", "Normal Shift"]).nullable() })).min(1).max(5000) }).parse(req.body);
+      if (new Set(input.rows.map(row => row.employeeId)).size !== input.rows.length) throw new HttpError(400, "Duplicate employee IDs.");
+      await prisma.$transaction(async tx => {
+        for (const row of input.rows) {
+          const employee = await tx.employee.findUnique({ where: { employeeId: row.employeeId }, include: { department: true } });
+          if (!employee || !/^production$/i.test(employee.department.name.trim())) throw new HttpError(409, `Employee ${row.employeeId} must be in Production. Refresh the roster preview.`);
+          await tx.employee.update({ where: { id: employee.id }, data: { section: row.section, line: row.line, group: row.group } });
+        }
+      });
+      res.json({ imported: input.rows.length });
+    })
+  );
+
+  router.post(
     "/employees/import/preview",
     upload.single("file"),
     asyncHandler(async (req, res) => {
@@ -501,6 +542,8 @@ export const createRouter = () => {
               company: row.company,
               base: row.base,
               departmentId: department.id,
+              section: row.section,
+              group: row.group,
               line: row.line,
               role: row.role,
               status: row.status
@@ -512,6 +555,8 @@ export const createRouter = () => {
               company: row.company,
               base: row.base,
               departmentId: department.id,
+              section: row.section,
+              group: row.group,
               line: row.line,
               role: row.role,
               status: row.status

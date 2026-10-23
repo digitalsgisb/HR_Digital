@@ -1,3 +1,4 @@
+import { useOrganizationFilter, organizationLabel } from "./OrganizationFilters";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, MailCheck, UserRound, UsersRound } from "lucide-react";
@@ -41,7 +42,7 @@ function DepartmentEmployees({ name, members, open, transitionName, onOpen, anim
             <span className="employee-card-avatar"><UserRound size={22} /></span>
             <span className="employee-card-identity"><strong>{person.name || "Name not recorded"}</strong><small>{person.employeeId}</small></span>
             <span className={`employment-status ${person.status.toLowerCase().replaceAll("_", "-")}`}>{person.status.toLowerCase().replaceAll("_", " ")}</span>
-            <span className="employee-card-role">{person.role || "Role not recorded"}{person.base ? ` · ${person.base}` : ""}</span>
+            <span className="employee-card-role">{[person.role || "Role not recorded", organizationLabel(person)].filter(Boolean).join(" · ")}{person.base ? ` · ${person.base}` : ""}</span>
             <span className={`employee-card-email ${person.email ? "" : "missing"}`}><MailCheck size={15} />{person.email || "No email address"}</span>
             <span className="employee-card-action">View profile →</span>
           </button>)}
@@ -86,17 +87,18 @@ export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter
       }
     }).catch(() => {});
   };
+  const organization = useOrganizationFilter(employees.filter(person => !department || person.department.name === department));
   const departments = [...new Set(employees.map((person) => person.department.name))].sort((a, b) => a.localeCompare(b));
-  const visible = employees.filter((person) => (!department || person.department.name === department) &&
+  const visible = employees.filter((person) => organization.matches(person) && (!department || person.department.name === department) &&
     (statusFilter === "all" || person.status === statusFilter) &&
     (emailFilter === "all" || (emailFilter === "with" ? !!person.email : !person.email)) &&
-    `${person.name ?? ""} ${person.employeeId} ${person.department.name} ${person.role ?? ""} ${person.email ?? ""} ${person.base ?? ""} ${person.status}`.toLowerCase().includes(query.toLowerCase()));
+    `${person.name ?? ""} ${person.employeeId} ${person.department.name} ${person.role ?? ""} ${person.email ?? ""} ${person.base ?? ""} ${person.status} ${organizationLabel(person)}`.toLowerCase().includes(query.toLowerCase()));
   const shownDepartments = departments.filter((name) => visible.some((person) => person.department.name === name));
-  const filtering = !!query.trim() || !!department || emailFilter !== "all" || statusFilter !== "all";
+  const filtering = organization.active || !!query.trim() || !!department || emailFilter !== "all" || statusFilter !== "all";
   return <section className="employee-directory" aria-label="Employees by department">
     <div className="directory-filters">
-      <label>Department<select aria-label="Department" value={department} onChange={(event) => setDepartment(event.target.value)}><option value="">All departments</option>{departments.map((name) => <option key={name}>{name}</option>)}</select></label>
-      <label>Email<select aria-label="Email availability" value={emailFilter} onChange={(event) => setEmailFilter(event.target.value)}><option value="all">All employees</option><option value="with">With email</option><option value="without">Without email</option></select></label>
+      <label>Department<select aria-label="Department" value={department} onChange={(event) => { setDepartment(event.target.value); organization.reset(); }}><option value="">All departments</option>{departments.map((name) => <option key={name}>{name}</option>)}</select></label>
+      {organization.controls}<label>Email<select aria-label="Email availability" value={emailFilter} onChange={(event) => setEmailFilter(event.target.value)}><option value="all">All employees</option><option value="with">With email</option><option value="without">Without email</option></select></label>
       <label>Employment<select aria-label="Employment status filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select></label>
       <span>{visible.length} employees · {shownDepartments.length} departments</span>
     </div>
@@ -109,7 +111,7 @@ export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter
         <button className="department-heading" aria-expanded={open} aria-controls={`department-content-${index}`} onClick={() => animateChange(() => setExpanded((current) => ({ ...current, [name]: !open })))}>
           <span className="department-icon"><UsersRound size={22} /></span><span><strong>{name}</strong><small>{members.length} employees · {withEmail} with email · {members.length - withEmail} without email</small></span><ChevronDown size={18} />
         </button>
-        <div id={`department-content-${index}`}><DepartmentEmployees key={JSON.stringify([name, query, department, emailFilter, statusFilter])} name={name} members={members} open={open} transitionName={`department-employees-${index}`} onOpen={onOpen} animateChange={animateChange} /></div>
+        <div id={`department-content-${index}`}><DepartmentEmployees key={JSON.stringify([name, query, department, emailFilter, statusFilter, members.map(person => person.id)])} name={name} members={members} open={open} transitionName={`department-employees-${index}`} onOpen={onOpen} animateChange={animateChange} /></div>
       </section>;
     })}</div>
   </section>;

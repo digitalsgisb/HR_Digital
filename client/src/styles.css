@@ -711,3 +711,8 @@ html[data-department-transition]::view-transition-new(root) { animation: none; m
 .attendance-qr .toolbar-actions { flex-wrap: wrap; }
 .attendance-employee-id { display: block; margin-top: 6px; }
 @media(max-width:800px) { .training-attendance-grid { grid-template-columns: 1fr; } .training-attendance-dialog { padding: 20px; } }
+
+/* Production roster filters wrap with participant search on narrow screens. */
+.participant-tools { flex-wrap: wrap; align-items: end; }
+.participant-tools > label:not(.compact-search) { display: grid; gap: 6px; font-size: 12px; }
+.participant-tools > label > select { min-height: 40px; border: 1px solid var(--line); border-radius: 9px; background: white; }

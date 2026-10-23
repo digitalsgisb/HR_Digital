@@ -84,6 +84,8 @@ export type EmployeeImportRow = {
   company?: string;
   base?: string;
   name?: string;
+  section?: string | null;
+  group?: string | null;
   line?: string;
   role?: string;
   status: EmployeeStatus;

@@ -13,6 +13,8 @@ export type Employee = {
   email?: string | null;
   company?: string | null;
   base?: string | null;
+  section?: string | null;
+  group?: string | null;
   line?: string | null;
   role?: string | null;
   status: EmployeeStatus;

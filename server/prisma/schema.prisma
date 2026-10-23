@@ -80,6 +80,8 @@ model Employee {
   base         String?
   departmentId String
   department   Department           @relation(fields: [departmentId], references: [id])
+  section      String?
+  group        String?
   line         String?
   role         String?
   status       EmployeeStatus       @default(ACTIVE)

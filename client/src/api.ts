@@ -1,3 +1,4 @@
+import type { RosterPreview } from "./ProductionRosterImport";
 import type {
   DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, Vehicle, VehicleCondition, VehicleStatus, VehicleTrip
 } from "@hr-training/shared";
@@ -10,6 +11,8 @@ export type EmployeeInput = {
   company?: string;
   base?: string;
   department: string;
+  section?: string | null;
+  group?: string | null;
   line?: string;
   role?: string;
   status: Employee["status"];
@@ -71,6 +74,13 @@ export const api = {
     return request<DashboardSummary>("/api/dashboard/summary");
   },
 
+  previewProductionRoster(file: File) {
+    const data = new FormData(); data.append("file", file);
+    return request<RosterPreview>("/api/employees/production/preview", { method: "POST", body: data });
+  },
+  commitProductionRoster(rows: RosterPreview["rows"]) {
+    return request<{ imported: number }>("/api/employees/production/commit", { method: "POST", body: JSON.stringify({ rows }) });
+  },
   async getEmployees(): Promise<Employee[]> {
     return request<Employee[]>("/api/employees");
   },
