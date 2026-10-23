@@ -57,6 +57,8 @@ const employeeInputSchema = z.object({
   employeeId: z.string().trim().min(1),
   name: nullableText,
   email: nullableText,
+  hodName: nullableText,
+  hodEmail: z.union([z.string().trim().email(), z.literal(""), z.null()]).optional(),
   company: nullableText,
   base: nullableText,
   department: z.string().trim().min(1),
@@ -373,6 +375,8 @@ export const createRouter = () => {
           employeeId: input.employeeId,
           name: input.name,
           email: input.email,
+          hodName: input.hodName,
+          hodEmail: input.hodEmail || null,
           company: input.company,
           base: input.base,
           departmentId: department.id,
@@ -400,6 +404,8 @@ export const createRouter = () => {
           employeeId: input.employeeId,
           name: input.name,
           email: input.email,
+          hodName: input.hodName,
+          hodEmail: input.hodEmail || null,
           company: input.company,
           base: input.base,
           departmentId: department.id,
@@ -636,7 +642,7 @@ export const createRouter = () => {
         const created = await tx.trainingSession.create({ data: {
           courseId: course.id, dateStart: new Date(input.dateStart), dateEnd: new Date(input.dateEnd),
           trainerName: input.trainerName, venue: input.venue, capacity: input.capacity, deliveryMethod: input.deliveryMethod,
-          attendanceEnabled: input.attendanceEnabled || isInternalTraining(input.deliveryMethod), attendanceToken: input.attendanceEnabled || isInternalTraining(input.deliveryMethod) ? randomBytes(24).toString("base64url") : null,
+          attendanceEnabled: true, attendanceToken: randomBytes(24).toString("base64url"),
           completions: { create: input.participantEmployeeIds.map((employeeId) => ({ employeeId, status: "REQUIRED" })) }
         }, include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } } });
         const emailDelivery = await queueTrainingEmails(tx, created, input.notifyParticipants);
@@ -784,7 +790,7 @@ export const createRouter = () => {
         where: { archivedAt: null },
         include: {
           trips: {
-            where: { status: "IN_PROGRESS" },
+            where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } },
             orderBy: { startedAt: "desc" },
             take: 1
           }
@@ -800,7 +806,7 @@ export const createRouter = () => {
     asyncHandler(async (req, res) => {
       const vehicle = await prisma.vehicle.findFirst({
         where: { id: String(req.params.id), archivedAt: null },
-        include: { trips: { where: { status: "IN_PROGRESS" }, orderBy: { startedAt: "desc" }, take: 1 } }
+        include: { trips: { where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, orderBy: { startedAt: "desc" }, take: 1 } }
       });
       if (!vehicle) throw new HttpError(404, "This vehicle QR is no longer available. Please contact the fleet administrator.");
       const { trips, ...details } = vehicle;
@@ -880,7 +886,7 @@ export const createRouter = () => {
       const id = routeParam(req.params.id);
       const current = await prisma.vehicle.findUnique({
         where: { id },
-        include: { trips: { where: { status: "IN_PROGRESS" }, orderBy: { startedAt: "desc" }, take: 1 } }
+        include: { trips: { where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, orderBy: { startedAt: "desc" }, take: 1 } }
       });
       if (!current) throw new HttpError(404, "Vehicle not found.");
       const duplicate = await prisma.vehicle.findFirst({ where: { plate: input.plate, NOT: { id } } });
@@ -903,7 +909,7 @@ export const createRouter = () => {
       const id = routeParam(req.params.id);
       const vehicle = await prisma.vehicle.findUnique({
         where: { id },
-        include: { trips: { where: { status: "IN_PROGRESS" }, take: 1 } }
+        include: { trips: { where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, take: 1 } }
       });
       if (!vehicle) throw new HttpError(404, "Vehicle not found.");
       if (vehicle.trips.length) throw new HttpError(409, "Return the active trip before removing this vehicle.");
@@ -940,14 +946,16 @@ export const createRouter = () => {
       const input = startVehicleTripSchema.parse(req.body);
       await ensureFleetData();
       const trip = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${input.vehicleId} FOR UPDATE`;
         const vehicle = await tx.vehicle.findUniqueOrThrow({ where: { id: input.vehicleId } });
         if (vehicle.archivedAt) throw new HttpError(409, "This vehicle is no longer in the active fleet.");
         const activeTrip = await tx.vehicleTrip.findFirst({ where: { vehicleId: input.vehicleId, status: "IN_PROGRESS" } });
         if (activeTrip || vehicle.status === "IN_USE") throw new HttpError(409, "This vehicle already has an active trip.");
-        if (vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE") throw new HttpError(409, "This vehicle is not cleared for use.");
+        if (vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE" || vehicle.mileage >= vehicle.serviceAt || (vehicle.serviceDueDate && vehicle.serviceDueDate <= new Date())) throw new HttpError(409, "This vehicle is not cleared for use.");
+        if(input.conditionBefore !== "GOOD") throw new HttpError(409, "Report this vehicle's condition to HR before driving.");
         if (input.odometerStart < vehicle.mileage) throw new HttpError(400, `Starting odometer cannot be below ${vehicle.mileage} km.`);
 
-        const created = await tx.vehicleTrip.create({ data: input });
+        const created = await tx.vehicleTrip.create({ data: {...input, departedAt:new Date(),mileageMismatch:input.odometerStart!==vehicle.mileage} });
         await tx.vehicle.update({
           where: { id: vehicle.id },
           data: { status: "IN_USE", mileage: input.odometerStart }
@@ -964,13 +972,14 @@ export const createRouter = () => {
       const input = completeVehicleTripSchema.parse(req.body);
       const id = routeParam(req.params.id);
       const completed = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${id} FOR UPDATE`;
         const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, include: { vehicle: true } });
         if (trip.status !== "IN_PROGRESS") throw new HttpError(409, "This trip has already been completed.");
         if (input.odometerEnd < trip.odometerStart) throw new HttpError(400, `Ending odometer cannot be below ${trip.odometerStart} km.`);
 
         const nextStatus = input.conditionAfter === "UNSAFE"
           ? "OUT_OF_SERVICE"
-          : input.conditionAfter === "ATTENTION_REQUIRED" || input.checksAfter.damageReported || input.odometerEnd >= trip.vehicle.serviceAt
+          : input.conditionAfter === "ATTENTION_REQUIRED" || input.checksAfter.damageReported || input.odometerEnd >= trip.vehicle.serviceAt || (trip.vehicle.serviceDueDate && trip.vehicle.serviceDueDate <= new Date())
             ? "SERVICE_DUE"
             : "AVAILABLE";
 

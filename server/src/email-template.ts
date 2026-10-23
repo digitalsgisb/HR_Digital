@@ -18,15 +18,15 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": 
 export type TrainingEmailDetails = { name: string; training: string; date: string; time: string; venue: string; trainer: string };
 export const developerTrainingDetails: TrainingEmailDetails = { name: "Developer", training: "Developer training", date: "Sample training date", time: "09:00–12:00 · Malaysia time", venue: "Sample training room", trainer: "HR Learning & Development" };
 
-export function renderTrainingEmail(templateId: EmailTestTemplate, details: TrainingEmailDetails, portalUrl: string, test = true, invitation = false): EmailTestPreview {
-  const template = invitation ? { title: "You are invited to training", intro: "You have been selected for the training below. Please review the details and make arrangements to attend. Contact Human Resources if you are unable to join.", action: "Open HR Digital" } : templates[templateId];
+export function renderTrainingEmail(templateId: EmailTestTemplate, details: TrainingEmailDetails, portalUrl: string, test = true, invitation = false, action?: {title: string; intro: string; action: string}): EmailTestPreview {
+  const template = action ?? (invitation ? { title: "You are invited to training", intro: "You have been selected for the training below. Please review the details and make arrangements to attend. Contact Human Resources if you are unable to join.", action: "Open HR Digital" } : templates[templateId]);
   const url = new URL(portalUrl);
   if (!["https:", "http:"].includes(url.protocol)) throw new Error("Email portal URL must use HTTP or HTTPS.");
-  const href = escapeHtml(url.origin);
+  const href = escapeHtml(test ? url.origin : url.toString());
   const subject = `${test ? "[TEST] " : ""}${template.title} — ${details.training}`;
   const rows = [["Training", details.training], ["Date", details.date], ["Time", details.time], ["Venue", details.venue], ["Trainer", details.trainer]];
   const testNote = "Developer preview · Sample details only. No employee records or schedules have been changed.";
-  const text = `SUGIHARA GRAND INDUSTRIES SDN. BHD.\nHR Digital · Learning & Development\n\n${template.title}\n\nHello ${details.name},\n\n${template.intro}\n\n${rows.map(([label, value]) => `${label}: ${value}`).join("\n")}\n\n${test ? "Open HR Digital (test only; no action will be submitted)" : template.action}: ${url.origin}\n\nIf you need help, please contact Human Resources.\n\nThank you,\nHuman Resources\nSugihara Grand Industries Sdn. Bhd.\n\n${test ? testNote : "This message was sent by HR Digital."}`;
+  const text = `SUGIHARA GRAND INDUSTRIES SDN. BHD.\nHR Digital · Learning & Development\n\n${template.title}\n\nHello ${details.name},\n\n${template.intro}\n\n${rows.map(([label, value]) => `${label}: ${value}`).join("\n")}\n\n${test ? "Open HR Digital (test only; no action will be submitted)" : template.action}: ${test ? url.origin : url.toString()}\n\nIf you need help, please contact Human Resources.\n\nThank you,\nHuman Resources\nSugihara Grand Industries Sdn. Bhd.\n\n${test ? testNote : "This message was sent by HR Digital."}`;
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${escapeHtml(subject)}</title><style>
 :root { color-scheme: light; supported-color-schemes: light; }

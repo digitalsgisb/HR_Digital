@@ -15,8 +15,8 @@ test("plan API queues eligible participants, supports opt-out and archives train
     const input = { title: "QA Training", category: "Safety", dateStart: "2099-01-02T01:00:00.000Z", dateEnd: "2099-01-02T04:00:00.000Z", trainerName: "QA Trainer", venue: "QA Room", capacity: 2, deliveryMethod: "Instructor-led", participantEmployeeIds: fixture.employees.map(person => person.id) };
     const post = async (body: any) => { const response = await fetch(`${root}/training-plans`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) }); assert.equal(response.status, 201); return response.json() as Promise<any>; };
     const plan = await post(input);
-    assert.equal(plan.emailDelivery.queued, 3); assert.equal(plan.emailDelivery.withoutEmail, 1);
-    assert.equal(fixture.jobs.length, 3); assert.ok(fixture.jobs.every(job => job.recipient === "qa@example.test"));
+    assert.equal(plan.emailDelivery.queued, 4); assert.equal(plan.emailDelivery.withoutEmail, 1);
+    assert.equal(fixture.jobs.length, 4); assert.ok(fixture.jobs.every(job => job.recipient === "qa@example.test"));
     assert.equal((await post({...input,notifyParticipants:false})).emailDelivery.queued, 0);
     assert.equal((await post({...input,dateStart:"2020-01-02T01:00:00.000Z",dateEnd:"2020-01-02T04:00:00.000Z"})).emailDelivery.queued, 0);
     fixture.sessions[0].completions[0].status = "COMPLETED";

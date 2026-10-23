@@ -7,7 +7,7 @@ import type { prisma } from "./prisma.js";
 
 test("training schedule uses Malaysia 08:00 and follows up two hours after end", () => {
   const jobs = trainingEmailSchedule(new Date("2099-01-02T09:00:00+08:00"), new Date("2099-01-02T12:00:00+08:00"), new Date("2099-01-01T00:00:00Z"));
-  assert.deepEqual(jobs.map(job => job.kind), ["INVITATION", "REMINDER", "FOLLOW_UP"]);
+  assert.deepEqual(jobs.map(job => job.kind), ["INVITATION", "REMINDER", "FOLLOW_UP", "SUMMARY_REMINDER"]);
   assert.equal(jobs[1].dueAt.toISOString(), "2099-01-02T00:00:00.000Z");
   assert.equal(jobs[2].dueAt.toISOString(), "2099-01-02T06:00:00.000Z");
   assert.equal(jobs[0].expiresAt.toISOString(), "2099-01-02T01:00:00.000Z");
@@ -27,7 +27,7 @@ test("early sessions, late creation, historical plans and invalid recipients", (
 // This fixture models persistent conditional updates. No production database or
 // SMTP connection is used by these worker tests.
 function fixture() {
-  const row = { id: "job-1", employeeId: "employee-1", status: "PENDING", claimToken: null as string | null, lockedAt: null as Date | null, attempts: 0, kind: "INVITATION", expiresAt: new Date("2099-02-01"), dueAt: new Date("2025-01-01"), sentAt: null as Date | null, lastError: null as string | null, employee: { email: "person@example.test", status: "ACTIVE", name: "Person", employeeId: "EMP-1" }, session: { archivedAt: null as Date | null, dateStart: new Date("2099-01-02T01:00Z"), dateEnd: new Date("2099-01-02T04:00Z"), course: { name: "Safety" }, venue: "Training room", trainerName: "Trainer", completions: [{ employeeId: "employee-1", status: "REQUIRED" }] } };
+  const row = { id: "job-1", employeeId: "employee-1", status: "PENDING", claimToken: null as string | null, lockedAt: null as Date | null, attempts: 0, kind: "INVITATION", expiresAt: new Date("2099-02-01"), dueAt: new Date("2025-01-01"), sentAt: null as Date | null, lastError: null as string | null, employee: { email: "person@example.test", status: "ACTIVE", name: "Person", employeeId: "EMP-1" }, session: { archivedAt: null as Date | null, dateStart: new Date("2099-01-02T01:00Z"), dateEnd: new Date("2099-01-02T04:00Z"), course: { name: "Safety" }, venue: "Training room", trainerName: "Trainer", detailsToken:"details-token-for-test-123456", attendanceToken:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", completions: [{ employeeId: "employee-1", status: "REQUIRED",summaryToken:"summary-token-for-test-123456",summarySubmittedAt:null as Date|null }] } };
   const matches = (where: any) => (!where.id || where.id === row.id) && (typeof where.status === "string" ? row.status === where.status : !where.status?.in || where.status.in.includes(row.status)) && (!where.claimToken || where.claimToken === row.claimToken) && (!where.expiresAt?.lte || row.expiresAt <= where.expiresAt.lte) && (!where.attempts?.gte || row.attempts >= where.attempts.gte) && (!where.attempts?.lt || row.attempts < where.attempts.lt) && (!where.dueAt?.lte || row.dueAt <= where.dueAt.lte) && (!where.expiresAt?.gt || row.expiresAt > where.expiresAt.gt) && (!where.lockedAt || (!!row.lockedAt && row.lockedAt < where.lockedAt.lt)) && (!where.session || !row.session.archivedAt);
   const db = { trainingEmailJob: {
     async updateMany({ where, data }: any) { if (!matches(where)) return { count: 0 }; const { attempts, ...rest } = data; Object.assign(row, rest); if (attempts?.increment) row.attempts += attempts.increment; return { count: 1 }; },
@@ -73,4 +73,24 @@ test("worker cancels deleted or absent participants and retains retryable failur
     const disabled = fixture(); env.emailTransport = "preview";
     await processTrainingEmails(new Date(), disabled.db, send); assert.equal(sent, 0); assert.equal(disabled.row.status, "PENDING");
   } finally { Object.assign(env, old); }
+});
+
+test("stage-specific buttons, HOD CC and recurring summary reminders retain the correct destinations",async()=>{
+ const old={...env};Object.assign(env,{emailTransport:"smtp",smtpHost:"localhost",smtpUser:""});
+ try{
+  const invitation=fixture();(invitation.row.employee as any).hodEmail="hod@example.test";const messages:any[]=[];const send=async(message:any)=>{messages.push(message);return {rejected:[]};};
+  await processTrainingEmails(new Date(),invitation.db,send);assert.equal(messages[0].cc,"hod@example.test");assert.match(messages[0].html,/\/training\/details\/details-token-for-test-123456/);
+  const reminder=fixture();reminder.row.kind="REMINDER";await processTrainingEmails(new Date(),reminder.db,send);assert.match(messages[1].html,/\/attendance\/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/);assert.match(messages[1].html,/Register attendance/);
+  const repeated=fixture();repeated.row.kind="SUMMARY_REMINDER";repeated.row.session.dateEnd=new Date("2026-01-01T04:00Z");await processTrainingEmails(new Date("2026-01-05T04:00Z"),repeated.db,send);assert.equal(repeated.row.status,"PENDING");assert.equal(repeated.row.dueAt.toISOString(),"2026-01-07T04:00:00.000Z");assert.match(messages[2].html,/\/training\/summary\/summary-token-for-test-123456/);assert.equal(messages[2].cc,undefined);
+  repeated.row.session.completions[0].summarySubmittedAt=new Date();repeated.row.dueAt=new Date("2020-01-01");await processTrainingEmails(new Date(),repeated.db,send);assert.equal(repeated.row.status,"CANCELLED");assert.equal(messages.length,3);
+ }finally{Object.assign(env,old);}
+});
+
+test("submitted summaries go to the HOD with notes and attachments; missing HODs remain retryable",async()=>{
+ const old={...env};Object.assign(env,{emailTransport:"smtp",smtpHost:"localhost",smtpUser:""});
+ try{
+  const value=fixture();value.row.kind="HOD_SUMMARY";Object.assign(value.row.session.completions[0],{summarySubmittedAt:new Date(),summaryLearning:"Learning",summaryApplication:"Application",summaryNotes:"My notes <script>",summaryAttachments:[{name:"notes.txt",data:"data:text/plain;base64,bm90ZXM="}]});
+  let message:any;await processTrainingEmails(new Date(),value.db,async m=>{message=m;return {};});assert.equal(message,undefined);assert.equal(value.row.status,"PENDING");assert.match(value.row.lastError!,/Missing HOD/);
+  (value.row.employee as any).hodEmail="hod@example.test";value.row.dueAt=new Date("2020-01-01");await processTrainingEmails(new Date(),value.db,async m=>{message=m;return {};});assert.equal((message as any).to,"hod@example.test");assert.match((message as any).text,/My notes/);assert.match((message as any).html,/&lt;script&gt;/);assert.equal((message as any).attachments[0].filename,"notes.txt");assert.equal((message as any).attachments[0].content.toString(),"notes");assert.equal(value.row.status,"SENT");
+ }finally{Object.assign(env,old);}
 });

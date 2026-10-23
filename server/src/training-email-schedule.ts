@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export type TrainingEmailKind = "INVITATION" | "REMINDER" | "FOLLOW_UP";
+export type TrainingEmailKind = "INVITATION" | "REMINDER" | "FOLLOW_UP" | "SUMMARY_REMINDER";
 export function trainingEmailSchedule(start: Date, end: Date | null, now = new Date()): Array<{ kind: TrainingEmailKind; dueAt: Date; expiresAt: Date }> {
   // Never backfill messages for historical/ongoing plans.
   if (start <= now) return [];
@@ -11,6 +11,7 @@ export function trainingEmailSchedule(start: Date, end: Date | null, now = new D
   // A plan created after reminder time gets one invitation, not two immediate emails.
   if (reminder > now) jobs.push({ kind: "REMINDER", dueAt: reminder, expiresAt: start });
   if (end && end > start) jobs.push({ kind: "FOLLOW_UP", dueAt: new Date(end.getTime() + 2 * 3600000), expiresAt: new Date(end.getTime() + 7 * 86400000) });
+  if (end && end > start) jobs.push({kind:"SUMMARY_REMINDER", dueAt:new Date(end.getTime()+3*86400000), expiresAt:new Date("9999-12-31")});
   return jobs;
 }
 

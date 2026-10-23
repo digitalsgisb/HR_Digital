@@ -8,6 +8,8 @@ export type EmployeeInput = {
   employeeId: string;
   name?: string;
   email?: string;
+  hodName?: string | null;
+  hodEmail?: string | null;
   company?: string;
   base?: string;
   department: string;

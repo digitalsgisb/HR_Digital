@@ -1,3 +1,6 @@
+import { trainingPortalUrl, escapeHtml } from "./training-portal.js";
+import { attendanceUrl } from "./attendance.js";
+import { z } from "zod";
 import nodemailer, { type SendMailOptions } from "nodemailer";
 import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
@@ -38,22 +41,31 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
     const job = await db.trainingEmailJob.findUniqueOrThrow({ where: { id: candidate.id }, include: { employee: true, session: { include: { course: true, completions: true } } } });
     const completion = job.session.completions.find(record => record.employeeId === job.employeeId);
     const owned = { id: job.id, status: "SENDING", claimToken };
-    if (job.session.archivedAt || job.expiresAt <= new Date() || !completion || !eligibleTrainingEmailRecipient(job.employee, completion.status)) {
+    if (job.session.archivedAt || job.expiresAt <= new Date() || !completion || !(job.kind === "HOD_SUMMARY" ? !!completion.summarySubmittedAt : eligibleTrainingEmailRecipient(job.employee, completion.status))) {
       await db.trainingEmailJob.updateMany({ where: owned, data: { status: "CANCELLED", claimToken: null, lockedAt: null, lastError: "Training or participant is no longer eligible." } }); continue;
+    }
+    const summaryAction = ["FOLLOW_UP","SUMMARY_REMINDER"].includes(job.kind);
+    if (summaryAction && (completion?.summarySubmittedAt || (job.kind === "FOLLOW_UP" && job.session.dateEnd && now.getTime() >= job.session.dateEnd.getTime()+3*86400000))) { await db.trainingEmailJob.updateMany({where:owned,data:{status:"CANCELLED",claimToken:null,lockedAt:null}}); continue; }
+    if (job.kind === "HOD_SUMMARY" && !z.string().email().safeParse(job.employee.hodEmail).success) {
+      await db.trainingEmailJob.updateMany({where:owned,data:{status:"PENDING",attempts:0,dueAt:new Date(now.getTime()+86400000),claimToken:null,lockedAt:null,lastError:"Missing HOD email. Update the employee profile; delivery will retry automatically."}}); continue;
     }
     try {
       const dateFormat = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" });
       const timeFormat = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false });
       const session = job.session;
-      const content = renderTrainingEmail(job.kind === "FOLLOW_UP" ? "email-2" : "email-1", { name: job.employee.name || job.employee.employeeId, training: session.course.name, date: dateFormat.format(session.dateStart), time: `${timeFormat.format(session.dateStart)}${session.dateEnd ? `–${timeFormat.format(session.dateEnd)}` : ""} · Malaysia time`, venue: session.venue || "Contact HR for the venue", trainer: session.trainerName || "Human Resources" }, env.clientOrigin, false, job.kind === "INVITATION");
+      const content = renderTrainingEmail(job.kind === "FOLLOW_UP" ? "email-2" : "email-1", { name: job.employee.name || job.employee.employeeId, training: session.course.name, date: dateFormat.format(session.dateStart), time: `${timeFormat.format(session.dateStart)}${session.dateEnd ? `–${timeFormat.format(session.dateEnd)}` : ""} · Malaysia time`, venue: session.venue || "Contact HR for the venue", trainer: session.trainerName || "Human Resources" }, job.kind === "INVITATION" ? trainingPortalUrl(`/training/details/${session.detailsToken}`) : job.kind === "REMINDER" ? attendanceUrl(session.attendanceToken || "closed") : trainingPortalUrl(`/training/summary/${completion!.summaryToken}`), false, job.kind === "INVITATION", job.kind === "INVITATION" ? {title:"You are invited to training",intro:"Please click below to review your training details and make arrangements to attend.",action:"View training details"} : job.kind === "REMINDER" ? {title:"Register your training attendance",intro:"Your training is today. Please click the button and enter your attendance during the check-in window.",action:"Register attendance"} : {title:job.kind === "SUMMARY_REMINDER" ? "Reminder: complete your training summary" : "Complete your training summary",intro:"Please complete your training summary, add your notes and useful materials, and submit it for your HOD. Reminders are sent every three days until submission.",action:"Complete training summary"});
       // Recheck cancellation immediately before handing the message to SMTP.
       if (!(await db.trainingEmailJob.count({ where: { ...owned, session: { archivedAt: null } } }))) continue;
-      const recipient = job.employee.email!.trim().toLowerCase();
-      const result = await sendMail({ from: env.smtpFrom, to: recipient, messageId: `<training-${job.id}@hr-digital.local>`, subject: content.subject, text: content.text, html: content.html, attachments: [{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }] });
+      const recipient = (job.kind === "HOD_SUMMARY" ? job.employee.hodEmail! : job.employee.email!).trim().toLowerCase();
+      if (summaryAction && !(await db.trainingEmailJob.count({where:{...owned,session:{archivedAt:null,completions:{some:{employeeId:job.employeeId,summarySubmittedAt:null}}}}}))) continue;
+      const hodSummary = job.kind === "HOD_SUMMARY";
+      const summaryText = hodSummary ? [`Training summary: ${session.course.name}`,`Participant: ${job.employee.name || job.employee.employeeId}`,`Learning: ${completion?.summaryLearning||""}`,`Application: ${completion?.summaryApplication||""}`,`Feedback: ${completion?.summaryFeedback||""}`,`Notes: ${completion?.summaryNotes||""}`].join("\n\n") : "";
+      const files = hodSummary && Array.isArray(completion?.summaryAttachments) ? completion.summaryAttachments as Array<{name:string;data:string}> : [];
+      const result = await sendMail({ from: env.smtpFrom, to: recipient, cc: ["INVITATION","REMINDER"].includes(job.kind) && z.string().email().safeParse(job.employee.hodEmail).success ? job.employee.hodEmail! : undefined, messageId: `<training-${job.id}${job.kind==="SUMMARY_REMINDER"?`-${job.sentAt?.getTime()||0}`:""}@hr-digital.local>`, subject: hodSummary ? `Training summary — ${session.course.name} — ${job.employee.name || job.employee.employeeId}` : content.subject, text: hodSummary ? summaryText : content.text, html: hodSummary ? `<div style="white-space:pre-wrap;font-family:Arial">${escapeHtml(summaryText)}</div>` : content.html, attachments: [...files.map(file=>({filename:file.name,content:Buffer.from(file.data.split(",")[1],"base64"),contentType:file.data.slice(5,file.data.indexOf(";")),contentDisposition:"attachment" as const})),{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }] });
       if (result.rejected?.length) throw new Error("Recipient rejected");
-      await db.trainingEmailJob.updateMany({ where: owned, data: { status: "SENT", recipient, sentAt: new Date(), claimToken: null, lockedAt: null, lastError: null } });
+      await db.trainingEmailJob.updateMany({ where: owned, data: { status: job.kind === "SUMMARY_REMINDER" ? "PENDING" : "SENT", ...(job.kind === "SUMMARY_REMINDER" ? {dueAt:nextSummaryReminder(session.dateEnd!,now),attempts:0} : {}), recipient, sentAt: new Date(), claimToken: null, lockedAt: null, lastError: null } });
     } catch {
-      await db.trainingEmailJob.updateMany({ where: owned, data: { status: job.attempts >= 5 ? "FAILED" : "PENDING", dueAt: new Date(Date.now() + Math.min(60, 2 ** job.attempts) * 60000), claimToken: null, lockedAt: null, lastError: "SMTP delivery failed. Check connection, sender permissions and provider limits." } });
+      await db.trainingEmailJob.updateMany({ where: owned, data: { status: job.attempts >= 5 && job.kind !== "SUMMARY_REMINDER" ? "FAILED" : "PENDING", ...(job.kind === "SUMMARY_REMINDER" && job.attempts >= 5 ? {attempts:0} : {}), dueAt: new Date(Date.now() + Math.min(60, 2 ** job.attempts) * 60000), claimToken: null, lockedAt: null, lastError: "SMTP delivery failed. Check connection, sender permissions and provider limits." } });
     }
   }
 }
@@ -64,4 +76,9 @@ export function startTrainingEmailWorker() {
   const tick = async () => { if (busy) return; busy = true; try { await processTrainingEmails(); } catch { console.error("Training email queue could not be processed. Check database connectivity and schema."); } finally { busy = false; } };
   const timer = setInterval(() => { void tick(); }, 60000); timer.unref(); void tick();
   return () => clearInterval(timer);
+}
+
+ export function nextSummaryReminder(end: Date, now: Date) {
+ const interval = 3 * 86400000;
+ return new Date(end.getTime() + (Math.floor(Math.max(0, now.getTime()-end.getTime())/interval)+1)*interval);
 }

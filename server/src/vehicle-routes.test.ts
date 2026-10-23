@@ -21,6 +21,7 @@ test("car QR loads only the requested active car and accepts a guest trip", asyn
     return drivers;
   });
   const tx = {
+    $queryRaw: async()=>[],
     vehicle: {
       findUniqueOrThrow: async () => vehicle,
       update: async ({ data }: any) => Object.assign(vehicle, data)

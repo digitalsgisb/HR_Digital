@@ -11,6 +11,8 @@ export type Employee = {
   employeeId: string;
   name?: string | null;
   email?: string | null;
+  hodName?: string | null;
+  hodEmail?: string | null;
   company?: string | null;
   base?: string | null;
   section?: string | null;

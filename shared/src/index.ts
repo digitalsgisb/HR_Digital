@@ -34,7 +34,7 @@ export type VehicleStatus = (typeof vehicleStatuses)[number];
 export const vehicleConditions = ["GOOD", "ATTENTION_REQUIRED", "UNSAFE"] as const;
 export type VehicleCondition = (typeof vehicleConditions)[number];
 
-export const vehicleTripStatuses = ["IN_PROGRESS", "COMPLETED"] as const;
+export const vehicleTripStatuses = ["AWAITING_DEPARTURE", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
 export type VehicleTripStatus = (typeof vehicleTripStatuses)[number];
 
 export type VehicleTrip = {
@@ -47,6 +47,9 @@ export type VehicleTrip = {
   passengers: number;
   startedAt: string;
   endedAt?: string | null;
+  departedAt?: string | null;
+  expectedReturnAt?: string | null;
+  mileageMismatch?: boolean;
   odometerStart: number;
   odometerEnd?: number | null;
   odometerPhotoBefore?: string | null;
@@ -70,6 +73,7 @@ export type Vehicle = {
   category: string;
   mileage: number;
   serviceAt: number;
+  serviceDueDate?: string | null;
   status: VehicleStatus;
   assigned: string;
   photo?: string | null;

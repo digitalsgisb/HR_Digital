@@ -1,3 +1,5 @@
+import { createTrainingPortalRouter, createTrainingReviewRouter } from "./training-portal.js";
+import { createFleetWorkflowRouter } from "./fleet-workflow.js";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
@@ -19,7 +21,10 @@ export const createApp = () => {
   app.use(helmet());
   app.use(cors({ origin: env.clientOrigin }));
   app.use(express.json({ limit: "8mb" }));
+  app.use("/training", createTrainingPortalRouter());
   app.use("/attendance", createAttendancePageRouter());
+  app.use("/api", createFleetWorkflowRouter());
+  app.use("/api", createTrainingReviewRouter());
   app.use("/api", createRouter());
 
   if (env.nodeEnv === "production") {

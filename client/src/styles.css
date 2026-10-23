@@ -716,3 +716,11 @@ html[data-department-transition]::view-transition-new(root) { animation: none; m
 .participant-tools { flex-wrap: wrap; align-items: end; }
 .participant-tools > label:not(.compact-search) { display: grid; gap: 6px; font-size: 12px; }
 .participant-tools > label > select { min-height: 40px; border: 1px solid var(--line); border-radius: 9px; background: white; }
+
+.maintenance-panel { padding: 20px; }
+.maintenance-panel summary { cursor: pointer; font-weight: 700; }
+.maintenance-record { border-top: 1px solid var(--line); padding: 16px 0; }
+.saved-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+.maintenance-panel textarea { min-height: 100px; font: inherit; padding: 12px; }
+
+.vehicle-usage-page .toolbar-actions button[aria-pressed="true"] { background: #17181a; color: white; }

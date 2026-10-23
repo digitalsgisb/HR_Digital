@@ -58,6 +58,8 @@ enum VehicleCondition {
 }
 
 enum VehicleTripStatus {
+  AWAITING_DEPARTURE
+  CANCELLED
   IN_PROGRESS
   COMPLETED
 }
@@ -76,6 +78,8 @@ model Employee {
   employeeId   String               @unique
   name         String?
   email        String?
+  hodName      String?
+  hodEmail     String?
   company      String?
   base         String?
   departmentId String
@@ -118,6 +122,7 @@ model TrainingSession {
   venue       String?
   capacity    Int?
   deliveryMethod String?
+  detailsToken String @unique @default(cuid())
   attendanceEnabled Boolean @default(false)
   attendanceToken String? @unique
   scopeType   ScopeType            @default(CUSTOM)
@@ -168,6 +173,13 @@ model TrainingCompletion {
   completedAt DateTime?
   checkedInAt DateTime?
   attendanceSource String?
+  summaryToken String @unique @default(cuid())
+  summaryLearning String?
+  summaryApplication String?
+  summaryFeedback String?
+  summaryNotes String?
+  summaryAttachments Json?
+  summarySubmittedAt DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -196,6 +208,8 @@ model Vehicle {
   assigned  String
   photo     String?
   archivedAt DateTime?
+  serviceDueDate DateTime?
+  maintenance VehicleMaintenance[]
   trips     VehicleTrip[]
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
@@ -215,6 +229,9 @@ model VehicleTrip {
   passengers       Int                  @default(1)
   startedAt        DateTime             @default(now())
   endedAt          DateTime?
+  departedAt       DateTime?
+  expectedReturnAt DateTime?
+  mileageMismatch Boolean @default(false)
   odometerStart    Int
   odometerEnd      Int?
   odometerPhotoBefore String?
@@ -234,4 +251,21 @@ model VehicleTrip {
   @@index([vehicleId, status])
   @@index([driverEmployeeId])
   @@index([startedAt])
+}
+
+model VehicleMaintenance {
+  id String @id @default(cuid())
+  vehicleId String
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  type String
+  servicedAt DateTime
+  odometer Int
+  workshop String
+  workCompleted String
+  cost Decimal @db.Decimal(12,2)
+  attachment Json?
+  nextServiceAt Int?
+  nextServiceDate DateTime?
+  createdAt DateTime @default(now())
+  @@index([vehicleId, servicedAt])
 }

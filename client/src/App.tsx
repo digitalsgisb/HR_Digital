@@ -1,3 +1,6 @@
+import { FleetAccess } from "./FleetAccess";
+import { MaintenancePanel } from "./MaintenancePanel";
+import { TrainingSummaries } from "./TrainingSummaries";
 import { ProductionRosterImport } from "./ProductionRosterImport";
 import { useOrganizationFilter } from "./OrganizationFilters";
 import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -31,7 +34,7 @@ import { malaysiaDate } from "./calendar-utils";
 import { toCalendarSession } from "./training-data";
 import type { Employee } from "./types";
 import {
-  employeeTrainingRows, notesLibrary,
+  employeeTrainingRows,
   vehicleTrips as fallbackVehicleTrips,
   vehicles as fallbackVehicles, type CalendarSession
 } from "./portal-data";
@@ -130,7 +133,7 @@ function loadAdminSettings(): AdminSettings {
 
 function App() {
   const vehicleId = new URLSearchParams(window.location.search).get("vehicle");
-  return vehicleId ? <VehicleUsagePage vehicleId={vehicleId} /> : <AdminApp />;
+  return vehicleId || new URLSearchParams(window.location.search).has("fleet") ? <FleetAccess /> : <AdminApp />;
 }
 
 function AdminApp() {
@@ -414,6 +417,8 @@ function EmployeeForm({ employee, onSubmit }: { employee?: Employee; onSubmit: (
   const [employeeId, setEmployeeId] = useState(employee?.employeeId ?? "");
   const [name, setName] = useState(employee?.name ?? "");
   const [email, setEmail] = useState(employee?.email ?? "");
+  const [hodName, setHodName] = useState(employee?.hodName ?? "");
+  const [hodEmail, setHodEmail] = useState(employee?.hodEmail ?? "");
   const [company, setCompany] = useState(employee?.company ?? "");
   const [base, setBase] = useState(employee?.base ?? "");
   const [department, setDepartment] = useState(employee?.department.name ?? "");
@@ -424,7 +429,7 @@ function EmployeeForm({ employee, onSubmit }: { employee?: Employee; onSubmit: (
   const [status, setStatus] = useState<Employee["status"]>(employee?.status ?? "ACTIVE");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, company, base, department, section, group, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="registry-note"><UserRound size={22} /><div><strong>{employee ? "Maintain the master employee record" : "Create a master employee record"}</strong><small>Status controls whether the employee appears in active workforce workflows; historical training records are always retained.</small></div></div><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / job type</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label><label className="field"><span>Base</span><input value={base} onChange={(event) => setBase(event.target.value)} /></label><label className="field"><span>Production section</span><select value={section} onChange={event => { setSection(event.target.value); setLine(""); setGroup(""); }}><option value="">Not assigned</option><option>Conversion</option><option>Roll Making</option></select></label>{section !== "Roll Making" && <label className="field"><span>Group</span><input value={group} onChange={event => setGroup(event.target.value)} /></label>}{section !== "Roll Making" && <label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label>}<label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Changes are saved to the central people directory.</span><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
+  return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, hodName, hodEmail, company, base, department, section, group, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="registry-note"><UserRound size={22} /><div><strong>{employee ? "Maintain the master employee record" : "Create a master employee record"}</strong><small>Status controls whether the employee appears in active workforce workflows; historical training records are always retained.</small></div></div><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>HOD name</span><input value={hodName} onChange={event=>setHodName(event.target.value)} /></label><label className="field"><span>HOD email</span><input type="email" value={hodEmail} onChange={event=>setHodEmail(event.target.value)} /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / job type</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label><label className="field"><span>Base</span><input value={base} onChange={(event) => setBase(event.target.value)} /></label><label className="field"><span>Production section</span><select value={section} onChange={event => { setSection(event.target.value); setLine(""); setGroup(""); }}><option value="">Not assigned</option><option>Conversion</option><option>Roll Making</option></select></label>{section !== "Roll Making" && <label className="field"><span>Group</span><input value={group} onChange={event => setGroup(event.target.value)} /></label>}{section !== "Roll Making" && <label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label>}<label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Changes are saved to the central people directory.</span><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
 }
 
 function TrainingRecords({ sessions, onDelete, onRefresh }: { sessions: CalendarSession[]; onDelete: (id: string) => Promise<void>; onRefresh: () => void }) {
@@ -435,8 +440,7 @@ function TrainingRecords({ sessions, onDelete, onRefresh }: { sessions: Calendar
 }
 
 function NotesLibrary({ showNotice }: { showNotice: (message: string) => void }) {
-  const [query, setQuery] = useState(""); const visible = notesLibrary.filter((note) => `${note.title} ${note.employee} ${note.course} ${note.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase()));
-  return <section className="page-stack"><div className="page-toolbar"><label className="search-field wide"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title, employee, course or tag" /></label><div className="toolbar-actions"><select><option>All file types</option><option>PDF</option><option>DOCX</option><option>XLSX</option></select><button className="button button-primary" onClick={() => showNotice("Upload area opened. Files will be stored against an employee and training record.")}><Upload size={16} /> Upload notes</button></div></div><div className="library-layout"><aside className="card library-filter"><SectionHeader kicker="Browse" title="Learning library" /><button className="active"><Library size={17} />All notes<span>{notesLibrary.length}</span></button><button><Clock3 size={17} />Recently added<span>0</span></button><button><UsersRound size={17} />My department<span>0</span></button><p>Popular tags</p>{["GMP", "Safety", "System", "Quality", "Leadership"].map((tag) => <button key={tag} className="tag-filter"># {tag}</button>)}</aside><section className="notes-results"><div className="results-heading"><span><strong>{visible.length} documents</strong><small>Indexed by employee and training</small></span><select><option>Newest first</option><option>Title A–Z</option></select></div>{!visible.length && <p className="training-empty">No training notes uploaded.</p>}{visible.map((note, index) => <article className="note-card" key={note.id} style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}><span className={`file-type ${note.type.toLowerCase()}`}><FileText size={21} /><em>{note.type}</em></span><div className="note-copy"><small>{note.course}</small><h3>{note.title}</h3><p>{note.excerpt}</p><div className="tag-row">{note.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><footer><span><Avatar initials={note.employee.split(" ").map((n) => n[0]).slice(0, 2).join("")} />{note.employee}</span><em>{note.submitted} · {note.size}</em></footer></div><button className="row-action" aria-label={`Open ${note.title}`} onClick={() => showNotice(`${note.title} is ready to retrieve from document storage.`)}><ArrowRight size={17} /></button></article>)}</section></div></section>;
+  return <TrainingSummaries />;
 }
 
 const fleetStatusLabel = (status: Vehicle["status"] | VehicleTrip["status"] | VehicleCondition) =>
@@ -543,7 +547,7 @@ function FleetTracker({
     selectedVehicle?.activeTrip ??
     trips.find(
       (trip) =>
-        trip.vehicleId === selectedVehicle?.id && trip.status === "IN_PROGRESS",
+        trip.vehicleId === selectedVehicle?.id && ["IN_PROGRESS","AWAITING_DEPARTURE"].includes(trip.status),
     ) ??
     null;
   const available = fleetVehicles.filter(
@@ -656,7 +660,8 @@ function FleetTracker({
                   }}
                 />
               )}
-              {dialog === "complete" && dialogVehicle && activeTrip && (
+              {dialog === "complete" && dialogVehicle && activeTrip?.status === "AWAITING_DEPARTURE" && <div className="fleet-form"><h3>Awaiting departure</h3><p>{activeTrip.driverName} · {activeTrip.destination}</p><p>Key collection reference: {activeTrip.id.slice(-8).toUpperCase()}. The employee must scan the shared QR to confirm departure with an odometer photo.</p><a className="button button-primary" href="/?fleet=1" target="_blank" rel="noreferrer">Open fleet access</a></div>}
+              {dialog === "complete" && dialogVehicle && activeTrip?.status === "IN_PROGRESS" && (
                 <CompleteTripForm
                   vehicle={dialogVehicle}
                   trip={activeTrip}
@@ -715,6 +720,7 @@ function FleetTracker({
             </button>
           </div>
         </div>
+        <details className="card shared-fleet-qr"><summary>Print the shared fleet QR</summary><VehicleQr /></details>
         <section className="card trip-launcher" aria-label="Choose a car and start a trip">
           <div><span className="module-kicker"><Route size={16} /> Ready to drive?</span><h2>Choose your car & start a trip</h2><p>Record the driver, destination and starting mileage before leaving.</p></div>
           <div className="trip-launcher-controls">
@@ -840,14 +846,6 @@ function FleetTracker({
                   </div>
                   <footer className="vehicle-actions">
                     <button onClick={() => onOpenHistory(vehicle.id)}><Clock3 size={15} /> History</button>
-                    <button
-                      onClick={() => {
-                        setSelectedVehicleId(vehicle.id);
-                        setDialog("qr");
-                      }}
-                    >
-                      <QrCode size={15} /> QR
-                    </button>
                     {vehicle.activeTrip ? (
                       <button
                         className="primary"
@@ -856,7 +854,7 @@ function FleetTracker({
                           setDialog("complete");
                         }}
                       >
-                        Return <ArrowRight size={14} />
+                        {vehicle.activeTrip.status === "AWAITING_DEPARTURE" ? "Awaiting departure" : "Return"} <ArrowRight size={14} />
                       </button>
                     ) : (
                       <button
@@ -957,6 +955,8 @@ function FleetTracker({
                       >
                         {fleetStatusLabel(trip.status)}
                       </span>
+                      {trip.mileageMismatch && <small className="form-error">Starting mileage differs from last return</small>}
+                      {trip.expectedReturnAt && trip.status !== "COMPLETED" && trip.status !== "CANCELLED" && new Date(trip.expectedReturnAt) < new Date() && <small className="form-error">Overdue return</small>}
                       {trip.status === "IN_PROGRESS" && (
                         <button
                           className="table-return"
@@ -1054,6 +1054,7 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
         <MetricCard icon={Route} label="In use" value={String(vehicles.filter((item) => item.status === "IN_USE").length)} detail="Live check-outs" tone="blue" />
         <MetricCard icon={Wrench} label="Attention" value={String(serviceAttention)} detail="Service or unavailable" tone="violet" />
       </div>
+      <MaintenancePanel vehicles={vehicles} onChanged={refresh} />
       <div className="page-toolbar registry-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search registration, model, category or owner" /></label><button className="button button-primary" onClick={() => setEditing(null)}><Plus size={16} /> Add vehicle</button></div>
       <section className="card registry-section"><SectionHeader kicker="Fleet master data" title="Registered vehicles" />
         <div className="registry-card-grid">
@@ -1360,13 +1361,15 @@ function VehicleFormPhoto({ vehicle, showIdentity = true }: { vehicle: Vehicle; 
   </figure>;
 }
 
-function StartTripForm({
+export function StartTripForm({
   vehicles,
   selectedVehicleId,
   onVehicleChange,
   onSubmit,
   showCarPhoto = true,
+  reservation,
 }: {
+  reservation?: VehicleTrip;
   vehicles: Vehicle[];
   selectedVehicleId: string;
   onVehicleChange: (id: string) => void;
@@ -1376,10 +1379,10 @@ function StartTripForm({
   ) => Promise<void>;
 }) {
   const vehicle = vehicles.find((item) => item.id === selectedVehicleId)!;
-  const [driver, setDriver] = useState<TripDriver | null>(null);
-  const [destination, setDestination] = useState("");
-  const [purpose, setPurpose] = useState("");
-  const [passengers, setPassengers] = useState(1);
+  const [driver, setDriver] = useState<TripDriver | null>(reservation ? {reference:reservation.driverEmployeeId,name:reservation.driverName} as TripDriver : null);
+  const [destination, setDestination] = useState(reservation?.destination ?? "");
+  const [purpose, setPurpose] = useState(reservation?.purpose ?? "");
+  const [passengers, setPassengers] = useState(reservation?.passengers ?? 1);
   const [odometer, setOdometer] = useState(vehicle.mileage);
   const [odometerPhoto, setOdometerPhoto] = useState("");
   const [fuel, setFuel] = useState(75);
@@ -1416,7 +1419,7 @@ function StartTripForm({
       setError("Complete every required before-drive check.");
       return;
     }
-    if (vehicle.status !== "AVAILABLE") {
+    if (vehicle.status !== "AVAILABLE" && !reservation) {
       setError("This car is no longer available. Refresh its status before starting.");
       return;
     }
@@ -1473,7 +1476,7 @@ function StartTripForm({
               ))}
           </select>
         </label>
-        <VehicleDriverPicker onChange={setDriver} />
+        {reservation ? <p className="field">Driver: <strong>{reservation.driverName}</strong></p> : <VehicleDriverPicker onChange={setDriver} />}
         <label className="field">
           <span>Destination</span>
           <input
@@ -1639,7 +1642,7 @@ function StartTripForm({
   );
 }
 
-function CompleteTripForm({
+export function CompleteTripForm({
   vehicle,
   trip,
   onSubmit,
@@ -1885,45 +1888,12 @@ function CompleteTripForm({
   );
 }
 
-function VehicleUsagePage({ vehicleId }: { vehicleId: string }) {
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [recording, setRecording] = useState(false);
-  const load = async () => {
-    setLoading(true); setError("");
-    try { setVehicle(await api.getVehicle(vehicleId)); }
-    catch (cause) { setVehicle(null); setError(cause instanceof Error ? cause.message : "Unable to load this car."); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { void load(); }, [vehicleId]);
-  return <main className="vehicle-usage-page"><div className="vehicle-usage-container">
-    <header className="vehicle-usage-brand"><img src="/sgi-logo.png" alt="Sugihara Grand Industries" /><span>Company car usage</span></header>
-    {loading ? <section className="card" role="status">Loading your car…</section> : error ? <section className="card"><h1>Unable to open this car</h1><p role="alert">{error}</p><button className="button button-primary" onClick={() => { void load(); }}>Retry</button></section> : vehicle && <>
-      <section className="card vehicle-usage-heading"><VehicleFormPhoto vehicle={vehicle} showIdentity={false} /><span className="module-kicker"><QrCode size={17} /> Your scanned car</span><h1>{vehicle.plate}</h1><p>{vehicle.model}</p><span className="status-badge">{fleetStatusLabel(vehicle.status)}</span><p>Current odometer: <strong>{formatNumber(vehicle.mileage)} km</strong></p></section>
-      {message && <section className="card vehicle-usage-message" role="status"><CheckCircle2 size={24} /><div><strong>{message}</strong><p>{vehicle.activeTrip ? "Scan this same QR when you return to record the ending mileage and car condition." : "Your usage record has been saved. Thank you for returning the car."}</p></div></section>}
-      <section className="card vehicle-usage-form">
-        <header><h2>{vehicle.activeTrip ? "Return this car" : "Start your trip"}</h2><p>{vehicle.activeTrip ? "Complete the return check and enter the final odometer reading." : "Enter your details, destination and car checks before driving."}</p></header>
-        {vehicle.activeTrip ? recording ? <CompleteTripForm key={vehicle.activeTrip.id} vehicle={vehicle} trip={vehicle.activeTrip} showCarPhoto={false} onSubmit={async (input) => {
-          await api.completeVehicleTrip(vehicle.activeTrip!.id, input);
-          setMessage("Car returned successfully."); setRecording(false); await load(); window.scrollTo(0, 0);
-        }} /> : <div className="vehicle-usage-prompt"><p>This car has a trip in progress. Only submit a return check when the car has been returned.</p><button className="button button-primary" onClick={() => setRecording(true)}><ClipboardCheck size={17} /> Record return</button></div> : vehicle.status === "AVAILABLE" ? <StartTripForm key={vehicle.id} vehicles={[vehicle]} selectedVehicleId={vehicle.id} onVehicleChange={() => {}} showCarPhoto={false} onSubmit={async (input) => {
-          await api.startVehicleTrip(input);
-          setMessage("Trip started. Drive safely."); setRecording(false); await load(); window.scrollTo(0, 0);
-        }} /> : <div className="vehicle-usage-prompt" role="status"><CircleAlert size={24} /><p>This car is {fleetStatusLabel(vehicle.status).toLowerCase()} and cannot start a trip. Please contact the fleet administrator.</p></div>}
-      </section>
-    </>}
-    <footer className="vehicle-usage-footer">HR Digital · Scan this car’s QR before driving and again when returning.</footer>
-  </div></main>;
-}
-
-function VehicleQr({ vehicle }: { vehicle: Vehicle }) {
+function VehicleQr({ vehicle }: { vehicle?: Vehicle }) {
   const [image, setImage] = useState("");
   const [feedback, setFeedback] = useState("");
-  const url = `${window.location.origin}/?vehicle=${encodeURIComponent(vehicle.id)}`;
+  const url = `${window.location.origin}/?fleet=1`;
   useEffect(() => { setImage(""); void QRCode.toDataURL(url, { width: 420, margin: 2, color: { dark: "#101112", light: "#ffffff" }, errorCorrectionLevel: "H" }).then(setImage).catch(() => setFeedback("Unable to generate QR. Please reopen this label.")); }, [url]);
-  return <div className="vehicle-qr"><div className="qr-sheet"><img className="qr-company" src="/sgi-logo.png" alt="Sugihara Grand Industries" /><span>Company vehicle access</span><strong>{vehicle.plate}</strong><small>{vehicle.model}</small>{image ? <img className="qr-code" src={image} alt={`QR code for ${vehicle.plate}`} /> : <div className="qr-loading">Generating QR…</div>}<p>Scan before taking this vehicle.<br />Complete the return check after driving.</p><em>{vehicle.id}</em></div><div className="qr-actions"><button className="button button-primary" disabled={!image} onClick={() => window.print()}><QrCode size={16} /> Print label</button>{image && <a className="button button-secondary" href={image} download={`HR-Digital-${vehicle.plate.replaceAll(" ", "-")}-QR.png`}><Download size={16} /> Download QR</a>}<button className="button button-secondary" onClick={async () => { try { await navigator.clipboard.writeText(url); setFeedback("Link copied."); } catch { setFeedback("Copy the car link below."); } }}><QrCode size={16} /> Copy link</button></div>{feedback && <p role="status">{feedback}</p>}<a className="qr-car-link" href={url} target="_blank" rel="noreferrer">{url}</a><p className="qr-help"><QrCode size={16} /> Print and place this label inside the car. Guests scan to record usage and scan again to return it. Generate labels from the address guests use to access HR Digital.</p></div>;
+  return <div className="vehicle-qr"><div className="qr-sheet"><img className="qr-company" src="/sgi-logo.png" alt="Sugihara Grand Industries" /><span>Company vehicle access</span><strong>Company car access</strong><small>Take, resume or return a car</small>{image ? <img className="qr-code" src={image} alt="Company car access QR" /> : <div className="qr-loading">Generating QR…</div>}<p>Scan before collecting a key.<br />Complete the return check after driving.</p><em>All company cars</em></div><div className="qr-actions"><button className="button button-primary" disabled={!image} onClick={() => window.print()}><QrCode size={16} /> Print label</button>{image && <a className="button button-secondary" href={image} download={"HR-Digital-Fleet-QR.png"}><Download size={16} /> Download QR</a>}<button className="button button-secondary" onClick={async () => { try { await navigator.clipboard.writeText(url); setFeedback("Link copied."); } catch { setFeedback("Copy the car link below."); } }}><QrCode size={16} /> Copy link</button></div>{feedback && <p role="status">{feedback}</p>}<a className="qr-car-link" href={url} target="_blank" rel="noreferrer">{url}</a><p className="qr-help"><QrCode size={16} /> Print and place this label at the key collection point. Employees scan to choose a car and scan again to return it. Generate labels from the address guests use to access HR Digital.</p></div>;
 }
 
 function Avatar({ initials }: { initials: string }) { return <span className="avatar">{initials}</span>; }
