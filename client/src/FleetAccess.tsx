@@ -1,11 +1,20 @@
 import { FleetCarPicker } from "./FleetCarPicker";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useState, type FormEvent } from "react";
 import type { Vehicle, VehicleTrip } from "@hr-training/shared";
 import { api } from "./api";
 import { StartTripForm, CompleteTripForm } from "./App";
 export async function workflowRequest<T>(path: string, body?: unknown): Promise<T> { const response = await fetch(`/api${path}`, body === undefined ? undefined : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const result = await response.json(); if (!response.ok)
     throw Error(result.message || "Could not save. Please retry."); return result; }
 export function FleetAccess() {
+    useLayoutEffect(() => {
+        document.documentElement.classList.add("fleet-access-mode");
+        document.body.classList.add("fleet-access-mode");
+        window.scrollTo(0, 0);
+        return () => {
+            document.documentElement.classList.remove("fleet-access-mode");
+            document.body.classList.remove("fleet-access-mode");
+        };
+    }, []);
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [employeeId, setEmployeeId] = useState("");
     const [employee, setEmployee] = useState<{employeeId: string; name: string} | null>(null);
@@ -22,6 +31,9 @@ export function FleetAccess() {
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState(false);
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    }, [identified, trip?.status]);
     const name = employee?.name || "";
     const identity = { driverEmployeeId: employee?.employeeId || employeeId, driverName: name };
     useEffect(() => {
@@ -54,7 +66,7 @@ export function FleetAccess() {
         setMessage("No open car trip was found for you."); }); };
     const car = trip?.vehicle || vehicles.find(v => v.id === carId);
     const availableCars = vehicles.filter(v => v.status === "AVAILABLE" && v.mileage < v.serviceAt && (!v.serviceDueDate || new Date(v.serviceDueDate) > new Date()));
-    return <main className="vehicle-usage-page"><div className="vehicle-usage-container"><header className="vehicle-usage-brand"><img src="/sugihara-mark.png" alt="Sugihara Grand Industries"/><div className="fleet-product-brand"><strong>HR Digital</strong><span>Company car access</span></div><span className="fleet-header-company">Sugihara Grand Industries</span></header><section className="card vehicle-usage-heading"><h1>Company cars</h1><p>Collect a key, confirm departure, then return the car using this same QR.</p></section>{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="card" role="status">{message}</p>}
+    return <main className="vehicle-usage-page"><div className="fleet-header-shell"><header className="vehicle-usage-brand"><img src="/sugihara-mark.png" alt="Sugihara Grand Industries"/><div className="fleet-product-brand"><strong>HR Digital</strong><span>Company car access</span></div><span className="fleet-header-company">Sugihara Grand Industries</span></header></div><div className="vehicle-usage-container"><section className="card vehicle-usage-heading"><h1>Company cars</h1><p>Collect a key, confirm departure, then return the car using this same QR.</p></section>{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="card" role="status">{message}</p>}
  {!identified ? <form className="card fleet-form" onSubmit={lookup}><div className="toolbar-actions"><button type="button" className="button" aria-pressed={mode === "take"} onClick={() => setMode("take")}>Take a car</button><button type="button" className="button" aria-pressed={mode === "return"} onClick={() => setMode("return")}>Return / resume a car</button></div><label className="field">Employee ID<input required maxLength={100} autoComplete="off" spellCheck={false} value={employeeId} onChange={e => { setEmployeeId(e.target.value); setEmployee(null); setIdentityError(""); setIdentityLoading(Boolean(e.target.value.trim())); }}/></label><label className="field">Employee name<input readOnly value={name} placeholder="Your name appears automatically" /></label><p role="status" aria-live="polite">{identityLoading ? "Finding your employee details…" : identityError || (employee ? "Employee found. Continue if this is your name." : "Enter your employee ID to find your name.")}</p>{identityError && <button type="button" className="button button-secondary" onClick={() => { setIdentityError(""); setIdentityLoading(true); setIdentityAttempt(attempt => attempt + 1); }}>Retry lookup</button>}<button className="button button-primary" disabled={busy || identityLoading || !employee}>Continue</button></form> : <>
  <section className="card fleet-form fleet-identity-card"><div><small>EMPLOYEE</small><p><strong>{name}</strong></p><span>{employee?.employeeId || employeeId}</span></div><button className="button button-secondary" onClick={() => { setIdentified(false); setTrip(null); setMessage(""); setEmployeeId(""); setEmployee(null); setIdentityError(""); setIdentityLoading(false); }}>Change employee</button></section>
  {trip && car ? <section className="card"><div className="fleet-form"><h2>{car.plate} · {car.model}</h2><p><strong>{trip.status === "AWAITING_DEPARTURE" ? "Awaiting departure" : "In use"}</strong> · {trip.destination}</p>{trip.expectedReturnAt && <p>Expected return: {new Date(trip.expectedReturnAt).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}</p>}</div>{trip.status === "AWAITING_DEPARTURE" ? <><div className="fleet-form"><p>Show this confirmation to the key custodian. Collect the key, turn on the dashboard, then photograph the total ODO reading before driving.</p><p>Reservation reference: <strong>{trip.id.slice(-8).toUpperCase()}</strong></p><button className="button button-secondary" disabled={busy} onClick={() => void act(async () => { const result = await workflowRequest<{
