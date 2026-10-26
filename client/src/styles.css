@@ -818,6 +818,43 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 .vehicle-usage-container > .card { animation: fleetCardReveal 180ms ease-out both; }
 .vehicle-usage-page button { transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
 @keyframes fleetCardReveal { from { opacity: 0; } to { opacity: 1; } }
+.current-usage-section { display: grid; gap: 14px; min-width: 0; }
+.current-usage-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.current-usage-heading h2 { margin: 5px 0 0; font-size: 23px; }
+.current-usage-heading > span { font-size: 13px; color: var(--muted); }
+.current-usage-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.current-usage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px,100%), 1fr)); gap: 16px; align-items: start; }
+.current-usage-heading .module-kicker { color: var(--muted); font-size: 11px; }
+.current-usage-card { display: grid; gap: 12px; padding: 20px; min-width: 0; }
+.current-usage-card p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.current-usage-car { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 12px; align-items: center; }
+.current-usage-car > img, .current-usage-car > span:first-child { display: grid; place-items: center; width: 90px; height: 64px; object-fit: contain; border-radius: 8px; background: #f7f6f5; }
+.current-usage-car > div { display: grid; gap: 4px; min-width: 0; }
+.current-usage-car strong { font-size: 21px; overflow-wrap: anywhere; }
+.current-usage-car small { font-size: 13px; color: var(--muted); }
+.current-usage-car > .status-badge { grid-column: 1 / -1; justify-self: start; }
+.current-usage-driver { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+.current-usage-driver strong { font-size: 15px; overflow-wrap: anywhere; }
+.current-usage-driver > span { font-size: 13px; color: var(--muted); }
+.current-usage-destination { display: flex; align-items: center; gap: 6px; }
+.current-usage-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; padding: 12px; border-radius: 9px; background: var(--soft); }
+.current-usage-card dt { margin-bottom: 4px; font-size: 11px; color: var(--muted); }
+.current-usage-card dd { margin: 0; font-size: 13px; font-weight: 650; }
+.current-usage-card .usage-overdue { color: #9f1d33; }
+.current-usage-card > footer, .history-usage-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.current-usage-card .button, .history-usage-actions .button { min-height: 38px; font-size: 12px; }
+.history-usage-actions { margin: 12px 0; }
+.usage-remove-dialog { width: min(540px, calc(100% - 28px)); max-height: calc(100dvh - 40px); overflow-y: auto; margin: auto; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: white; color: var(--ink); box-shadow: var(--shadow); }
+.usage-remove-dialog::backdrop { background: #0008; }
+.usage-remove-dialog > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.usage-remove-dialog h2 { margin: 0; font-size: 22px; }
+.usage-remove-dialog > header > button { display: grid; place-items: center; border: 0; background: transparent; padding: 6px; color: inherit; }
+.usage-remove-dialog form { display: grid; gap: 14px; margin-top: 16px; }
+.usage-remove-dialog p { margin: 0; font-size: 14px; line-height: 1.5; }
+.usage-remove-dialog textarea { min-height: 90px; font-size: 15px; }
+.usage-remove-confirm { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; }
+.usage-remove-confirm input { flex-shrink: 0; width: 20px; height: 20px; accent-color: #17181a; }
+.usage-remove-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
 @media (prefers-reduced-motion: reduce) {
   html.fleet-access-mode { scroll-behavior: auto; }
   .vehicle-usage-container > .card { animation: none; }

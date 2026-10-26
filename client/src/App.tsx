@@ -1,3 +1,4 @@
+import { CurrentUsageCards, RemoveVehicleUsage, isOpenVehicleUsage } from "./VehicleUsageActions";
 import { FleetAccess } from "./FleetAccess";
 import { MaintenancePanel } from "./MaintenancePanel";
 import { TrainingSummaries } from "./TrainingSummaries";
@@ -720,6 +721,7 @@ function FleetTracker({
             </button>
           </div>
         </div>
+        <CurrentUsageCards trips={trips} vehicles={fleetVehicles} disabled={loading || !!fleetError} onRemoved={async () => { await refreshFleet(); showNotice("Usage removed. The fleet status has been updated."); }} onHistory={onOpenHistory} onReturn={trip => { setSelectedVehicleId(trip.vehicleId); setDialog("complete"); }} />
         <details className="card shared-fleet-qr"><summary>Print the shared fleet QR</summary><VehicleQr /></details>
         <section className="card trip-launcher" aria-label="Choose a car and start a trip">
           <div><span className="module-kicker"><Route size={16} /> Ready to drive?</span><h2>Choose your car & start a trip</h2><p>Record the driver, destination and starting mileage before leaving.</p></div>
@@ -1105,9 +1107,17 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
     return () => { mounted = false; };
   }, []);
 
+  const refreshHistory = async () => {
+    const [vehicleRows, tripRows] = await Promise.all([api.getVehicles(), api.getVehicleTrips()]);
+    const allVehicles = new Map(vehicleRows.map(vehicle => [vehicle.id, vehicle]));
+    tripRows.forEach(trip => { if (trip.vehicle && !allVehicles.has(trip.vehicleId)) allVehicles.set(trip.vehicleId, trip.vehicle); });
+    setVehicles([...allVehicles.values()].sort((a,b) => a.plate.localeCompare(b.plate)));
+    setTrips(tripRows); setPreview(false);
+  };
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
   const history = trips.filter((trip) => trip.vehicleId === selectedVehicleId)
     .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+  const pastHistory = history.filter(trip => !isOpenVehicleUsage(trip));
   const completed = history.filter((trip) => trip.status === "COMPLETED");
   const totalDistance = completed.reduce((sum, trip) => sum + Math.max(0, (trip.odometerEnd ?? trip.odometerStart) - trip.odometerStart), 0);
   const localDate = (value: string) => new Date(value).toLocaleString("en-MY", {
@@ -1124,16 +1134,17 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
         {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} · {vehicle.model}{vehicle.archivedAt ? " (archived)" : ""}</option>)}
       </select></label>
     </div>
+    {!loading && <CurrentUsageCards trips={history} vehicles={selectedVehicle ? [selectedVehicle] : []} disabled={preview} onRemoved={refreshHistory} />}
     <div className="history-summary">
       <div><span>Total journeys</span><strong>{history.length}</strong><small>Recorded check-outs</small></div>
       <div><span>Completed</span><strong>{completed.length}</strong><small>Returned vehicles</small></div>
       <div><span>Distance logged</span><strong>{formatNumber(totalDistance)} <em>km</em></strong><small>Completed journeys</small></div>
       <div><span>Latest use</span><strong className="history-last-used">{history[0] ? localDate(history[0].startedAt).split(",")[0] : "—"}</strong><small>{history[0] ? history[0].driverName : "No journeys yet"}</small></div>
     </div>
-    <section className="card history-log"><div className="history-log-heading"><div><span className="history-kicker">Audit trail</span><h3>{selectedVehicle?.plate ?? "Vehicle"} usage log</h3><p>{history.length} journey{history.length === 1 ? "" : "s"} · newest first</p></div><ShieldCheck size={24} /></div>
+    <section className="card history-log"><div className="history-log-heading"><div><span className="history-kicker">Audit trail</span><h3>{selectedVehicle?.plate ?? "Vehicle"} usage log</h3><p>{pastHistory.length} past journey{pastHistory.length === 1 ? "" : "s"} · newest first</p></div><ShieldCheck size={24} /></div>
       {loading && <div className="history-empty">Loading usage history…</div>}
-      {!loading && history.length === 0 && <div className="history-empty"><Clock3 size={28} /><strong>No usage recorded for this car</strong><p>Trips will appear here after a driver starts using it.</p></div>}
-      {history.map((trip) => <article className="history-entry" key={trip.id}>
+      {!loading && pastHistory.length === 0 && <div className="history-empty"><Clock3 size={28} /><strong>No usage recorded for this car</strong><p>Trips will appear here after a driver starts using it.</p></div>}
+      {pastHistory.map((trip) => <article className="history-entry" key={trip.id}>
         <div className="history-entry-top"><span className="history-entry-icon"><Route size={18} /></span><div><strong>{trip.destination}</strong><small>{trip.purpose} · {trip.id.startsWith("TRIP-") ? trip.id : trip.id.slice(-8).toUpperCase()}</small></div><span className={`status-badge ${trip.status.toLowerCase().replaceAll("_", "-")}`}>{fleetStatusLabel(trip.status)}</span></div>
         <div className="history-entry-grid">
           <div><span>Driver</span><strong>{trip.driverName}</strong><small>{trip.driverEmployeeId} · {trip.passengers} passenger{trip.passengers === 1 ? "" : "s"}</small></div>
@@ -1142,6 +1153,7 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
           <div><span>Odometer</span><strong>{formatNumber(trip.odometerStart)} → {trip.odometerEnd == null ? "Pending" : formatNumber(trip.odometerEnd)} km</strong><small>{trip.odometerEnd == null ? "Distance pending" : `${formatNumber(Math.max(0, trip.odometerEnd - trip.odometerStart))} km travelled`}</small></div>
         </div>
         <div className="history-entry-footer"><div className="history-evidence">{trip.odometerPhotoBefore && <a href={trip.odometerPhotoBefore} target="_blank" rel="noreferrer"><Gauge size={14} /> Before photo</a>}{trip.odometerPhotoAfter && <a href={trip.odometerPhotoAfter} target="_blank" rel="noreferrer"><Gauge size={14} /> After photo</a>}{!trip.odometerPhotoBefore && !trip.odometerPhotoAfter && <span>No odometer photos saved</span>}</div>{(trip.notesBefore || trip.notesAfter) && <div className="history-notes">{trip.notesBefore && <p><strong>Before:</strong> {trip.notesBefore}</p>}{trip.notesAfter && <p><strong>After:</strong> {trip.notesAfter}</p>}</div>}</div>
+        <div className="history-usage-actions"><RemoveVehicleUsage trip={trip} disabled={preview} onRemoved={refreshHistory} /></div>
         <details className="history-inspection"><summary>Inspection checklist</summary><div><div><strong>Before departure</strong>{Object.entries(trip.checksBefore).map(([check, passed]) => <span key={check}>{check.replace(/([A-Z])/g, " $1")} · {passed ? "Yes" : "No"}</span>)}</div><div><strong>After return</strong>{trip.checksAfter ? Object.entries(trip.checksAfter).map(([check, passed]) => <span key={check}>{check.replace(/([A-Z])/g, " $1")} · {passed ? "Yes" : "No"}</span>) : <span>Pending return</span>}</div></div></details>
       </article>)}
     </section>

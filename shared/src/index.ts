@@ -50,6 +50,8 @@ export type VehicleTrip = {
   departedAt?: string | null;
   expectedReturnAt?: string | null;
   mileageMismatch?: boolean;
+  archivedAt?: string | null;
+  removalReason?: string | null;
   odometerStart: number;
   odometerEnd?: number | null;
   odometerPhotoBefore?: string | null;

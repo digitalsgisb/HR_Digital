@@ -172,6 +172,11 @@ export const api = {
   getVehicleTrips() {
     return request<VehicleTrip[]>("/api/vehicle-trips");
   },
+  removeVehicleTrip(id: string, reason: string, confirmCarReturned: boolean) {
+    return request<{ removed: boolean; releasedVehicle: boolean }>(`/api/vehicle-trips/${encodeURIComponent(id)}`, {
+      method: "DELETE", body: JSON.stringify({ reason, confirmCarReturned })
+    });
+  },
 
   startVehicleTrip(input: {
     vehicleId: string; driverEmployeeId: string; driverName: string; destination: string;

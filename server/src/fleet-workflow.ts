@@ -13,6 +13,39 @@ async function verifyDriver(input: z.infer<typeof identity>) { const employee = 
     throw new AttendanceError(400, "Employee ID and full name must match an active employee."); return employee; }
 export function createFleetWorkflowRouter() {
     const router = Router();
+    // HR route: protected by the same workspace access policy as fleet administration.
+    router.delete("/vehicle-trips/:id", async (req, res, next) => {
+        try {
+            const input = z.object({ reason: z.string().trim().min(2).max(1000), confirmCarReturned: z.boolean().default(false) }).parse(req.body);
+            const result = await prisma.$transaction(async tx => {
+                const reference = await tx.vehicleTrip.findUnique({ where: { id: String(req.params.id) }, select: { vehicleId: true } });
+                if (!reference) throw new AttendanceError(404, "Usage record not found.");
+                // Match checkout/return lock order, and serialize removal with new reservations.
+                await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${reference.vehicleId} FOR UPDATE`;
+                await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${String(req.params.id)} FOR UPDATE`;
+                const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) }, include: { vehicle: true } });
+                if (trip.archivedAt) return { removed: true, releasedVehicle: false };
+                const open = ["AWAITING_DEPARTURE", "IN_PROGRESS"].includes(trip.status);
+                if (open && !input.confirmCarReturned) throw new AttendanceError(400, "Confirm the car is no longer in use and its key has been returned before removing this usage.");
+                await tx.vehicleTrip.update({ where: { id: trip.id }, data: {
+                    archivedAt: new Date(), removalReason: input.reason, removedFromStatus: trip.status,
+                    ...(open ? { status: "CANCELLED", endedAt: new Date() } : {})
+                } });
+                let releasedVehicle = false;
+                if (open && trip.vehicle.status === "IN_USE" && !await tx.vehicleTrip.findFirst({ where: {
+                    vehicleId: trip.vehicleId, archivedAt: null, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] }, NOT: { id: trip.id }
+                } })) {
+                    const status = trip.vehicle.archivedAt || trip.conditionBefore === "UNSAFE" ? "OUT_OF_SERVICE"
+                        : trip.conditionBefore === "ATTENTION_REQUIRED" || trip.vehicle.mileage >= trip.vehicle.serviceAt || (trip.vehicle.serviceDueDate && trip.vehicle.serviceDueDate <= new Date()) ? "SERVICE_DUE" : "AVAILABLE";
+                    await tx.vehicle.update({ where: { id: trip.vehicleId }, data: { status } });
+                    releasedVehicle = true;
+                }
+                // Removing a record never rewinds the odometer or deletes its evidence.
+                return { removed: true, releasedVehicle };
+            });
+            res.json(result);
+        } catch (error) { next(error); }
+    });
     router.post("/vehicle-drivers/identify", async (req, res, next) => {
         try {
             const input = z.object({ employeeId: z.string().trim().min(1).max(100) }).parse(req.body);
@@ -31,10 +64,10 @@ export function createFleetWorkflowRouter() {
         const employee = await verifyDriver(input);
         if (input.conditionBefore !== "GOOD")
             throw new AttendanceError(409, "Report this car's condition to HR before departure. Do not drive until cleared.");
-        const result = await prisma.$transaction(async (tx) => { const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) }, include: { vehicle: true } }); if (trip.driverEmployeeId !== employee.employeeId)
+        const result = await prisma.$transaction(async (tx) => { const reference = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) }, select: { vehicleId: true } }); await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${reference.vehicleId} FOR UPDATE`; await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${String(req.params.id)} FOR UPDATE`; const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) }, include: { vehicle: true } }); if (trip.driverEmployeeId !== employee.employeeId)
             throw new AttendanceError(403, "This reservation belongs to another employee."); if (trip.vehicle.archivedAt || trip.vehicle.status !== "IN_USE")
             throw new AttendanceError(409, "This car is no longer cleared for departure."); if (input.odometerStart < trip.vehicle.mileage)
-            throw new AttendanceError(400, `Starting mileage cannot be below ${trip.vehicle.mileage} km.`); const saved = await tx.vehicleTrip.updateMany({ where: { id: trip.id, status: "AWAITING_DEPARTURE" }, data: { ...input, status: "IN_PROGRESS", departedAt: new Date(), mileageMismatch: input.odometerStart !== trip.vehicle.mileage } }); if (!saved.count)
+            throw new AttendanceError(400, `Starting mileage cannot be below ${trip.vehicle.mileage} km.`); const saved = await tx.vehicleTrip.updateMany({ where: { id: trip.id, archivedAt: null, status: "AWAITING_DEPARTURE" }, data: { ...input, status: "IN_PROGRESS", departedAt: new Date(), mileageMismatch: input.odometerStart !== trip.vehicle.mileage } }); if (!saved.count)
             throw new AttendanceError(409, "This trip is no longer awaiting departure. Reload the page."); await tx.vehicle.update({ where: { id: trip.vehicleId }, data: { mileage: input.odometerStart } }); return tx.vehicleTrip.findUniqueOrThrow({ where: { id: trip.id }, include: { vehicle: true } }); });
         res.json(result);
     }
@@ -43,7 +76,7 @@ export function createFleetWorkflowRouter() {
     } });
     router.post("/vehicle-trips/lookup", async (req, res, next) => { try {
         const employee = await verifyDriver(identity.parse(req.body));
-        res.json(await prisma.vehicleTrip.findMany({ where: { driverEmployeeId: employee.employeeId, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] } }, include: { vehicle: true }, orderBy: { startedAt: "desc" } }));
+        res.json(await prisma.vehicleTrip.findMany({ where: { driverEmployeeId: employee.employeeId, archivedAt: null, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] } }, include: { vehicle: true }, orderBy: { startedAt: "desc" } }));
     }
     catch (e) {
         next(e);
@@ -57,7 +90,7 @@ export function createFleetWorkflowRouter() {
             const trip = await prisma.$transaction(async (tx) => {
                 // Lock the employee as well as the car so concurrent scans cannot create two open trips.
                 await tx.$queryRaw `SELECT id FROM "Employee" WHERE id = ${employee.id} FOR UPDATE`;
-                if (await tx.vehicleTrip.findFirst({ where: { driverEmployeeId: employee.employeeId, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] } } }))
+                if (await tx.vehicleTrip.findFirst({ where: { driverEmployeeId: employee.employeeId, archivedAt: null, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] } } }))
                     throw new AttendanceError(409, "You already have an open car trip. Resume or return it first.");
                 const claimed = await tx.vehicle.updateMany({ where: { id: input.vehicleId, archivedAt: null, status: "AVAILABLE", OR: [{ serviceDueDate: null }, { serviceDueDate: { gt: new Date() } }] }, data: { status: "IN_USE" } });
                 if (!claimed.count)
@@ -75,8 +108,8 @@ export function createFleetWorkflowRouter() {
     });
     router.post("/vehicle-trips/:id/cancel-reservation", async (req, res, next) => { try {
         const employee = await verifyDriver(identity.parse(req.body));
-        await prisma.$transaction(async (tx) => { const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) } }); if (trip.driverEmployeeId !== employee.employeeId)
-            throw new AttendanceError(403, "This reservation belongs to another employee."); const saved = await tx.vehicleTrip.updateMany({ where: { id: trip.id, status: "AWAITING_DEPARTURE" }, data: { status: "CANCELLED", endedAt: new Date() } }); if (!saved.count)
+        await prisma.$transaction(async (tx) => { const reference = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) }, select: { vehicleId: true } }); await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${reference.vehicleId} FOR UPDATE`; await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${String(req.params.id)} FOR UPDATE`; const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) } }); if (trip.driverEmployeeId !== employee.employeeId)
+            throw new AttendanceError(403, "This reservation belongs to another employee."); const saved = await tx.vehicleTrip.updateMany({ where: { id: trip.id, archivedAt: null, status: "AWAITING_DEPARTURE" }, data: { status: "CANCELLED", endedAt: new Date() } }); if (!saved.count)
             throw new AttendanceError(409, "Only an awaiting-departure reservation can be cancelled."); await tx.vehicle.update({ where: { id: trip.vehicleId }, data: { status: "AVAILABLE" } }); });
         res.json({ message: "Reservation cancelled. Return the key if already collected." });
     }
@@ -92,7 +125,7 @@ export function createFleetWorkflowRouter() {
     router.post("/vehicles/:id/maintenance", async (req, res, next) => { try {
         const input = maintenanceSchema.parse(req.body);
         const result = await prisma.$transaction(async (tx) => { const id = String(req.params.id); await tx.$queryRaw `SELECT id FROM "Vehicle" WHERE id = ${id} FOR UPDATE`; const car = await tx.vehicle.findUniqueOrThrow({ where: { id } }); if (car.archivedAt)
-            throw new AttendanceError(409, "This car has been archived."); if (await tx.vehicleTrip.findFirst({ where: { vehicleId: id, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] } } }))
+            throw new AttendanceError(409, "This car has been archived."); if (await tx.vehicleTrip.findFirst({ where: { vehicleId: id, archivedAt: null, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] } } }))
             throw new AttendanceError(409, "Close the car's open trip before recording maintenance."); if (new Date(input.servicedAt) > new Date())
             throw new AttendanceError(400, "Maintenance date cannot be in the future."); const { releaseVehicle, ...record } = input; const saved = await tx.vehicleMaintenance.create({ data: { ...record, attachment: record.attachment ?? undefined, vehicleId: id, servicedAt: new Date(input.servicedAt), nextServiceDate: input.nextServiceDate ? new Date(input.nextServiceDate) : null } }); const mileage = Math.max(car.mileage, input.odometer); const serviceAt = input.nextServiceAt ?? car.serviceAt; const due = input.nextServiceDate ? new Date(input.nextServiceDate) : releaseVehicle ? null : car.serviceDueDate; await tx.vehicle.update({ where: { id }, data: { mileage, serviceAt, serviceDueDate: due, ...(releaseVehicle ? { status: mileage >= serviceAt || (due && due <= new Date()) ? "SERVICE_DUE" : "AVAILABLE" } : {}) } }); return saved; });
         res.status(201).json(result);

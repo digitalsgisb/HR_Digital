@@ -5,6 +5,45 @@ import { prisma } from "./prisma.js";
 import { summarySchema } from "./training-portal.js";
 import { maintenanceSchema } from "./fleet-workflow.js";
 import { nextSummaryReminder } from "./training-email.js";
+test("HR can remove current and past usage without losing evidence, mileage or newer reservations", async t => {
+    const restore: Array<() => void> = [];
+    const replace = (target: any, key: string, handler: any) => { const previous = target[key]; target[key] = handler; restore.push(() => target[key] = previous); };
+    t.after(() => restore.reverse().forEach(fn => fn()));
+    const car: any = { id: "car", plate: "TEST 123", model: "Test car", status: "IN_USE", mileage: 500, serviceAt: 10000, serviceDueDate: null, archivedAt: null };
+    let rows: any[] = [];
+    let updates = 0;
+    const make = (id: string, status: string) => ({ id, vehicleId: car.id, status, archivedAt: null, driverEmployeeId: "EMP1", conditionBefore: "GOOD", odometerStart: 400, odometerEnd: status === "COMPLETED" ? 500 : null, odometerPhotoBefore: "photo-before", odometerPhotoAfter: "photo-after" });
+    const filter = (where: any) => rows.filter(row => (!where.id || row.id === where.id) && (!where.NOT?.id || row.id !== where.NOT.id) && (where.archivedAt !== null || !row.archivedAt) && (!where.status?.in || where.status.in.includes(row.status)) && (!where.driverEmployeeId || row.driverEmployeeId === where.driverEmployeeId));
+    const tx = { $queryRaw: async () => [], vehicleTrip: {
+        findUnique: async ({ where }: any) => rows.find(row => row.id === where.id) || null,
+        findUniqueOrThrow: async ({ where }: any) => ({ ...rows.find(row => row.id === where.id), vehicle: { ...car } }),
+        update: async ({ where, data }: any) => Object.assign(rows.find(row => row.id === where.id), data),
+        findFirst: async ({ where }: any) => filter(where)[0] || null
+    }, vehicle: { update: async ({ data }: any) => { updates++; Object.assign(car, data); return car; } } };
+    replace(prisma, "$transaction", async (run: any) => run(tx));
+    replace(prisma.vehicle, "count", async () => 1);
+    replace(prisma.vehicleTrip, "findMany", async ({ where }: any) => { assert.equal(where.archivedAt, null); return filter(where); });
+    const server = createApp().listen(0, "127.0.0.1"); await new Promise<void>(resolve => server.once("listening", resolve));
+    t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
+    const address = server.address(); assert.ok(address && typeof address !== "string");
+    const url = `http://127.0.0.1:${address.port}/api/vehicle-trips`;
+    const remove = (id: string, confirmCarReturned = true, reason = "Duplicate usage") => fetch(`${url}/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason, confirmCarReturned }) });
+    rows = [make("pending", "AWAITING_DEPARTURE"), make("past", "COMPLETED")];
+    assert.equal((await remove("pending", false)).status, 400); assert.equal(rows[0].archivedAt, null); assert.equal(updates, 0);
+    assert.equal((await remove("pending", true, "")).status, 400);
+    assert.equal((await remove("missing")).status, 404);
+    assert.equal((await remove("pending")).status, 200); assert.equal(car.status, "AVAILABLE"); assert.equal(car.mileage, 500);
+    assert.equal(rows[0].status, "CANCELLED"); assert.ok(rows[0].archivedAt); assert.equal(rows[0].removedFromStatus, "AWAITING_DEPARTURE"); assert.equal(rows[0].removalReason, "Duplicate usage"); assert.equal(rows[0].odometerPhotoBefore, "photo-before");
+    const visible = await (await fetch(url)).json() as any[]; assert.deepEqual(visible.map(row => row.id), ["past"]);
+    car.status = "IN_USE"; rows.push(make("new", "IN_PROGRESS")); const previousUpdates = updates;
+    assert.equal((await remove("pending")).status, 200); assert.equal(updates, previousUpdates); assert.equal(car.status, "IN_USE");
+    assert.equal((await remove("past", false)).status, 200); assert.equal(car.status, "IN_USE"); assert.equal(car.mileage, 500); assert.equal(rows[1].status, "COMPLETED"); assert.equal(rows[1].odometerPhotoAfter, "photo-after");
+    car.serviceAt = 500; assert.equal((await remove("new")).status, 200); assert.equal(car.status, "SERVICE_DUE"); assert.equal(rows[2].removedFromStatus, "IN_PROGRESS");
+    car.status = "IN_USE"; car.serviceAt = 10000; rows = [make("unsafe", "IN_PROGRESS")]; rows[0].conditionBefore = "UNSAFE";
+    assert.equal((await remove("unsafe")).status, 200); assert.equal(car.status, "OUT_OF_SERVICE");
+    car.status = "IN_USE"; rows = [make("first", "IN_PROGRESS"), make("second", "AWAITING_DEPARTURE")];
+    assert.equal((await remove("first")).status, 200); assert.equal(car.status, "IN_USE"); assert.equal(rows[1].archivedAt, null);
+});
 test("employee ID lookup returns only the active employee's name and canonical ID", async t => {
     const original = prisma.employee.findFirst;
     t.after(() => { prisma.employee.findFirst = original; });

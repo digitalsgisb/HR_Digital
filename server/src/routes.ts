@@ -790,7 +790,7 @@ export const createRouter = () => {
         where: { archivedAt: null },
         include: {
           trips: {
-            where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } },
+            where: { archivedAt: null, status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } },
             orderBy: { startedAt: "desc" },
             take: 1
           }
@@ -806,7 +806,7 @@ export const createRouter = () => {
     asyncHandler(async (req, res) => {
       const vehicle = await prisma.vehicle.findFirst({
         where: { id: String(req.params.id), archivedAt: null },
-        include: { trips: { where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, orderBy: { startedAt: "desc" }, take: 1 } }
+        include: { trips: { where: { archivedAt: null, status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, orderBy: { startedAt: "desc" }, take: 1 } }
       });
       if (!vehicle) throw new HttpError(404, "This vehicle QR is no longer available. Please contact the fleet administrator.");
       const { trips, ...details } = vehicle;
@@ -886,7 +886,7 @@ export const createRouter = () => {
       const id = routeParam(req.params.id);
       const current = await prisma.vehicle.findUnique({
         where: { id },
-        include: { trips: { where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, orderBy: { startedAt: "desc" }, take: 1 } }
+        include: { trips: { where: { archivedAt: null, status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, orderBy: { startedAt: "desc" }, take: 1 } }
       });
       if (!current) throw new HttpError(404, "Vehicle not found.");
       const duplicate = await prisma.vehicle.findFirst({ where: { plate: input.plate, NOT: { id } } });
@@ -909,7 +909,7 @@ export const createRouter = () => {
       const id = routeParam(req.params.id);
       const vehicle = await prisma.vehicle.findUnique({
         where: { id },
-        include: { trips: { where: { status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, take: 1 } }
+        include: { trips: { where: { archivedAt: null, status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } }, take: 1 } }
       });
       if (!vehicle) throw new HttpError(404, "Vehicle not found.");
       if (vehicle.trips.length) throw new HttpError(409, "Return the active trip before removing this vehicle.");
@@ -929,6 +929,7 @@ export const createRouter = () => {
       const status = String(req.query.status ?? "").trim();
       const trips = await prisma.vehicleTrip.findMany({
         where: {
+          archivedAt: null,
           ...(vehicleId ? { vehicleId } : {}),
           ...(status === "IN_PROGRESS" || status === "COMPLETED" ? { status } : {})
         },
@@ -949,7 +950,7 @@ export const createRouter = () => {
         await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${input.vehicleId} FOR UPDATE`;
         const vehicle = await tx.vehicle.findUniqueOrThrow({ where: { id: input.vehicleId } });
         if (vehicle.archivedAt) throw new HttpError(409, "This vehicle is no longer in the active fleet.");
-        const activeTrip = await tx.vehicleTrip.findFirst({ where: { vehicleId: input.vehicleId, status: "IN_PROGRESS" } });
+        const activeTrip = await tx.vehicleTrip.findFirst({ where: { vehicleId: input.vehicleId, archivedAt: null, status: { in: ["IN_PROGRESS", "AWAITING_DEPARTURE"] } } });
         if (activeTrip || vehicle.status === "IN_USE") throw new HttpError(409, "This vehicle already has an active trip.");
         if (vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE" || vehicle.mileage >= vehicle.serviceAt || (vehicle.serviceDueDate && vehicle.serviceDueDate <= new Date())) throw new HttpError(409, "This vehicle is not cleared for use.");
         if(input.conditionBefore !== "GOOD") throw new HttpError(409, "Report this vehicle's condition to HR before driving.");
@@ -972,9 +973,11 @@ export const createRouter = () => {
       const input = completeVehicleTripSchema.parse(req.body);
       const id = routeParam(req.params.id);
       const completed = await prisma.$transaction(async (tx) => {
+        const reference = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, select: { vehicleId: true } });
+        await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${reference.vehicleId} FOR UPDATE`;
         await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${id} FOR UPDATE`;
         const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, include: { vehicle: true } });
-        if (trip.status !== "IN_PROGRESS") throw new HttpError(409, "This trip has already been completed.");
+        if (trip.archivedAt || trip.status !== "IN_PROGRESS") throw new HttpError(409, "This trip has already been closed or removed.");
         if (input.odometerEnd < trip.odometerStart) throw new HttpError(400, `Ending odometer cannot be below ${trip.odometerStart} km.`);
 
         const nextStatus = input.conditionAfter === "UNSAFE"

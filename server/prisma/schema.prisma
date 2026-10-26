@@ -232,6 +232,9 @@ model VehicleTrip {
   departedAt       DateTime?
   expectedReturnAt DateTime?
   mileageMismatch Boolean @default(false)
+  archivedAt       DateTime?
+  removalReason    String?
+  removedFromStatus String?
   odometerStart    Int
   odometerEnd      Int?
   odometerPhotoBefore String?
@@ -249,6 +252,7 @@ model VehicleTrip {
   updatedAt        DateTime             @updatedAt
 
   @@index([vehicleId, status])
+  @@index([archivedAt])
   @@index([driverEmployeeId])
   @@index([startedAt])
 }
