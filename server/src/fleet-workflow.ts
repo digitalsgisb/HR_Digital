@@ -13,6 +13,19 @@ async function verifyDriver(input: z.infer<typeof identity>) { const employee = 
     throw new AttendanceError(400, "Employee ID and full name must match an active employee."); return employee; }
 export function createFleetWorkflowRouter() {
     const router = Router();
+    router.post("/vehicle-drivers/identify", async (req, res, next) => {
+        try {
+            const input = z.object({ employeeId: z.string().trim().min(1).max(100) }).parse(req.body);
+            const employee = await prisma.employee.findFirst({
+                where: { employeeId: { equals: input.employeeId, mode: "insensitive" }, status: "ACTIVE" },
+                select: { employeeId: true, name: true }
+            });
+            if (!employee?.name) throw new AttendanceError(404, "Employee ID not found. Check your ID or contact HR.");
+            res.set("Cache-Control", "no-store").json({ employeeId: employee.employeeId, name: employee.name });
+        } catch (error) {
+            next(error);
+        }
+    });
     router.post("/vehicle-trips/:id/depart", async (req, res, next) => { try {
         const input = departureSchema.parse(req.body);
         const employee = await verifyDriver(input);

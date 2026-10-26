@@ -62,6 +62,7 @@ export type VehicleInput = {
 export type TrainingAttendanceData = { id:string;title:string;dateStart:string;dateEnd:string|null;enabled:boolean;url:string|null;opensAt?:string;closesAt?:string;participants:Array<{id:string;employeeId:string;name:string;department:string;checkedInAt:string|null;source:string|null;status:string;hours:number}> };
 
 export const api = {
+  identifyFleetDriver: (employeeId: string, signal?: AbortSignal) => request<{ employeeId: string; name: string }>("/api/vehicle-drivers/identify", { method: "POST", body: JSON.stringify({ employeeId }), signal }),
   getTrainingAttendance: (id:string) => request<TrainingAttendanceData>(`/api/training-sessions/${encodeURIComponent(id)}/attendance`),
   enableTrainingAttendance: (id:string,rotate=false) => request<TrainingAttendanceData>(`/api/training-sessions/${encodeURIComponent(id)}/attendance/qr`,{method:"POST",body:JSON.stringify({rotate})}),
   closeTrainingAttendance: (id:string) => request<{closed:boolean}>(`/api/training-sessions/${encodeURIComponent(id)}/attendance/qr`,{method:"DELETE"}),

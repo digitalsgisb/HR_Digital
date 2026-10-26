@@ -5,6 +5,33 @@ import { prisma } from "./prisma.js";
 import { summarySchema } from "./training-portal.js";
 import { maintenanceSchema } from "./fleet-workflow.js";
 import { nextSummaryReminder } from "./training-email.js";
+test("employee ID lookup returns only the active employee's name and canonical ID", async t => {
+    const original = prisma.employee.findFirst;
+    t.after(() => { prisma.employee.findFirst = original; });
+    prisma.employee.findFirst = (async ({ where, select }: any) => {
+        assert.equal(where.status, "ACTIVE");
+        assert.equal(where.employeeId.mode, "insensitive");
+        assert.deepEqual(select, { employeeId: true, name: true });
+        if (where.employeeId.equals.toLowerCase() === "emp1") return { employeeId: "EMP1", name: "Test Employee" };
+        if (where.employeeId.equals === "NO-NAME") return { employeeId: "NO-NAME", name: null };
+        return null;
+    }) as any;
+    const server = createApp().listen(0, "127.0.0.1");
+    await new Promise<void>(resolve => server.once("listening", resolve));
+    t.after(() => new Promise<void>(resolve => server.close(() => resolve())));
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const identify = (employeeId: string) => fetch(`http://127.0.0.1:${address.port}/api/vehicle-drivers/identify`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employeeId })
+    });
+    const response = await identify("  emp1  ");
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await response.json(), { employeeId: "EMP1", name: "Test Employee" });
+    for (const id of ["UNKNOWN", "INACTIVE", "NO-NAME"]) assert.equal((await identify(id)).status, 404);
+    assert.equal((await identify(" ")).status, 400);
+    assert.equal((await identify("x".repeat(101))).status, 400);
+});
 test("three-day cadence stays anchored to training end and skips missed reminders", () => {
     const end = new Date("2026-10-01T04:00:00Z");
     assert.equal(nextSummaryReminder(end, end).toISOString(), "2026-10-04T04:00:00.000Z");
