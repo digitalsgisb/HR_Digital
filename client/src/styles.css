@@ -855,6 +855,54 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 .usage-remove-confirm { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; }
 .usage-remove-confirm input { flex-shrink: 0; width: 20px; height: 20px; accent-color: #17181a; }
 .usage-remove-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+
+/* Fleet administration cards use the requested black finish. QR sheets stay white for scanning. */
+.current-usage-card, .current-usage-empty { background: #111214; border-color: #303136; color: #f5f5f6; }
+.current-usage-empty { color: #c4c5cb; }
+.current-usage-card p, .current-usage-car small, .current-usage-driver > span { color: #c4c5cb; }
+.current-usage-driver { border-color: #36373d; }
+.current-usage-car > .status-badge { background: #303238; color: #f3f3f5; }
+.current-usage-car > span:first-child { color: #f3f3f5; background: #282a30; }
+.current-usage-card dl { background: #232429; }
+.current-usage-card dt { color: #bfc0c8; }
+.current-usage-card dd { color: #f4f4f6; }
+.current-usage-card .usage-overdue { color: #ffb6c1; }
+.current-usage-card > footer > .button-secondary { color: #f3f3f6; background: #27292e; border-color: #505259; }
+.current-usage-card > footer > .button-primary { color: #101112; background: #fff; border-color: #fff; }
+.current-usage-card > footer > .button-danger-outline { color: #ffc0c6; border-color: #83555e; background: transparent; }
+.fleet-status-page .vehicle-section { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.fleet-status-page .vehicle-card { --ink: #f5f5f6; --muted: #bfc0c8; --subtle: #aeb0b8; --line: #36383e; --soft: #24262a; background: #111214; color: #f5f5f6; border-color: #303136; }
+.fleet-status-page .vehicle-card header > span { color: #fff; background: #2c2e34; }
+.fleet-status-page .vehicle-card .vehicle-meta { background: #202126; }
+.fleet-status-page .vehicle-card .vehicle-meta > span { background: #24262b; }
+.fleet-status-page .metric-card { background: #111214; border-color: #303136; color: #f5f5f6; }
+.fleet-status-page .metric-card p, .fleet-status-page .metric-card small { color: #c4c5cb; }
+.fleet-status-page .vehicle-card .service-meter > div:nth-child(2) { background: #393b42; }
+.fleet-status-page .vehicle-card .vehicle-actions button { color: #f3f3f6; background: #27292e; border-color: #505259; }
+.fleet-status-page .vehicle-card .vehicle-actions button.primary { color: #101112; background: #fff; border-color: #fff; }
+.fleet-status-page .vehicle-card .active-driver { background: #282a30; }
+.fleet-usage-page .trip-launcher, .fleet-usage-page > .data-card { background: #111214; color: #f5f5f6; border-color: #303136; }
+.fleet-usage-page .trip-launcher h2, .fleet-usage-page > .data-card h2 { color: #f5f5f6; }
+.fleet-usage-page .trip-launcher p, .fleet-usage-page .trip-launcher > small, .fleet-usage-page .trip-launcher .field { color: #c4c5cb; }
+.fleet-usage-page .trip-launcher .field select { background: #fff; color: #211d1d; }
+.fleet-usage-page .trip-launcher .button-primary { background: #fff; color: #111214; border-color: #fff; }
+.fleet-usage-page > .data-card .data-table th { background: #222429; color: #d5d6dc; border-color: #36383e; }
+.fleet-usage-page > .data-card .data-table td { color: #f0f0f3; border-color: #36383e; }
+.fleet-usage-page > .data-card .data-table td small { color: #bfc0c8; }
+.fleet-usage-page > .data-card .data-table tbody tr:hover { background: #25272c; }
+.fleet-usage-page > .data-card .card-header p, .fleet-usage-page > .data-card .section-heading p { color: #bfc0c8; }
+.fleet-usage-page > .data-card .section-header p { color: #bfc0c8; }
+.fleet-usage-page > .data-card .data-table td small.form-error { color: #ffc0c6; background: #41252b; }
+.fleet-usage-page > .data-card a, .fleet-usage-page > .data-card button, .fleet-usage-page > .data-card .table-return, .fleet-usage-page > .data-card svg { color: #f3f3f5; }
+.fleet-qr-panel { padding: 12px; }
+.fleet-qr-panel .vehicle-qr { padding: 20px 10px; }
+.fleet-qr-panel .qr-sheet { width: min(420px,100%); }
+@media print {
+  .app-shell:has(.fleet-qr-page) { padding-left: 0; }
+  .workspace:has(.fleet-qr-page), .page-stage:has(.fleet-qr-page), .fleet-qr-page, .fleet-qr-panel, .fleet-qr-panel .vehicle-qr { position: static !important; height: auto !important; max-height: none !important; overflow: visible !important; transform: none !important; animation: none !important; }
+  .fleet-qr-panel .qr-sheet { width: 95mm; }
+  .fleet-qr-panel .qr-company { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
 @media (prefers-reduced-motion: reduce) {
   html.fleet-access-mode { scroll-behavior: auto; }
   .vehicle-usage-container > .card { animation: none; }

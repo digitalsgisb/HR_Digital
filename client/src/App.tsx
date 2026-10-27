@@ -41,7 +41,7 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-registry" | "usage-history" | "administration";
+  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "usage-history" | "administration";
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   overview: { title: "Dashboard", eyebrow: "HR Digital" },
@@ -53,6 +53,8 @@ const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   "email-automation": { title: "Email automation", eyebrow: "Learning & development" },
   "notes-library": { title: "Training notes library", eyebrow: "Learning & development" },
   fleet: { title: "Car usage", eyebrow: "Company cars" },
+  "fleet-qr": { title: "Fleet QR", eyebrow: "Company cars" },
+  "fleet-status": { title: "Vehicle status", eyebrow: "Company cars" },
   "fleet-registry": { title: "Manage cars", eyebrow: "Company cars" },
   "usage-history": { title: "Trip history", eyebrow: "Company cars" },
   administration: { title: "Settings", eyebrow: "HR Digital" }
@@ -69,6 +71,8 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
 
 const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "fleet", label: "Car usage", icon: Route },
+  { id: "fleet-qr", label: "Fleet QR", icon: QrCode },
+  { id: "fleet-status", label: "Vehicle status", icon: Gauge },
   { id: "fleet-registry", label: "Manage cars", icon: CarFront },
   { id: "usage-history", label: "Trip history", icon: Clock3 }
 ];
@@ -173,7 +177,7 @@ function AdminApp() {
     setActiveView(view);
     setMobileNavOpen(false);
     if (view.startsWith("training") || view === "email-automation" || view === "notes-library") setTrainingOpen(true);
-    if (view === "fleet" || view === "fleet-registry" || view === "usage-history") setFleetOpen(true);
+    if (view.startsWith("fleet") || view === "usage-history") setFleetOpen(true);
   };
 
   const deleteTraining = async (id: string) => {
@@ -209,6 +213,8 @@ function AdminApp() {
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}
           {activeView === "notes-library" && <NotesLibrary showNotice={setNotice} />}
           {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
+          {activeView === "fleet-qr" && <FleetQrPage />}
+          {activeView === "fleet-status" && <FleetTracker key="status" mode="status" showNotice={setNotice} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
           {activeView === "fleet-registry" && <VehicleRegistryPage showNotice={setNotice} onOpenHistory={openHistory} />}
           {activeView === "usage-history" && <UsageHistory initialVehicleId={historyVehicleId} />}
           {activeView === "administration" && <Administration showNotice={setNotice} />}
@@ -482,11 +488,13 @@ const makeFallbackFleet = () => {
 };
 
 function FleetTracker({
+  mode = "usage",
   showNotice,
   initialVehicleId,
   onOpenRegistry,
   onOpenHistory,
 }: {
+  mode?: "usage" | "status";
   showNotice: (message: string) => void;
   initialVehicleId?: string;
   onOpenRegistry: () => void;
@@ -683,9 +691,6 @@ function FleetTracker({
                   <p>Refresh the fleet or start a new trip for this vehicle.</p>
                 </div>
               )}
-              {dialog === "qr" && dialogVehicle && (
-                <VehicleQr vehicle={dialogVehicle} />
-              )}
             </section>
           </div>,
           document.body,
@@ -694,15 +699,15 @@ function FleetTracker({
 
   return (
     <>
-      <section className="page-stack">
+      <section className={`page-stack ${mode === "status" ? "fleet-status-page" : "fleet-usage-page"}`}>
         <div className="module-intro fleet-intro">
           <div>
             <span className="module-kicker">
               <CarFront size={15} /> Company cars
             </span>
-            <h2>Track company car trips</h2>
+            <h2>{mode === "status" ? "Vehicle availability & servicing" : "Track company car trips"}</h2>
             <p>
-              Start a trip, complete the car checks and record the odometer reading when you return.
+              {mode === "status" ? "Check availability, current mileage and service targets for every company car." : "Start a trip, complete the car checks and record the odometer reading when you return."}
             </p>
           </div>
           <div className="fleet-hero-actions">
@@ -721,9 +726,9 @@ function FleetTracker({
             </button>
           </div>
         </div>
-        <CurrentUsageCards trips={trips} vehicles={fleetVehicles} disabled={loading || !!fleetError} onRemoved={async () => { await refreshFleet(); showNotice("Usage removed. The fleet status has been updated."); }} onHistory={onOpenHistory} onReturn={trip => { setSelectedVehicleId(trip.vehicleId); setDialog("complete"); }} />
-        <details className="card shared-fleet-qr"><summary>Print the shared fleet QR</summary><VehicleQr /></details>
-        <section className="card trip-launcher" aria-label="Choose a car and start a trip">
+        {mode === "status" && fleetError && <div className="form-error" role="alert">{fleetError}<button type="button" onClick={() => { void refreshFleet(); }}>Retry</button></div>}
+        {mode === "usage" && <CurrentUsageCards trips={trips} vehicles={fleetVehicles} disabled={loading || !!fleetError} onRemoved={async () => { await refreshFleet(); showNotice("Usage removed. The fleet status has been updated."); }} onHistory={onOpenHistory} onReturn={trip => { setSelectedVehicleId(trip.vehicleId); setDialog("complete"); }} />}
+{mode === "usage" && <>        <section className="card trip-launcher" aria-label="Choose a car and start a trip">
           <div><span className="module-kicker"><Route size={16} /> Ready to drive?</span><h2>Choose your car & start a trip</h2><p>Record the driver, destination and starting mileage before leaving.</p></div>
           <div className="trip-launcher-controls">
             <label className="field"><span>Company car</span><select value={selectedVehicle?.id ?? ""} disabled={loading || !fleetVehicles.length} onChange={(event) => setSelectedVehicleId(event.target.value)}>
@@ -731,13 +736,12 @@ function FleetTracker({
               {fleetVehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} · {vehicle.model} · {fleetStatusLabel(vehicle.status)}</option>)}
             </select></label>
             <button className="button button-primary" disabled={loading || !selectedVehicle || (!activeTrip && selectedVehicle.status !== "AVAILABLE")} onClick={() => { if (activeTrip) setDialog("complete"); else if (selectedVehicle) openStart(selectedVehicle); }}><CarFront size={18} />{activeTrip ? "Return car" : "Start trip"}<ArrowRight size={16} /></button>
-            <button className="button button-secondary" disabled={loading || !selectedVehicle} onClick={() => setDialog("qr")}><QrCode size={17} /> Print car QR</button>
           </div>
           {selectedVehicle && selectedVehicle.status !== "AVAILABLE" && !activeTrip && <p role="status">This car is {fleetStatusLabel(selectedVehicle.status).toLowerCase()}. Choose an available car to start a trip.</p>}
-          <small><QrCode size={15} /> Driving as a guest? Scan the QR inside the car to open its usage form.</small>
+          <small><QrCode size={15} /> Employees can scan the shared code from the Fleet QR page to take or return a car.</small>
           {fleetError && <div className="form-error" role="alert">{fleetError}<button type="button" onClick={() => { void refreshFleet(); }}>Retry</button></div>}
         </section>
-        <div className="metric-grid">
+</>}{mode === "status" && <>        <div className="metric-grid">
           <MetricCard
             icon={CarFront}
             label="Registered vehicles"
@@ -773,7 +777,7 @@ function FleetTracker({
         <section className="card vehicle-section">
           <SectionHeader
             kicker="Trip-ready fleet"
-            title="Vehicle status & QR access"
+            title="Vehicle status"
           />
           <div className="vehicle-grid">
             {fleetVehicles.map((vehicle) => {
@@ -873,7 +877,7 @@ function FleetTracker({
             })}
           </div>
         </section>
-        <section className="card data-card">
+</>}{mode === "usage" && <>        <section className="card data-card">
           <SectionHeader
             kicker="Auditable usage log"
             title="Recent journeys"
@@ -977,7 +981,7 @@ function FleetTracker({
             </table>
           </div>
         </section>
-      </section>
+</>}      </section>
       {fleetDialog}
     </>
   );
@@ -1900,7 +1904,11 @@ export function CompleteTripForm({
   );
 }
 
-function VehicleQr({ vehicle }: { vehicle?: Vehicle }) {
+function FleetQrPage() {
+  return <section className="page-stack fleet-qr-page"><div className="module-intro fleet-intro"><div><span className="module-kicker"><QrCode size={16} /> Company cars</span><h2>One QR for all company cars</h2><p>Print this code at the key collection point. Employees scan it to choose a car, resume a trip or record a return.</p></div></div><section className="card fleet-qr-panel" aria-label="Shared fleet QR"><VehicleQr /></section></section>;
+}
+
+function VehicleQr() {
   const [image, setImage] = useState("");
   const [feedback, setFeedback] = useState("");
   const url = `${window.location.origin}/?fleet=1`;
