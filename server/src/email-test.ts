@@ -41,11 +41,11 @@ export function createEmailTestService(config = env) {
       catch { throw new EmailTestError(502, "SMTP connection failed. Check the server host, port, TLS and credentials."); }
       return { mode, message: mode === "preview" ? "Local test inbox is ready. No emails leave this server." : "SMTP connection and authentication succeeded. Delivery still depends on the mail provider." };
     },
-    async send(input: z.infer<typeof emailTestInput>): Promise<EmailTestResult> {
+    async send(input: z.infer<typeof emailTestInput>, custom?: EmailTestPreview): Promise<EmailTestResult> {
       assertReady();
       if (mode === "smtp" && !config.smtpTestRecipients.includes(input.recipient)) throw new EmailTestError(400, "Choose an address listed in SMTP_TEST_RECIPIENTS on the server.");
-      const content = preview(input.templateId);
-      const mail = renderTrainingEmail(input.templateId, developerTrainingDetails, config.clientOrigin);
+      const mail = custom ?? renderTrainingEmail(input.templateId, developerTrainingDetails, config.clientOrigin);
+      const content = custom ? {...custom,html:previewEmailHtml(custom.html)} : preview(input.templateId);
       let messageId: string;
       try {
         const result = await transporter.sendMail({ from: config.smtpFrom, to: input.recipient, subject: content.subject, text: content.text, html: mail.html, attachments: [{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }], disableFileAccess: true, disableUrlAccess: true });

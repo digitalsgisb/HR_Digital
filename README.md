@@ -381,3 +381,16 @@ Company cars now separates **Car usage** (current trips and checkout/return), **
 - Training → Evaluations & notes shows participant answers, later review status/answers and editable HR comments. Historical summaries submitted before this feature remain readable without retroactively demanding Section A answers.
 
 Deployment: rebuild the Docker application. The entrypoint backfills unique review tokens before Prisma db push adds the nullable department HOD, employee superior, evaluation/review and HR-comment fields. It then runs server/prisma/evaluation-review-jobs.sql to queue reviews for previously submitted summaries, once per participant/session. Existing data is retained. With a manual/non-Docker deployment, run workflow-upgrade.sql, prisma db push, then evaluation-review-jobs.sql in that order before starting the new server. Back up the database using the normal deployment procedure. No production migration or real email delivery was performed during local development.
+
+
+### HR email editing and CC/BCC controls
+
+Open Training → Email automation → Edit automated emails. HR can customise each of the six automated email types: invitation, training-day reminder, evaluation request, outstanding evaluation reminder, submitted evaluation to HOD, and three-month superior review. Edit the subject, heading, message and button label; set CC/BCC addresses, whether to CC the participant's HOD, and an optional reply-to address. These are defaults per email type and apply across training plans; primary recipients remain selected automatically from the participant/HOD/superior records.
+
+Use {{employee_name}}, {{training_name}}, {{training_date}}, {{training_time}}, {{venue}} and {{trainer}} to personalise the wording. Dates, venue details, full submitted evaluations/attachments and the correct form links are inserted by the system. Plain text messages retain line breaks and are escaped in HTML. The original company logo and branded layout remain in place.
+
+Preview shows the current draft without saving or sending. Test uses that draft with sample details; it excludes CC/BCC and can only use SMTP_TEST_RECIPIENTS in SMTP mode. Preview-mode tests stay in the local inbox. Restore defaults loads the original template into the editor; Save applies it. Saved changes are read when each queued email is sent, including recurring reminders; already sent messages are not resent. Unsaved drafts are kept when switching email types in the current editor session and are lost if the page is reloaded.
+
+CC/BCC accept up to 20 email addresses each, separated by commas, semicolons or new lines. Duplicate addresses are removed across To, CC and BCC, with CC taking precedence over BCC. Copies receive the full email, including evaluation details and attachments where applicable. Reply-to changes where responses go; the sender remains the configured company SMTP account.
+
+Deployment requires rebuilding the Docker app so Prisma db push creates TrainingEmailTemplate. Existing schedules, recipients and submitted evaluations remain intact; without saved overrides the existing default messages and invitation/reminder HOD copying continue. Local validation uses synthetic records and a local mail fixture, with no production settings changed or real messages sent.

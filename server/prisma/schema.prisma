@@ -166,6 +166,19 @@ model TrainingEmailJob {
   @@index([status, dueAt])
 }
 
+model TrainingEmailTemplate {
+  kind        String   @id
+  subject     String
+  title       String
+  body        String
+  buttonLabel String
+  cc          String[] @default([])
+  bcc         String[] @default([])
+  ccHod       Boolean  @default(false)
+  replyTo     String?
+  updatedAt   DateTime @updatedAt
+}
+
 model TrainingCompletion {
   id          String           @id @default(cuid())
   employeeId  String

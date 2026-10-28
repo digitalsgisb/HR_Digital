@@ -29,7 +29,7 @@ test("early sessions, late creation, historical plans and invalid recipients", (
 function fixture() {
   const row = { id: "job-1", employeeId: "employee-1", status: "PENDING", claimToken: null as string | null, lockedAt: null as Date | null, attempts: 0, kind: "INVITATION", expiresAt: new Date("2099-02-01"), dueAt: new Date("2025-01-01"), sentAt: null as Date | null, lastError: null as string | null, employee: { email: "person@example.test", status: "ACTIVE", name: "Person", employeeId: "EMP-1" }, session: { archivedAt: null as Date | null, dateStart: new Date("2099-01-02T01:00Z"), dateEnd: new Date("2099-01-02T04:00Z"), course: { name: "Safety" }, venue: "Training room", trainerName: "Trainer", detailsToken:"details-token-for-test-123456", attendanceToken:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", completions: [{ employeeId: "employee-1", status: "REQUIRED",summaryToken:"summary-token-for-test-123456",summarySubmittedAt:null as Date|null }] } };
   const matches = (where: any) => (!where.id || where.id === row.id) && (typeof where.status === "string" ? row.status === where.status : !where.status?.in || where.status.in.includes(row.status)) && (!where.claimToken || where.claimToken === row.claimToken) && (!where.expiresAt?.lte || row.expiresAt <= where.expiresAt.lte) && (!where.attempts?.gte || row.attempts >= where.attempts.gte) && (!where.attempts?.lt || row.attempts < where.attempts.lt) && (!where.dueAt?.lte || row.dueAt <= where.dueAt.lte) && (!where.expiresAt?.gt || row.expiresAt > where.expiresAt.gt) && (!where.lockedAt || (!!row.lockedAt && row.lockedAt < where.lockedAt.lt)) && (!where.session || !row.session.archivedAt);
-  const db = { trainingEmailJob: {
+  const db = { trainingEmailTemplate:{findUnique:async()=>null}, trainingEmailJob: {
     async updateMany({ where, data }: any) { if (!matches(where)) return { count: 0 }; const { attempts, ...rest } = data; Object.assign(row, rest); if (attempts?.increment) row.attempts += attempts.increment; return { count: 1 }; },
     async findMany({where}: any) { return matches(where) ? [{id: row.id}] : []; },
     async findUniqueOrThrow() { return { ...row }; },
@@ -104,5 +104,15 @@ test("department HOD is used at send time; superior reviews repeat and stop on s
   const review=fixture();review.row.kind="SUPERIOR_REVIEW";review.row.session.dateEnd=new Date("2026-01-01");Object.assign(review.row.employee,{department:{hodEmail:"department@example.test"},superiorEmail:"superior@example.test"});Object.assign(review.row.session.completions[0],{summarySubmittedAt:new Date(),reviewToken:"review-token-test-123456789"});
   await processTrainingEmails(new Date(),review.db,send);assert.equal(messages[1].to,"superior@example.test");assert.match(messages[1].html,/\/training\/review\/review-token-test-123456789/);assert.equal(review.row.status,"PENDING");assert.ok(review.row.dueAt>new Date());
   Object.assign(review.row.session.completions[0],{reviewSubmittedAt:new Date()});review.row.dueAt=new Date("2020-01-01");await processTrainingEmails(new Date(),review.db,send);assert.equal(review.row.status,"CANCELLED");assert.equal(messages.length,2);
+ }finally{Object.assign(env,old);}
+});
+
+test("scheduled emails use HR's latest template, CC/BCC, HOD choice and reply-to",async()=>{
+ const old={...env};Object.assign(env,{emailTransport:"smtp",smtpHost:"localhost",smtpUser:""});
+ try{
+  const value=fixture();value.row.kind="REMINDER";Object.assign(value.row.employee,{hodEmail:"hod@example.test"});
+  (value.db.trainingEmailTemplate as any).findUnique=async()=>({subject:"Attendance: {{training_name}}",title:"HR attendance reminder",body:"Please register today, {{employee_name}}.",buttonLabel:"Check in",cc:["hr@example.test","person@example.test"],bcc:["archive@example.test"],ccHod:false,replyTo:"replies@example.test"});
+  let message:any;await processTrainingEmails(new Date(),value.db,async m=>{message=m;return {};});
+  assert.equal(message.to,"person@example.test");assert.equal(message.cc,"hr@example.test");assert.equal(message.bcc,"archive@example.test");assert.equal(message.replyTo,"replies@example.test");assert.equal(message.subject,"Attendance: Safety");assert.match(message.text,/Please register today, Person/);assert.match(message.html,/Check in/);assert.match(message.html,/\/attendance\/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/);
  }finally{Object.assign(env,old);}
 });
