@@ -6,9 +6,10 @@ import { developerTrainingDetails, previewEmailHtml } from "./email-template.js"
 import { emailTestInput, emailTestService } from "./email-test.js";
 import { defaultTrainingEmailTemplates, emailVariables, trainingEmailKinds, trainingEmailTemplate, trainingEmailTemplateSchema, renderConfiguredTrainingEmail } from "./training-email-templates.js";
 
+const sampleDetails={...developerTrainingDetails,name:"Sample participant",training:"Sample training course"};
 const inputSchema = z.object({kind:z.enum(trainingEmailKinds),template:trainingEmailTemplateSchema});
 function sampleEmail(input:z.infer<typeof inputSchema>){
-  return renderConfiguredTrainingEmail(trainingEmailTemplate(input.kind,input.template),developerTrainingDetails,env.clientOrigin,true,input.kind==="HOD_SUMMARY"?"Sample completed evaluation\nLearning: Safe working methods\nApplication: Daily safety checks\nNotes: Participant notes and attachments appear in the real email.":"",input.kind==="HOD_SUMMARY"?"Head of Department":input.kind==="SUPERIOR_REVIEW"?"Immediate Superior":developerTrainingDetails.name);
+  return renderConfiguredTrainingEmail(trainingEmailTemplate(input.kind,input.template),sampleDetails,env.clientOrigin,true,input.kind==="HOD_SUMMARY"?"Sample completed evaluation\nLearning: Safe working methods\nApplication: Daily safety checks\nNotes: Participant notes and attachments appear in the real email.":"",input.kind==="HOD_SUMMARY"?"Head of Department":input.kind==="SUPERIOR_REVIEW"?"Immediate Superior":sampleDetails.name);
 }
 export function createTrainingEmailSettingsRouter(){
   const router=Router();
@@ -31,6 +32,10 @@ export function createTrainingEmailSettingsRouter(){
   }catch(e){next(e);}});
   router.put("/training-email/templates/:kind",async(req,res,next)=>{try{
     const kind=z.enum(trainingEmailKinds).parse(req.params.kind),data=trainingEmailTemplateSchema.parse(req.body);
+    if(data.ccEmployeeIds.length){
+      const people=await prisma.employee.findMany({where:{id:{in:data.ccEmployeeIds}},select:{id:true,status:true,email:true}});
+      if(data.ccEmployeeIds.some(id=>!people.some(person=>person.id===id&&person.status==="ACTIVE"&&z.string().email().safeParse(person.email).success))){res.status(400).json({message:"Choose active employees with a saved email address. Update missing emails in Employees first."});return;}
+    }
     const saved=await prisma.trainingEmailTemplate.upsert({where:{kind},create:{kind,...data},update:data});
     res.json({...trainingEmailTemplate(kind,saved),updatedAt:saved.updatedAt,defaults:defaultTrainingEmailTemplates.find(row=>row.kind===kind)});
   }catch(e){next(e);}});

@@ -180,6 +180,9 @@ model TrainingEmailTemplate {
   cc          String[] @default([])
   bcc         String[] @default([])
   ccHod       Boolean  @default(false)
+  ccSuperior  Boolean  @default(false)
+  ccParticipant Boolean @default(false)
+  ccEmployeeIds String[] @default([])
   replyTo     String?
   updatedAt   DateTime @updatedAt
 }

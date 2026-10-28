@@ -127,3 +127,13 @@ test("queued HOD emails resolve the linked employee's current email at delivery"
   let sent=false;await processTrainingEmails(new Date(),inactive.db,async()=>{sent=true;return {};});assert.equal(sent,false);assert.equal(inactive.row.status,"PENDING");
  }finally{Object.assign(env,old);}
 });
+
+test("friendly Cc choices resolve superior, participant and selected employees at send time",async()=>{
+ const old={...env};Object.assign(env,{emailTransport:"smtp",smtpHost:"localhost",smtpUser:""});
+ try{
+  const value=fixture();value.row.kind="HOD_SUMMARY";Object.assign(value.row.session.completions[0],{summarySubmittedAt:new Date()});Object.assign(value.row.employee,{hodEmail:"hod@example.test",superiorEmail:"superior@example.test"});
+  (value.db.trainingEmailTemplate as any).findUnique=async()=>({ccHod:true,ccSuperior:true,ccParticipant:true,ccEmployeeIds:["chosen"],cc:["superior@example.test"],bcc:[]});
+  (value.db as any).employee={findMany:async({where}:any)=>{assert.deepEqual(where,{id:{in:["chosen"]},status:"ACTIVE"});return [{email:"current-colleague@example.test"}];}};
+  let message:any;await processTrainingEmails(new Date(),value.db,async m=>{message=m;return {};});assert.equal(message.to,"hod@example.test");assert.equal(message.cc,"superior@example.test, current-colleague@example.test, person@example.test");
+ }finally{Object.assign(env,old);}
+});

@@ -20,11 +20,12 @@ const templateText = (max: number, singleLine = false) => z.string().trim().min(
 export const trainingEmailTemplateSchema = z.object({
   subject: templateText(250, true), title: templateText(180, true), body: templateText(12000), buttonLabel: templateText(80, true),
   cc: addresses.default([]), bcc: addresses.default([]), ccHod: z.boolean().default(false),
+  ccSuperior:z.boolean().default(false), ccParticipant:z.boolean().default(false), ccEmployeeIds:z.array(z.string().trim().min(1).max(100)).max(20).default([]).transform(ids=>[...new Set(ids)]),
   replyTo: z.union([emailAddress, z.literal(""), z.null()]).optional().transform(v => v || null),
 });
 export type TrainingEmailTemplateInput = z.infer<typeof trainingEmailTemplateSchema>;
 export type TrainingEmailTemplateSettings = TrainingEmailTemplateInput & { kind: TrainingEmailTemplateKind; label: string };
-const base = { cc: [] as string[], bcc: [] as string[], replyTo: null, ccHod: false };
+const base = { cc: [] as string[], bcc: [] as string[], replyTo: null, ccHod: false, ccSuperior:false, ccParticipant:false, ccEmployeeIds:[] as string[] };
 export const defaultTrainingEmailTemplates: TrainingEmailTemplateSettings[] = [
   { ...base, kind:"INVITATION", label:"Training invitation", ccHod:true, subject:"You are invited to training — {{training_name}}", title:"You are invited to training", body:"Please review your training details below and make arrangements to attend.", buttonLabel:"View training details" },
   { ...base, kind:"REMINDER", label:"Training-day attendance reminder", ccHod:true, subject:"Register your training attendance — {{training_name}}", title:"Register your training attendance", body:"Your training is today. Please click the button and enter your attendance during the check-in window.", buttonLabel:"Register attendance" },
@@ -45,9 +46,9 @@ export function renderConfiguredTrainingEmail(settings: TrainingEmailTemplateSet
     subject: expand(settings.subject).replace(/[\r\n]/g, " "), title: expand(settings.title), intro: expand(settings.body), action: expand(settings.buttonLabel), additionalText,
   });
 }
-export function trainingEmailCopies(settings: Pick<TrainingEmailTemplateInput,"cc"|"bcc"|"ccHod">, recipient: string, hodEmail: string) {
+export function trainingEmailCopies(settings: Pick<TrainingEmailTemplateInput,"cc"|"bcc"|"ccHod">, recipient: string, hodEmail: string, extraEmails:string[] = []) {
   const to = recipient.trim().toLowerCase();
-  const cc = [...new Set([...settings.cc, ...(settings.ccHod && emailAddress.safeParse(hodEmail).success ? [hodEmail] : [])].map(v => v.trim().toLowerCase()))].filter(v => v !== to);
+  const cc = [...new Set([...settings.cc, ...extraEmails.filter(email=>emailAddress.safeParse(email).success), ...(settings.ccHod && emailAddress.safeParse(hodEmail).success ? [hodEmail] : [])].map(v => v.trim().toLowerCase()))].filter(v => v !== to);
   const bcc = [...new Set(settings.bcc.map(v=>v.trim().toLowerCase()))].filter(v => v !== to && !cc.includes(v));
   return { cc: cc.length ? cc.join(", ") : undefined, bcc: bcc.length ? bcc.join(", ") : undefined };
 }

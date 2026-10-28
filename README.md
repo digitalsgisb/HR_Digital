@@ -405,3 +405,14 @@ Department.hodEmployeeId links to Employee; the email worker reads that employee
 Existing employee-specific HOD overrides retain priority. Leave those fields blank to follow the department HOD. Existing manually entered department contacts remain readable and usable until HR replaces or clears them; this update does not guess employee matches from emails.
 
 Deployment: rebuild the Docker app and let the existing Prisma db push add the nullable HOD employee link, foreign key and non-unique index. The non-unique relationship allows one person to lead multiple departments. Existing employees, department memberships, manual contacts and training records are retained. Local tests and browser checks use synthetic records only.
+
+
+### Visual email editing for HR
+
+Training → Email automation now opens a visual email template. HR clicks the subject, heading, message or button text directly inside the branded email, selects copy recipients and saves. Company branding, greeting, training details, action links and submitted evaluation content remain automatic. Saved wording from the previous editor is retained.
+
+The main recipient is shown as a plain-language role appropriate to the email type: participant, HOD or immediate superior (with HOD fallback). Cc shortcuts select HOD, immediate superior (with HOD fallback), and/or participant. Choose other employees searches the existing employee directory; their addresses are resolved from current profiles when messages are sent. Only active employees with emails can be newly selected; employees who later become inactive or lose their email are not copied. Duplicate addresses across To/Cc/Bcc are removed.
+
+Add a detail inserts a labelled chip such as Training name or Participant name into the text being edited. HR never needs to type merge-variable syntax; the editor stores the existing supported placeholders behind the scenes. Pasted text is treated as plain text. More options contains existing external Cc addresses, Bcc, reply-to, restore-original and sample sending. Delivery diagnostics are collapsed under Delivery settings (system administrator). Sample sending still excludes every Cc/Bcc shortcut and employee copy.
+
+Deployment requires rebuilding the app and applying the normal Prisma db push, which adds ccSuperior, ccParticipant and ccEmployeeIds with empty/false defaults. Existing ccHod, manual Cc/Bcc, reply-to settings and email wording are preserved. No production recipients or messages were changed during development.

@@ -15,6 +15,13 @@ test("HR templates validate recipients, headers and placeholders; copies are ded
  assert.equal(trainingEmailCopies({...saved,ccHod:false},"person@example.test","hod@example.test").cc,"hr@example.test");
 });
 
+test("recipient shortcuts accept selected employee IDs and deduplicate dynamic addresses",()=>{
+ const saved=trainingEmailTemplateSchema.parse({...trainingEmailTemplate("INVITATION"),ccHod:true,ccSuperior:true,ccParticipant:true,ccEmployeeIds:["employee-a","employee-a"]});
+ assert.deepEqual(saved.ccEmployeeIds,["employee-a"]);
+ assert.equal(trainingEmailTemplateSchema.safeParse({...saved,ccEmployeeIds:[""]}).success,false);
+ assert.deepEqual(trainingEmailCopies(saved,"participant@example.test","hod@example.test",["hod@example.test","superior@example.test","participant@example.test","colleague@example.test","invalid"]),{cc:"hod@example.test, superior@example.test, colleague@example.test",bcc:undefined});
+});
+
 test("edited wording keeps the employee action URL, branded layout and full evaluation answers",()=>{
  const settings=trainingEmailTemplate("HOD_SUMMARY",{subject:"Evaluation: {{training_name}} / {{employee_name}}",title:"Hello {{employee_name}}",body:"Please review {{training_name}}.\nThank you <script>.",buttonLabel:"Open <details>"});
  const content=renderConfiguredTrainingEmail(settings,{...developerTrainingDetails,name:"Test <employee>",training:"Safe\nwork"},"https://hr.example.test/training/details/private-token",false,"Learning: <script>\nNotes: Test notes");
@@ -26,16 +33,17 @@ test("edited wording keeps the employee action URL, branded layout and full eval
 });
 
 test("HR can save templates and preview drafts without changing the saved template or sending email",async t=>{
- const rows=new Map<string,any>(),originalFind=prisma.trainingEmailTemplate.findMany,originalUpsert=prisma.trainingEmailTemplate.upsert;
+ const rows=new Map<string,any>(),originalFind=prisma.trainingEmailTemplate.findMany,originalUpsert=prisma.trainingEmailTemplate.upsert,originalPeople=prisma.employee.findMany;
+ (prisma.employee as any).findMany=async()=>[{id:"copy-person",status:"ACTIVE",email:"copy@example.test"}];
  (prisma.trainingEmailTemplate as any).findMany=async()=>[...rows.values()];
  (prisma.trainingEmailTemplate as any).upsert=async({where,create,update}:any)=>{const row={...(rows.get(where.kind)?{...rows.get(where.kind),...update}:create),updatedAt:new Date()};rows.set(where.kind,row);return row;};
- t.after(()=>{prisma.trainingEmailTemplate.findMany=originalFind;prisma.trainingEmailTemplate.upsert=originalUpsert;});
+ t.after(()=>{prisma.trainingEmailTemplate.findMany=originalFind;prisma.trainingEmailTemplate.upsert=originalUpsert;prisma.employee.findMany=originalPeople;});
  const server=createApp().listen(0,"127.0.0.1");await new Promise<void>(resolve=>server.once("listening",resolve));t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));
  const address=server.address();assert.ok(address&&typeof address!=="string");const root=`http://127.0.0.1:${address.port}/api/training-email/templates`;
  const list:any=await(await fetch(root)).json();assert.equal(list.templates.length,6);assert.equal(list.templates[0].ccHod,true);
- const template={...trainingEmailTemplate("REMINDER"),subject:"HR reminder — {{training_name}}",cc:["hr@example.test"],bcc:["archive@example.test"],ccHod:false,replyTo:"hr@example.test"};
+ const template={...trainingEmailTemplate("REMINDER"),subject:"HR reminder — {{training_name}}",cc:["hr@example.test"],bcc:["archive@example.test"],ccHod:false,replyTo:"hr@example.test",ccSuperior:true,ccEmployeeIds:["copy-person"]};
  const save=(value:unknown)=>fetch(`${root}/REMINDER`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)});
- assert.equal((await save({...template,cc:["invalid"]})).status,400);assert.equal(rows.size,0);
+ assert.equal((await save({...template,cc:["invalid"]})).status,400);assert.equal(rows.size,0);assert.equal((await save({...template,ccEmployeeIds:["missing"]})).status,400);
  assert.equal((await save(template)).status,200);assert.equal(rows.get("REMINDER").ccHod,false);
  const preview=await fetch(`${root}/preview`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"REMINDER",template:{...template,subject:"Draft preview"}})});
  assert.equal(preview.status,200);const body:any=await preview.json();assert.equal(body.subject,"[TEST] Draft preview");assert.match(body.html,/data:image\/png;base64/);assert.doesNotMatch(body.html,/\/attendance\/|\/training\/summary\//);
