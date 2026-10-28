@@ -6,6 +6,8 @@ export type Department = {
   name: string;
   hodName?: string | null;
   hodEmail?: string | null;
+  hodEmployeeId?: string | null;
+  hodEmployee?: Pick<Employee,"id"|"employeeId"|"name"|"email"|"status"> | null;
 };
 
 export type Employee = {

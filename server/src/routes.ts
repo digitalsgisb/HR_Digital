@@ -1,3 +1,4 @@
+import { departmentWithHod, hodEmployeeSelect } from "./department-hod.js";
 import { Router, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
 import { randomUUID } from "node:crypto";
@@ -263,7 +264,7 @@ export const createRouter = () => {
         prisma.trainingCompletion.findMany({
           where: { session: { archivedAt: null } },
           include: {
-            employee: { include: { department: true } },
+            employee: { include: { department: departmentWithHod } },
             session: { include: { course: true } }
           }
         }),
@@ -276,7 +277,7 @@ export const createRouter = () => {
         prisma.trainingCompletion.findMany({
           where: { session: { archivedAt: null }, completedAt: { not: null } },
           include: {
-            employee: { include: { department: true } },
+            employee: { include: { department: departmentWithHod } },
             session: { include: { course: true } }
           },
           orderBy: { completedAt: "desc" },
@@ -339,14 +340,21 @@ export const createRouter = () => {
   router.get(
     "/departments",
     asyncHandler(async (_req, res) => {
-      const departments = await prisma.department.findMany({ orderBy: { name: "asc" } });
+      const departments = await prisma.department.findMany({ include:{hodEmployee:{select:hodEmployeeSelect}},orderBy: { name: "asc" } });
       res.json(departments);
     })
   );
 
   router.put("/departments/:id/hod", asyncHandler(async (req, res) => {
-    const data = z.object({hodName:z.string().trim().max(200),hodEmail:z.union([z.string().trim().email(),z.literal("")])}).parse(req.body);
-    const row = await prisma.department.update({where:{id:routeParam(req.params.id)},data:{hodName:data.hodName||null,hodEmail:data.hodEmail||null}});
+    const {hodEmployeeId}=z.object({hodEmployeeId:z.string().trim().min(1).nullable()}).parse(req.body);
+    const id=routeParam(req.params.id);
+    if(!await prisma.department.findUnique({where:{id}})) throw new HttpError(404,"Department not found.");
+    if(hodEmployeeId){
+      const person=await prisma.employee.findUnique({where:{id:hodEmployeeId},select:hodEmployeeSelect});
+      if(!person) throw new HttpError(404,"The selected employee was not found.");
+      if(person.status!=="ACTIVE") throw new HttpError(409,"Choose an active employee as the department HOD.");
+    }
+    const row=await prisma.department.update({where:{id},data:{hodEmployeeId,hodName:null,hodEmail:null},include:{hodEmployee:{select:hodEmployeeSelect}}});
     res.json(row);
   }));
   router.get(
@@ -366,7 +374,7 @@ export const createRouter = () => {
               }
             : {})
         },
-        include: { department: true },
+        include: { department: departmentWithHod },
         orderBy: { employeeId: "asc" },
       });
       res.json(employees);
@@ -396,7 +404,7 @@ export const createRouter = () => {
           role: input.role,
           status: input.status
         },
-        include: { department: true }
+        include: { department: departmentWithHod }
       });
       res.status(201).json(employee);
     })
@@ -427,7 +435,7 @@ export const createRouter = () => {
           role: input.role,
           status: input.status
         },
-        include: { department: true }
+        include: { department: departmentWithHod }
       });
       res.json(employee);
     })
@@ -496,7 +504,7 @@ export const createRouter = () => {
       let roster;
       try { roster = await parseProductionRoster(req.file.buffer); }
       catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "The roster could not be read."); }
-      const employees = await prisma.employee.findMany({ where: { employeeId: { in: roster.rows.map(row => row.employeeId) } }, include: { department: true } });
+      const employees = await prisma.employee.findMany({ where: { employeeId: { in: roster.rows.map(row => row.employeeId) } }, include: { department: departmentWithHod } });
       res.json({ sheet: roster.sheet, rows: roster.rows.map(row => {
         const employee = employees.find(person => person.employeeId === row.employeeId);
         return { ...row, matched: !!employee && /^production$/i.test(employee.department.name.trim()), currentName: employee?.name ?? null };
@@ -511,7 +519,7 @@ export const createRouter = () => {
       if (new Set(input.rows.map(row => row.employeeId)).size !== input.rows.length) throw new HttpError(400, "Duplicate employee IDs.");
       await prisma.$transaction(async tx => {
         for (const row of input.rows) {
-          const employee = await tx.employee.findUnique({ where: { employeeId: row.employeeId }, include: { department: true } });
+          const employee = await tx.employee.findUnique({ where: { employeeId: row.employeeId }, include: { department: departmentWithHod } });
           if (!employee || !/^production$/i.test(employee.department.name.trim())) throw new HttpError(409, `Employee ${row.employeeId} must be in Production. Refresh the roster preview.`);
           await tx.employee.update({ where: { id: employee.id }, data: { section: row.section, line: row.line, group: row.group } });
         }
@@ -635,7 +643,7 @@ export const createRouter = () => {
     asyncHandler(async (_req, res) => {
       const sessions = await prisma.trainingSession.findMany({
         where: { archivedAt: null },
-        include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } },
+        include: { course: true, completions: { include: { employee: { include: { department: departmentWithHod } } } }, _count: { select: { completions: true } } },
         orderBy: { dateStart: "desc" },
       });
       res.json(sessions);
@@ -656,7 +664,7 @@ export const createRouter = () => {
           trainerName: input.trainerName, venue: input.venue, capacity: input.capacity, deliveryMethod: input.deliveryMethod,
           attendanceEnabled: true, attendanceToken: randomBytes(24).toString("base64url"),
           completions: { create: input.participantEmployeeIds.map((employeeId) => ({ employeeId, status: "REQUIRED" })) }
-        }, include: { course: true, completions: { include: { employee: { include: { department: true } } } }, _count: { select: { completions: true } } } });
+        }, include: { course: true, completions: { include: { employee: { include: { department: departmentWithHod } } } }, _count: { select: { completions: true } } } });
         const emailDelivery = await queueTrainingEmails(tx, created, input.notifyParticipants);
         return { ...created, emailDelivery };
       });
@@ -713,7 +721,7 @@ export const createRouter = () => {
         include: {
           course: true,
           completions: {
-            include: { employee: { include: { department: true } } },
+            include: { employee: { include: { department: departmentWithHod } } },
             orderBy: { employee: { employeeId: "asc" } }
           }
         }

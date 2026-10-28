@@ -48,6 +48,16 @@ export function reviewDueDate(end: Date) {
   const last = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 0)).getUTCDate();
   local.setUTCDate(Math.min(day, last)); return new Date(local.getTime() - 8 * 3600000);
 }
-export function resolvedHod(person: { hodEmail?: string | null; department?: { hodEmail?: string | null } | null }) {
-  return person.hodEmail?.trim() || person.department?.hodEmail?.trim() || "";
+type HodContact = { hodName?: string | null; hodEmail?: string | null; department?: { hodName?: string | null; hodEmail?: string | null; hodEmployeeId?: string | null; hodEmployee?: { name?: string | null; employeeId: string; email?: string | null; status: string } | null } | null };
+export function resolvedHod(person: HodContact) {
+  if (person.hodEmail?.trim()) return person.hodEmail.trim();
+  const department = person.department;
+  if (department?.hodEmployeeId) return department.hodEmployee?.status === "ACTIVE" ? department.hodEmployee.email?.trim() || "" : "";
+  return department?.hodEmail?.trim() || "";
+}
+export function resolvedHodName(person: HodContact) {
+  if (person.hodEmail?.trim()) return person.hodName?.trim() || person.hodEmail.trim();
+  const department=person.department;
+  if(department?.hodEmployeeId) return department.hodEmployee?.status === "ACTIVE" ? department.hodEmployee.name || department.hodEmployee.employeeId : "";
+  return department?.hodName || department?.hodEmail || "";
 }

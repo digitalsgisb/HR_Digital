@@ -116,3 +116,14 @@ test("scheduled emails use HR's latest template, CC/BCC, HOD choice and reply-to
   assert.equal(message.to,"person@example.test");assert.equal(message.cc,"hr@example.test");assert.equal(message.bcc,"archive@example.test");assert.equal(message.replyTo,"replies@example.test");assert.equal(message.subject,"Attendance: Safety");assert.match(message.text,/Please register today, Person/);assert.match(message.html,/Check in/);assert.match(message.html,/\/attendance\/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/);
  }finally{Object.assign(env,old);}
 });
+
+test("queued HOD emails resolve the linked employee's current email at delivery",async()=>{
+ const old={...env};Object.assign(env,{emailTransport:"smtp",smtpHost:"localhost",smtpUser:""});
+ try{
+  const value=fixture();value.row.kind="HOD_SUMMARY";Object.assign(value.row.session.completions[0],{summarySubmittedAt:new Date()});
+  const hod={employeeId:"HOD-1",name:"Linked HOD",email:"old@example.test",status:"ACTIVE"};Object.assign(value.row.employee,{department:{hodEmployeeId:"hod-1",hodEmployee:hod}});hod.email="current@example.test";
+  let message:any;await processTrainingEmails(new Date(),value.db,async m=>{message=m;return {};});assert.equal(message.to,"current@example.test");assert.match(message.text,/Hello Linked HOD/);
+  const inactive=fixture();inactive.row.kind="HOD_SUMMARY";Object.assign(inactive.row.session.completions[0],{summarySubmittedAt:new Date()});hod.status="INACTIVE";Object.assign(inactive.row.employee,{department:{hodEmployeeId:"hod-1",hodEmployee:hod,hodEmail:"stale@example.test"}});
+  let sent=false;await processTrainingEmails(new Date(),inactive.db,async()=>{sent=true;return {};});assert.equal(sent,false);assert.equal(inactive.row.status,"PENDING");
+ }finally{Object.assign(env,old);}
+});

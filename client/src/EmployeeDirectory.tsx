@@ -1,8 +1,10 @@
+import { DepartmentHodAssignment, departmentHodLabel } from "./DepartmentHods";
+import { createPortal } from "react-dom";
 import { useOrganizationFilter, organizationLabel } from "./OrganizationFilters";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, MailCheck, UserRound, UsersRound } from "lucide-react";
-import type { Employee } from "./types";
+import type { Department, Employee } from "./types";
 
 const pageSize = 12;
 type AnimateChange = (update: () => void) => void;
@@ -57,10 +59,13 @@ function DepartmentEmployees({ name, members, open, transitionName, onOpen, anim
   </div>;
 }
 
-export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter = "all", initialStatus = "all" }: {
+export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter = "all", initialStatus = "all", onDepartmentChanged }: {
   employees: Employee[]; query: string; onOpen: (employee: Employee) => void;
-  initialEmailFilter?: string; initialStatus?: string;
+  initialEmailFilter?: string; initialStatus?: string; onDepartmentChanged?: () => Promise<void>;
 }) {
+  const [editingHod,setEditingHod]=useState<Department|null>(null);
+  const [hodMessage,setHodMessage]=useState("");
+  const [hodSaving,setHodSaving]=useState(false);
   const [department, setDepartment] = useState("");
   const [emailFilter, setEmailFilter] = useState(initialEmailFilter);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -96,6 +101,7 @@ export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter
   const shownDepartments = departments.filter((name) => visible.some((person) => person.department.name === name));
   const filtering = organization.active || !!query.trim() || !!department || emailFilter !== "all" || statusFilter !== "all";
   return <section className="employee-directory" aria-label="Employees by department">
+    {hodMessage&&<p role="status">{hodMessage}</p>}
     <div className="directory-filters">
       <label>Department<select aria-label="Department" value={department} onChange={(event) => { setDepartment(event.target.value); organization.reset(); }}><option value="">All departments</option>{departments.map((name) => <option key={name}>{name}</option>)}</select></label>
       {organization.controls}<label>Email<select aria-label="Email availability" value={emailFilter} onChange={(event) => setEmailFilter(event.target.value)}><option value="all">All employees</option><option value="with">With email</option><option value="without">Without email</option></select></label>
@@ -105,14 +111,17 @@ export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter
     {visible.length === 0 && <div className="card directory-empty">No employees match these filters.</div>}
     <div className="department-groups">{shownDepartments.map((name, index) => {
       const members = visible.filter((person) => person.department.name === name).sort((a, b) => (a.name || a.employeeId).localeCompare(b.name || b.employeeId));
+      const departmentRecord=employees.find(person=>person.department.name===name)!.department;
       const withEmail = members.filter((person) => person.email).length;
       const open = expanded[name] ?? filtering;
       return <section className={`department-group ${open ? "is-open" : ""}`} key={name} style={{ viewTransitionName: `department-${index}` }}>
         <button className="department-heading" aria-expanded={open} aria-controls={`department-content-${index}`} onClick={() => animateChange(() => setExpanded((current) => ({ ...current, [name]: !open })))}>
           <span className="department-icon"><UsersRound size={22} /></span><span><strong>{name}</strong><small>{members.length} employees · {withEmail} with email · {members.length - withEmail} without email</small></span><ChevronDown size={18} />
         </button>
+        <div className="department-hod-bar"><div><span>Department HOD</span><strong>{departmentHodLabel(departmentRecord)}</strong>{departmentRecord.hodEmployeeId&&departmentRecord.hodEmployee?.status==="ACTIVE"&&!departmentRecord.hodEmployee.email&&<small>Email missing in employee profile</small>}</div><button type="button" className="button button-secondary" aria-label={`Assign HOD for ${name}`} onClick={()=>setEditingHod(departmentRecord)}>{departmentRecord.hodEmployeeId||departmentRecord.hodEmail?"Change HOD":"Assign HOD"}</button></div>
         <div id={`department-content-${index}`}><DepartmentEmployees key={JSON.stringify([name, query, department, emailFilter, statusFilter, members.map(person => person.id)])} name={name} members={members} open={open} transitionName={`department-employees-${index}`} onOpen={onOpen} animateChange={animateChange} /></div>
       </section>;
     })}</div>
+    {editingHod&&createPortal(<div className="fleet-dialog-backdrop"><section className="fleet-dialog" role="dialog" aria-modal="true" aria-label={`Assign HOD for ${editingHod.name}`}><header><div><span>{editingHod.name}</span><strong>Choose department HOD</strong></div><button aria-label="Close HOD assignment" disabled={hodSaving} onClick={()=>setEditingHod(null)}>×</button></header><div className="fleet-form"><DepartmentHodAssignment key={editingHod.id} department={editingHod} employees={employees} onBusyChange={setHodSaving} onSaved={async row=>{setHodSaving(true);try{await onDepartmentChanged?.();setHodMessage(`${row.name} HOD updated.`);setEditingHod(null);}finally{setHodSaving(false);}}}/></div></section></div>,document.body)}
   </section>;
 }

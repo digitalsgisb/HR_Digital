@@ -70,9 +70,13 @@ model Department {
   name      String     @unique
   hodName   String?
   hodEmail  String?
+  hodEmployeeId String?
+  hodEmployee Employee? @relation("DepartmentHod", fields: [hodEmployeeId], references: [id], onDelete: SetNull)
   employees Employee[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  @@index([hodEmployeeId])
 }
 
 model Employee {
@@ -88,6 +92,7 @@ model Employee {
   base         String?
   departmentId String
   department   Department           @relation(fields: [departmentId], references: [id])
+  headedDepartments Department[] @relation("DepartmentHod")
   section      String?
   group        String?
   line         String?

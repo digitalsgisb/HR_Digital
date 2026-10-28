@@ -1,5 +1,6 @@
+import { departmentWithHod } from "./department-hod.js";
 import { trainingEmailTemplate, renderConfiguredTrainingEmail, trainingEmailCopies } from "./training-email-templates.js";
-import { participantFields, resolvedHod, reviewDueDate } from "./training-evaluation.js";
+import { participantFields, resolvedHod, resolvedHodName, reviewDueDate } from "./training-evaluation.js";
 import { trainingPortalUrl } from "./training-portal.js";
 import { attendanceUrl } from "./attendance.js";
 import { z } from "zod";
@@ -40,7 +41,7 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
     const claimToken = randomUUID();
     const claimed = await db.trainingEmailJob.updateMany({ where: { id: candidate.id, status: "PENDING", dueAt: { lte: now }, expiresAt: { gt: now }, attempts: { lt: 5 }, session: { archivedAt: null } }, data: { status: "SENDING", claimToken, lockedAt: new Date(), attempts: { increment: 1 } } });
     if (!claimed.count) continue;
-    const job = await db.trainingEmailJob.findUniqueOrThrow({ where: { id: candidate.id }, include: { employee: {include:{department:true}}, session: { include: { course: true, completions: true } } } });
+    const job = await db.trainingEmailJob.findUniqueOrThrow({ where: { id: candidate.id }, include: { employee: {include:{department:departmentWithHod}}, session: { include: { course: true, completions: true } } } });
     const completion = job.session.completions.find(record => record.employeeId === job.employeeId);
     const hodEmail=resolvedHod(job.employee);
     const reviewerEmail=job.employee.superiorEmail?.trim() || hodEmail;
@@ -69,7 +70,7 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
       const hodSummary = job.kind === "HOD_SUMMARY";
       const summaryText = hodSummary ? [`Training summary: ${session.course.name}`,`Participant: ${job.employee.name || job.employee.employeeId}`,`Learning: ${completion?.summaryLearning||""}`,`Application: ${completion?.summaryApplication||""}`,`Feedback: ${completion?.summaryFeedback||""}`,`Notes: ${completion?.summaryNotes||""}`, ...participantFields.map(f=>`${f.label}: ${(completion?.evaluation as Record<string,string>|null)?.[f.key]||"Not entered"}`)].join("\n\n") : "";
       const files = hodSummary && Array.isArray(completion?.summaryAttachments) ? completion.summaryAttachments as Array<{name:string;data:string}> : [];
-      const hodName=job.employee.hodName||job.employee.department?.hodName||"Head of Department";
+      const hodName=resolvedHodName(job.employee)||"Head of Department";
       const recipientName=hodSummary?hodName:reviewAction?(job.employee.superiorEmail?job.employee.superiorName||"Reviewer":hodName):details.name;
       const content=renderConfiguredTrainingEmail(settings,details,actionUrl,false,summaryText,recipientName);
       const result = await sendMail({ from: env.smtpFrom, to: recipient, ...trainingEmailCopies(settings,recipient,hodEmail), replyTo:settings.replyTo||undefined, messageId: `<training-${job.id}${(job.kind==="SUMMARY_REMINDER"||reviewAction)?`-${job.sentAt?.getTime()||0}`:""}@hr-digital.local>`, subject:content.subject, text:content.text, html:content.html, attachments: [...files.map(file=>({filename:file.name,content:Buffer.from(file.data.split(",")[1],"base64"),contentType:file.data.slice(5,file.data.indexOf(";")),contentDisposition:"attachment" as const})),{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }] });

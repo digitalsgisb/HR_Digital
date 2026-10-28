@@ -394,3 +394,14 @@ Preview shows the current draft without saving or sending. Test uses that draft 
 CC/BCC accept up to 20 email addresses each, separated by commas, semicolons or new lines. Duplicate addresses are removed across To, CC and BCC, with CC taking precedence over BCC. Copies receive the full email, including evaluation details and attachments where applicable. Reply-to changes where responses go; the sender remains the configured company SMTP account.
 
 Deployment requires rebuilding the Docker app so Prisma db push creates TrainingEmailTemplate. Existing schedules, recipients and submitted evaluations remain intact; without saved overrides the existing default messages and invitation/reminder HOD copying continue. Local validation uses synthetic records and a local mail fixture, with no production settings changed or real messages sent.
+
+
+### Assign department HODs from employee records
+
+Employees → department card → Assign HOD / Change HOD opens the employee selector. Search by name, employee ID, email or department, select an active employee from any department, then save. The same employee can be selected for multiple departments. Training → Department HODs uses the same selector. Choosing No HOD assigned clears the assignment and the old manual department contact.
+
+Department.hodEmployeeId links to Employee; the email worker reads that employee's current name, email and employment status at delivery time. Updating their employee profile or importing their new email therefore updates HOD routing for every department they lead. An assigned HOD without an email can be saved, but the UI highlights the missing address and HOD deliveries wait for it. Inactive HODs must be reassigned; the worker does not send to their old address or fall back to a stale manual department contact.
+
+Existing employee-specific HOD overrides retain priority. Leave those fields blank to follow the department HOD. Existing manually entered department contacts remain readable and usable until HR replaces or clears them; this update does not guess employee matches from emails.
+
+Deployment: rebuild the Docker app and let the existing Prisma db push add the nullable HOD employee link, foreign key and non-unique index. The non-unique relationship allows one person to lead multiple departments. Existing employees, department memberships, manual contacts and training records are retained. Local tests and browser checks use synthetic records only.
