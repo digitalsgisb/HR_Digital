@@ -1,3 +1,5 @@
+import {publicTrainingPage,publicTrainingStyles} from "./public-training-ui.js";
+import {trainingDetailsHeader,trainingDetailsPage, type PublicTrainingDetails} from "./training-details-view.js";
 import { departmentWithHod } from "./department-hod.js";
 import { participantFields, reviewerFields, evaluationSchema, reviewSchema, missingFields, reviewDueDate, resolvedHod, resolvedHodName, type EvaluationField } from "./training-evaluation.js";
 import { Router } from "express";
@@ -23,28 +25,18 @@ router.put("/training-summaries/:id/comments",async(req,res,next)=>{try{const in
 catch (e) {
     next(e);
 } }); return router; }
-const shell = (body: string) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Training · HR Digital</title><link rel="stylesheet" href="/training/portal.css"></head><body><main><header>SGI · HR Digital</header><section>${body}</section></main><script src="/training/portal.js" defer></script></body></html>`;
+const shell = (body:string) => publicTrainingPage(`<section class="portal-card">${body}</section>`,{section:"Training evaluation",variant:"evaluation"});
 const token = (value: unknown) => z.string().regex(/^[A-Za-z0-9_-]{20,64}$/).parse(value);
-const details = (s: {
-    course: {
-        name: string;
-    };
-    dateStart: Date;
-    dateEnd: Date | null;
-    venue: string | null;
-    trainerName: string | null;
-    deliveryMethod: string | null;
-    notes: string | null;
-}) => `<h1>${escapeHtml(s.course.name)}</h1><dl>${[["Starts", s.dateStart.toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })], ["Ends", s.dateEnd?.toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" }) || "Ask HR"], ["Venue", s.venue || "Ask HR"], ["Trainer", s.trainerName || "Human Resources"], ["Delivery", s.deliveryMethod || "Ask HR"]].map(([a, b]) => `<dt>${a}</dt><dd>${escapeHtml(b)}</dd>`).join("")}</dl><p>All times are Malaysia time.</p>${s.notes ? `<p class="notes">${escapeHtml(s.notes)}</p>` : ""}`;
+const details=(s:PublicTrainingDetails)=>`${trainingDetailsHeader(s,"Your training")}${s.notes?`<p class="notes">${escapeHtml(s.notes)}</p>`:""}`;
 export function createTrainingPortalRouter() {
     const router = Router();
-    router.get("/portal.css", (_q, r) => r.type("css").send(`*{box-sizing:border-box}body{font:16px/1.6 Arial;background:#f4f4f4;margin:0;color:#171717}main{max-width:700px;margin:24px auto;padding:12px}header{background:#111;color:white;padding:24px;border-radius:12px 12px 0 0}section{padding:24px;background:white}h1{line-height:1.25}dt{font-size:13px;color:#555;margin-top:12px}dd{margin:0;font-weight:bold}label{display:block;margin:20px 0}textarea{display:block;width:100%;min-height:130px;padding:12px;font:inherit}button,a.button{display:inline-block;background:#111;color:white;padding:14px 20px;border:0;border-radius:6px;margin:8px 8px 8px 0;font:inherit;cursor:pointer}button:disabled{opacity:.5}.notes{white-space:pre-wrap;overflow-wrap:anywhere}#message{white-space:pre-wrap}input,select{max-width:100%;font:inherit}input:not([type=checkbox]):not([type=file]){display:block;width:100%;padding:12px}.check{margin:8px 0}fieldset{border:1px solid #ddd;padding:16px}select{display:block;width:100%;padding:12px}textarea{min-height:90px}`));
+    router.get("/portal.css",(_req,res)=>res.type("css").send(publicTrainingStyles));
     router.get("/portal.js", (_q, r) => r.type("js").send(`const form=document.querySelector('form');if(form) form.addEventListener('submit',async event=>{event.preventDefault();const output=document.querySelector('#message');const buttons=[...form.querySelectorAll('button')];buttons.forEach(b=>b.disabled=true);try{const formData=new FormData(form);const data=Object.fromEntries(formData);const attachments=JSON.parse(document.querySelector('#saved-files')?.textContent||'[]');const files=[...(form.querySelector('[type=file]')?.files||[])];if(attachments.length+files.length>3)throw Error('Attach up to three files.');for(const file of files){if(file.size>2000000)throw Error('Each attachment must be 2 MB or smaller.');const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});attachments.push({name:file.name,data:value});}delete data.files;data.attachments=attachments;const evaluation={};for(const key of Object.keys(data))if(key.startsWith("eval_")){evaluation[key.slice(5)]=key==="eval_improvements"?formData.getAll(key).join(" | "):data[key];delete data[key];}data.evaluation=evaluation;data.submit=event.submitter.value==='submit';const response=await fetch(location.pathname,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw Error(result.message||'Could not save.');output.textContent=result.message;location.href=location.pathname+(data.submit?'':'?saved=draft');}catch(e){output.textContent=e.message||'Could not save. Please retry.';}finally{buttons.forEach(b=>b.disabled=false);}});`));
     router.get("/details/:token", async (req, res, next) => { try {
         const session = await prisma.trainingSession.findFirst({ where: { detailsToken: token(req.params.token), archivedAt: null }, include: { course: true } });
         if (!session)
             throw new AttendanceError(404, "Training was not found. Contact HR.");
-        res.type("html").send(shell(details(session)));
+        res.set("Cache-Control","no-store").set("X-Robots-Tag","noindex, nofollow").type("html").send(publicTrainingPage(trainingDetailsPage(session),{title:session.course.name,script:"",variant:"details"}));
     }
     catch (e) {
         next(e);

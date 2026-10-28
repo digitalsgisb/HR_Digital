@@ -5,6 +5,7 @@ export const trainingPlanSchema = z.object({
   dateStart: z.string().datetime(), dateEnd: z.string().datetime(),
   trainerName: z.string().trim().min(1), venue: z.string().trim().min(1),
   capacity: z.number().int().min(1).max(5000), deliveryMethod: z.string().trim().min(1),
+  notes:z.string().trim().max(20000).optional(),
   notifyParticipants: z.boolean().default(true),
   attendanceEnabled: z.boolean().default(false),
   participantEmployeeIds: z.array(z.string().min(1)).min(1).max(5000)

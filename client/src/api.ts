@@ -47,7 +47,7 @@ const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
 
 export type TrainingPlanInput = {
   title: string; category: string; dateStart: string; dateEnd: string; trainerName: string; venue: string;
-  capacity: number; deliveryMethod: string; participantEmployeeIds: string[]; notifyParticipants?: boolean; attendanceEnabled?: boolean;
+  capacity: number; deliveryMethod: string; participantEmployeeIds: string[]; notifyParticipants?: boolean; attendanceEnabled?: boolean; notes?: string;
 };
 
 export type VehicleInput = {

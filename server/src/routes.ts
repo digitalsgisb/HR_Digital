@@ -667,7 +667,7 @@ export const createRouter = () => {
           await tx.trainingCourse.create({ data: { code: `TRN-${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`, name: input.title, category: input.category } });
         const created = await tx.trainingSession.create({ data: {
           courseId: course.id, dateStart: new Date(input.dateStart), dateEnd: new Date(input.dateEnd),
-          trainerName: input.trainerName, venue: input.venue, capacity: input.capacity, deliveryMethod: input.deliveryMethod,
+          trainerName: input.trainerName, venue: input.venue, capacity: input.capacity, deliveryMethod: input.deliveryMethod, notes:input.notes||null,
           attendanceEnabled: true, attendanceToken: randomBytes(24).toString("base64url"),
           completions: { create: input.participantEmployeeIds.map((employeeId) => ({ employeeId, status: "REQUIRED" })) }
         }, include: { course: true, completions: { include: { employee: { include: { department: departmentWithHod } } } }, _count: { select: { completions: true } } } });

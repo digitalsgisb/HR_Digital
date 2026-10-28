@@ -430,3 +430,14 @@ Email now has its own expandable section beside Training and Company cars. Its p
 - Connection settings: email connection checks and administrator test tools.
 
 The overview fetches submission counts separately, without loading participant notes or attachments. Email-related links have moved out of the Training submenu. Existing email templates, messages, schedules and evaluation records are retained. Deploy/rebuild the app and API to enable the new pages; this change adds no database fields.
+
+
+### Branded participant pages
+
+The real training-day attendance email button opens /attendance/:token, the same form as the attendance QR. The initial invitation opens the training details page, and post-training emails open the participant's personal evaluation. Email previews/tests deliberately open only the home page and do not include participant action links.
+
+Attendance now uses a mobile-first card layout, original company logo, check-in status, session information, clear ID/name fields, confirmation checkbox and a styled receipt. On phones the form appears before the detailed session sidebar. Early, invalid and closed attendance links retain their existing timing and validation rules; the page never displays a public employee list or email address. Attendance still requires a selected active participant's matching ID/full name and confirmation of their own attendance.
+
+Training details now include the original-colour company logo, date/time/duration, venue, trainer, delivery method, participant information, attendance access during the permitted window, and the training/evaluation follow-up steps. In Plan training, HR can add Participant information for an overview, agenda or preparation notes; it uses the existing TrainingSession.notes field and appears on the invitation's details page. Existing notes remain readable. All dates use Malaysia time.
+
+The public form pages share a lightweight stylesheet and branded shell, without loading the admin application. CSS and script URLs are versioned to prevent cached older public-page styles from affecting a new deployment. Rebuild/deploy the app and API; no database fields are added by this update. Local verification used synthetic training/participants and no real email delivery.

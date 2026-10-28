@@ -31,7 +31,7 @@ test("internal/OJT QR check-in is private, repeatable, closes correctly, and cou
     assert.equal(details.participants.length,2);assert.ok(details.url.includes("/attendance/"));
     const guestPath=new URL(details.url).pathname;
     const page=await fetch(origin+guestPath);const html=await page.text();assert.equal(page.status,200);
-    assert.match(html,/Employee ID/);assert.match(html,/Full name/);assert.doesNotMatch(html,/QA Without Email|qa@example.test|Primary navigation/);
+    assert.match(html,/\/training\/portal.css\?v=[a-f0-9]+/);assert.match(html,/data:image\/png;base64/);assert.match(html,/Employee ID/);assert.match(html,/Full name/);assert.doesNotMatch(html,/QA Without Email|qa@example.test|Primary navigation/);
     assert.match(page.headers.get("cache-control")||"",/no-store/);
     const script=await fetch(origin+"/attendance/client.js");const clientScript=await script.text();assert.match(clientScript,/Register|Saving attendance/);
     const input={employeeId:"qa-002",name:"qa without email",confirmed:true};
@@ -44,11 +44,11 @@ test("internal/OJT QR check-in is private, repeatable, closes correctly, and cou
     // checking raw requests. This verifies receipt rendering and duplicate UX.
     let submit: ((event: {preventDefault:()=>void})=>Promise<void>) | undefined;
     const button={disabled:false};
-    const output={textContent:"",focus:()=>{}};
+    const output={textContent:"",dataset:{} as Record<string,string>,focus:()=>{}};
     const form={action:origin+guestPath+"/check-in",hidden:false,reportValidity:()=>true,querySelector:()=>button,elements:{employeeId:{value:input.employeeId},name:{value:input.name},confirmed:{checked:true}},addEventListener:(_name:string,callback:typeof submit)=>{submit=callback;}};
     new Function("document","fetch","Intl",clientScript)({querySelector:(selector:string)=>selector==="form"?form:output},fetch,Intl);
     assert.ok(submit);await submit({preventDefault:()=>{}});
-    assert.equal(form.hidden,true);assert.match(output.textContent,/already registered/);assert.match(output.textContent,/QA Without Email/);assert.ok(output.textContent.includes("\n"));
+    assert.equal(form.hidden,true);assert.equal(output.dataset.state,"success");assert.match(output.textContent,/already registered/);assert.match(output.textContent,/QA Without Email/);assert.ok(output.textContent.includes("\n"));
     details=await (await fetch(origin+hrPath)).json() as any;
     assert.equal(details.participants.filter((person:any)=>person.checkedInAt).length,1);
     assert.equal(details.participants.find((person:any)=>person.employeeId==="QA-002").status,"REQUIRED");

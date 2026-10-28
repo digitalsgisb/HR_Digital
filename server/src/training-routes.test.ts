@@ -12,9 +12,12 @@ test("plan API queues eligible participants, supports opt-out and archives train
   try {
     const address = server.address(); assert.ok(address && typeof address !== "string");
     const root = `http://127.0.0.1:${address.port}/api`;
-    const input = { title: "QA Training", category: "Safety", dateStart: "2099-01-02T01:00:00.000Z", dateEnd: "2099-01-02T04:00:00.000Z", trainerName: "QA Trainer", venue: "QA Room", capacity: 2, deliveryMethod: "Instructor-led", participantEmployeeIds: fixture.employees.map(person => person.id) };
+    const input = { title: "QA Training", category: "Safety", dateStart: "2099-01-02T01:00:00.000Z", dateEnd: "2099-01-02T04:00:00.000Z", trainerName: "QA Trainer", venue: "QA Room", capacity: 2, deliveryMethod: "Instructor-led", notes:"Agenda: practical safety exercises.\nBring a notebook. <script>not executable</script>", participantEmployeeIds: fixture.employees.map(person => person.id) };
     const post = async (body: any) => { const response = await fetch(`${root}/training-plans`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) }); assert.equal(response.status, 201); return response.json() as Promise<any>; };
     const plan = await post(input);
+    assert.equal(plan.notes,input.notes);assert.equal(plan.attendanceEnabled,true);
+    const detailsPage=await fetch(root.replace(/\/api$/,"")+`/training/details/${plan.detailsToken}`);
+    const detailsHtml=await detailsPage.text();assert.equal(detailsPage.status,200);assert.match(detailsHtml,/data:image\/png;base64/);assert.match(detailsHtml,/About this training/);assert.match(detailsHtml,/What happens next/);assert.match(detailsHtml,/practical safety exercises/);assert.match(detailsHtml,/&lt;script&gt;not executable&lt;\/script&gt;/);assert.doesNotMatch(detailsHtml,/<script>not executable/);assert.match(detailsHtml,new RegExp(`/attendance/${plan.attendanceToken}`));assert.doesNotMatch(detailsHtml,/qa@example.test|QA Participant|Primary navigation/);
     assert.equal(plan.emailDelivery.queued, 4); assert.equal(plan.emailDelivery.withoutEmail, 1);
     assert.equal(fixture.jobs.length, 4); assert.ok(fixture.jobs.every(job => job.recipient === "qa@example.test"));
     assert.equal((await post({...input,notifyParticipants:false})).emailDelivery.queued, 0);
