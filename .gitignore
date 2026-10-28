@@ -12,3 +12,4 @@ backups/
 *.sql
 !server/prisma/attendance-token.sql
 !server/prisma/workflow-upgrade.sql
+!server/prisma/evaluation-review-jobs.sql

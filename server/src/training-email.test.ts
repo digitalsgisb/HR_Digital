@@ -94,3 +94,15 @@ test("submitted summaries go to the HOD with notes and attachments; missing HODs
   (value.row.employee as any).hodEmail="hod@example.test";value.row.dueAt=new Date("2020-01-01");await processTrainingEmails(new Date(),value.db,async m=>{message=m;return {};});assert.equal((message as any).to,"hod@example.test");assert.match((message as any).text,/My notes/);assert.match((message as any).html,/&lt;script&gt;/);assert.equal((message as any).attachments[0].filename,"notes.txt");assert.equal((message as any).attachments[0].content.toString(),"notes");assert.equal(value.row.status,"SENT");
  }finally{Object.assign(env,old);}
 });
+
+test("department HOD is used at send time; superior reviews repeat and stop on submission",async()=>{
+ const old={...env};Object.assign(env,{emailTransport:"smtp",smtpHost:"localhost",smtpUser:""});
+ try{
+  const invitation=fixture();Object.assign(invitation.row.employee,{department:{hodEmail:"department@example.test"}});const messages:any[]=[];
+  const send=async(m:any)=>{messages.push(m);return {};};
+  await processTrainingEmails(new Date(),invitation.db,send);assert.equal(messages[0].cc,"department@example.test");
+  const review=fixture();review.row.kind="SUPERIOR_REVIEW";review.row.session.dateEnd=new Date("2026-01-01");Object.assign(review.row.employee,{department:{hodEmail:"department@example.test"},superiorEmail:"superior@example.test"});Object.assign(review.row.session.completions[0],{summarySubmittedAt:new Date(),reviewToken:"review-token-test-123456789"});
+  await processTrainingEmails(new Date(),review.db,send);assert.equal(messages[1].to,"superior@example.test");assert.match(messages[1].html,/\/training\/review\/review-token-test-123456789/);assert.equal(review.row.status,"PENDING");assert.ok(review.row.dueAt>new Date());
+  Object.assign(review.row.session.completions[0],{reviewSubmittedAt:new Date()});review.row.dueAt=new Date("2020-01-01");await processTrainingEmails(new Date(),review.db,send);assert.equal(review.row.status,"CANCELLED");assert.equal(messages.length,2);
+ }finally{Object.assign(env,old);}
+});

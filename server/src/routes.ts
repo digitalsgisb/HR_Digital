@@ -57,6 +57,8 @@ const employeeInputSchema = z.object({
   employeeId: z.string().trim().min(1),
   name: nullableText,
   email: nullableText,
+  superiorName: nullableText,
+  superiorEmail: z.union([z.string().trim().email(), z.literal(""), z.null()]).optional(),
   hodName: nullableText,
   hodEmail: z.union([z.string().trim().email(), z.literal(""), z.null()]).optional(),
   company: nullableText,
@@ -167,6 +169,7 @@ const vehicleInputSchema = z.object({
   category: z.string().trim().min(2).max(60),
   mileage: z.coerce.number().int().min(0),
   serviceAt: z.coerce.number().int().min(0),
+  serviceDueDate: z.string().datetime().nullable().optional(),
   status: z.enum(vehicleStatuses).refine((status) => status !== "IN_USE", "A vehicle can only be marked in use by starting a trip."),
   assigned: z.string().trim().min(2).max(100),
   photo: optionalVehiclePhotoSchema
@@ -341,6 +344,11 @@ export const createRouter = () => {
     })
   );
 
+  router.put("/departments/:id/hod", asyncHandler(async (req, res) => {
+    const data = z.object({hodName:z.string().trim().max(200),hodEmail:z.union([z.string().trim().email(),z.literal("")])}).parse(req.body);
+    const row = await prisma.department.update({where:{id:routeParam(req.params.id)},data:{hodName:data.hodName||null,hodEmail:data.hodEmail||null}});
+    res.json(row);
+  }));
   router.get(
     "/employees",
     asyncHandler(async (req, res) => {
@@ -375,6 +383,8 @@ export const createRouter = () => {
           employeeId: input.employeeId,
           name: input.name,
           email: input.email,
+          superiorName: input.superiorName || null,
+          superiorEmail: input.superiorEmail || null,
           hodName: input.hodName,
           hodEmail: input.hodEmail || null,
           company: input.company,
@@ -404,6 +414,8 @@ export const createRouter = () => {
           employeeId: input.employeeId,
           name: input.name,
           email: input.email,
+          superiorName: input.superiorName || null,
+          superiorEmail: input.superiorEmail || null,
           hodName: input.hodName,
           hodEmail: input.hodEmail || null,
           company: input.company,

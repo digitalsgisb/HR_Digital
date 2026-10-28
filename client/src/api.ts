@@ -8,6 +8,8 @@ export type EmployeeInput = {
   employeeId: string;
   name?: string;
   email?: string;
+  superiorName?: string | null;
+  superiorEmail?: string | null;
   hodName?: string | null;
   hodEmail?: string | null;
   company?: string;
@@ -54,6 +56,7 @@ export type VehicleInput = {
   category: string;
   mileage: number;
   serviceAt: number;
+  serviceDueDate?: string | null;
   status: Exclude<VehicleStatus, "IN_USE">;
   assigned: string;
   photo?: string | null;

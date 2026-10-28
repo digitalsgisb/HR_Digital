@@ -4,6 +4,8 @@ export type Department = {
   id: string;
   code: string;
   name: string;
+  hodName?: string | null;
+  hodEmail?: string | null;
 };
 
 export type Employee = {
@@ -11,6 +13,8 @@ export type Employee = {
   employeeId: string;
   name?: string | null;
   email?: string | null;
+  superiorName?: string | null;
+  superiorEmail?: string | null;
   hodName?: string | null;
   hodEmail?: string | null;
   company?: string | null;

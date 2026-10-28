@@ -908,3 +908,5 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
   .vehicle-usage-container > .card { animation: none; }
   .fleet-car-drawer, .fleet-car-toggle > svg, .vehicle-usage-page button { transition: none; }
 }
+
+.vehicle-card-interactive{cursor:pointer}.vehicle-details-link{display:flex;justify-content:space-between;align-items:center;width:100%;background:transparent;color:inherit;border:0;padding:0 0 14px;text-align:left;font:inherit;font-weight:700;cursor:pointer}.vehicle-details-link:focus-visible{outline:2px solid #8dd6c0;outline-offset:5px}.maintenance-panel>h2{padding:24px 24px 0}.maintenance-record{padding:20px 0;border-top:1px solid #ddd}

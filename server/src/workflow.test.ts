@@ -124,13 +124,13 @@ test("summary pages retain drafts, submit once, cancel reminders and queue HOD d
     assert.equal(hodCreates, 0);
     assert.equal(jobs[1].status, "PENDING");
     const files = [{ name: "notes.txt", data: "data:text/plain;base64,bm90ZXM=" }];
-    assert.equal((await save({ learning: "Safe work", application: "Use the checklist", notes: "Full notes", attachments: files, submit: true })).status, 200);
+    assert.equal((await save({ learning: "Safe work", application: "Use the checklist", notes: "Full notes", attachments: files, evaluation:{company:"Sugihara Grand Industries Sdn Bhd", superior:"Test Superior",vendor:"Test vendor",briefing:"No",relevance:"4",opportunity:"Yes",confidence:"4",assistance:"No assistance required"}, submit: true })).status, 200);
     assert.ok(row.summarySubmittedAt);
-    assert.equal(hodCreates, 1);
+    assert.equal(hodCreates, 2);
     assert.deepEqual(row.summaryAttachments, files);
     assert.ok(jobs.every(j => j.status === "CANCELLED"));
     assert.equal((await save({ learning: "Duplicate", application: "Duplicate", submit: true })).status, 200);
-    assert.equal(hodCreates, 1);
+    assert.equal(hodCreates, 2);
     assert.equal(row.summaryLearning, "Safe work");
     row.session.archivedAt = new Date();
     assert.equal((await fetch(root + row.summaryToken)).status, 404);

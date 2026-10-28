@@ -8,6 +8,10 @@ DO $$ BEGIN
   CREATE UNIQUE INDEX IF NOT EXISTS "TrainingSession_detailsToken_key" ON "TrainingSession"("detailsToken");
  END IF;
  IF to_regclass('public."TrainingCompletion"') IS NOT NULL THEN
+  ALTER TABLE "TrainingCompletion" ADD COLUMN IF NOT EXISTS "reviewToken" TEXT;
+  UPDATE "TrainingCompletion" SET "reviewToken" = gen_random_uuid()::text WHERE "reviewToken" IS NULL;
+  ALTER TABLE "TrainingCompletion" ALTER COLUMN "reviewToken" SET NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS "TrainingCompletion_reviewToken_key" ON "TrainingCompletion"("reviewToken");
   ALTER TABLE "TrainingCompletion" ADD COLUMN IF NOT EXISTS "summaryToken" TEXT;
   UPDATE "TrainingCompletion" SET "summaryToken" = gen_random_uuid()::text WHERE "summaryToken" IS NULL;
   ALTER TABLE "TrainingCompletion" ALTER COLUMN "summaryToken" SET NOT NULL;

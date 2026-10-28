@@ -1,6 +1,7 @@
 import { CurrentUsageCards, RemoveVehicleUsage, isOpenVehicleUsage } from "./VehicleUsageActions";
 import { FleetAccess } from "./FleetAccess";
-import { MaintenancePanel } from "./MaintenancePanel";
+import { DepartmentHods } from "./DepartmentHods";
+import { MaintenancePage } from "./MaintenancePanel";
 import { TrainingSummaries } from "./TrainingSummaries";
 import { ProductionRosterImport } from "./ProductionRosterImport";
 import { useOrganizationFilter } from "./OrganizationFilters";
@@ -41,7 +42,7 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "usage-history" | "administration";
+  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   overview: { title: "Dashboard", eyebrow: "HR Digital" },
@@ -51,9 +52,11 @@ const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   "training-planner": { title: "Plan training", eyebrow: "Learning & development" },
   "training-records": { title: "Employee training records", eyebrow: "Learning & development" },
   "email-automation": { title: "Email automation", eyebrow: "Learning & development" },
-  "notes-library": { title: "Training notes library", eyebrow: "Learning & development" },
+  "notes-library": { title: "Training evaluations & notes", eyebrow: "Learning & development" },
   fleet: { title: "Car usage", eyebrow: "Company cars" },
   "fleet-qr": { title: "Fleet QR", eyebrow: "Company cars" },
+  "fleet-maintenance": { title: "Maintenance history", eyebrow: "Company cars" },
+  "department-hods": { title: "Department HODs", eyebrow: "People" },
   "fleet-status": { title: "Vehicle status", eyebrow: "Company cars" },
   "fleet-registry": { title: "Manage cars", eyebrow: "Company cars" },
   "usage-history": { title: "Trip history", eyebrow: "Company cars" },
@@ -65,14 +68,16 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "training-calendar", label: "Training calendar", icon: CalendarDays },
   { id: "training-planner", label: "Plan training", icon: CalendarCheck2 },
   { id: "training-records", label: "Training records", icon: GraduationCap },
+  { id: "department-hods", label: "Department HODs", icon: UserCog },
   { id: "email-automation", label: "Email automation", icon: MailCheck },
-  { id: "notes-library", label: "Notes library", icon: Library }
+  { id: "notes-library", label: "Evaluations & notes", icon: Library }
 ];
 
 const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "fleet", label: "Car usage", icon: Route },
   { id: "fleet-qr", label: "Fleet QR", icon: QrCode },
   { id: "fleet-status", label: "Vehicle status", icon: Gauge },
+  { id: "fleet-maintenance", label: "Maintenance history", icon: Wrench },
   { id: "fleet-registry", label: "Manage cars", icon: CarFront },
   { id: "usage-history", label: "Trip history", icon: Clock3 }
 ];
@@ -213,6 +218,8 @@ function AdminApp() {
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}
           {activeView === "notes-library" && <NotesLibrary showNotice={setNotice} />}
           {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
+          {activeView === "department-hods" && <DepartmentHods />}
+          {activeView === "fleet-maintenance" && <MaintenancePage />}
           {activeView === "fleet-qr" && <FleetQrPage />}
           {activeView === "fleet-status" && <FleetTracker key="status" mode="status" showNotice={setNotice} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
           {activeView === "fleet-registry" && <VehicleRegistryPage showNotice={setNotice} onOpenHistory={openHistory} />}
@@ -424,6 +431,8 @@ function EmployeeForm({ employee, onSubmit }: { employee?: Employee; onSubmit: (
   const [employeeId, setEmployeeId] = useState(employee?.employeeId ?? "");
   const [name, setName] = useState(employee?.name ?? "");
   const [email, setEmail] = useState(employee?.email ?? "");
+  const [superiorName, setSuperiorName] = useState(employee?.superiorName ?? "");
+  const [superiorEmail, setSuperiorEmail] = useState(employee?.superiorEmail ?? "");
   const [hodName, setHodName] = useState(employee?.hodName ?? "");
   const [hodEmail, setHodEmail] = useState(employee?.hodEmail ?? "");
   const [company, setCompany] = useState(employee?.company ?? "");
@@ -436,7 +445,7 @@ function EmployeeForm({ employee, onSubmit }: { employee?: Employee; onSubmit: (
   const [status, setStatus] = useState<Employee["status"]>(employee?.status ?? "ACTIVE");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, hodName, hodEmail, company, base, department, section, group, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="registry-note"><UserRound size={22} /><div><strong>{employee ? "Maintain the master employee record" : "Create a master employee record"}</strong><small>Status controls whether the employee appears in active workforce workflows; historical training records are always retained.</small></div></div><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>HOD name</span><input value={hodName} onChange={event=>setHodName(event.target.value)} /></label><label className="field"><span>HOD email</span><input type="email" value={hodEmail} onChange={event=>setHodEmail(event.target.value)} /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / job type</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label><label className="field"><span>Base</span><input value={base} onChange={(event) => setBase(event.target.value)} /></label><label className="field"><span>Production section</span><select value={section} onChange={event => { setSection(event.target.value); setLine(""); setGroup(""); }}><option value="">Not assigned</option><option>Conversion</option><option>Roll Making</option></select></label>{section !== "Roll Making" && <label className="field"><span>Group</span><input value={group} onChange={event => setGroup(event.target.value)} /></label>}{section !== "Roll Making" && <label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label>}<label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Changes are saved to the central people directory.</span><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
+  return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, superiorName, superiorEmail, hodName, hodEmail, company, base, department, section, group, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="registry-note"><UserRound size={22} /><div><strong>{employee ? "Maintain the master employee record" : "Create a master employee record"}</strong><small>Status controls whether the employee appears in active workforce workflows; historical training records are always retained.</small></div></div><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>HOD name override (optional)</span><input value={hodName} onChange={event=>setHodName(event.target.value)} /></label><label className="field"><span>HOD email override (blank uses department HOD)</span><input type="email" value={hodEmail} onChange={event=>setHodEmail(event.target.value)} /></label><label className="field"><span>Immediate superior</span><input value={superiorName} onChange={e=>setSuperiorName(e.target.value)} /></label><label className="field"><span>Immediate superior email (three-month review)</span><input type="email" value={superiorEmail} onChange={e=>setSuperiorEmail(e.target.value)} /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / job type</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label><label className="field"><span>Base</span><input value={base} onChange={(event) => setBase(event.target.value)} /></label><label className="field"><span>Production section</span><select value={section} onChange={event => { setSection(event.target.value); setLine(""); setGroup(""); }}><option value="">Not assigned</option><option>Conversion</option><option>Roll Making</option></select></label>{section !== "Roll Making" && <label className="field"><span>Group</span><input value={group} onChange={event => setGroup(event.target.value)} /></label>}{section !== "Roll Making" && <label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label>}<label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Changes are saved to the central people directory.</span><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
 }
 
 function TrainingRecords({ sessions, onDelete, onRefresh }: { sessions: CalendarSession[]; onDelete: (id: string) => Promise<void>; onRefresh: () => void }) {
@@ -787,7 +796,8 @@ function FleetTracker({
                   ? Math.min(100, (vehicle.mileage / vehicle.serviceAt) * 100)
                   : 100;
               return (
-                <article key={vehicle.id} className="vehicle-card">
+                <article key={vehicle.id} className="vehicle-card vehicle-card-interactive" onClick={event => { if ((event.target as HTMLElement).closest("button,a,input")) return; setEditingVehicleId(vehicle.id); setDialog("vehicle"); }}>
+                  <button className="vehicle-details-link" onClick={() => { setEditingVehicleId(vehicle.id); setDialog("vehicle"); }}>View / edit {vehicle.plate} details <Pencil size={15} /></button>
                   {vehicle.photo && <img className="vehicle-card-photo" src={vehicle.photo} alt={`${vehicle.plate} ${vehicle.model}`} />}
                   <header>
                     <span>
@@ -1060,7 +1070,7 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
         <MetricCard icon={Route} label="In use" value={String(vehicles.filter((item) => item.status === "IN_USE").length)} detail="Live check-outs" tone="blue" />
         <MetricCard icon={Wrench} label="Attention" value={String(serviceAttention)} detail="Service or unavailable" tone="violet" />
       </div>
-      <MaintenancePanel vehicles={vehicles} onChanged={refresh} />
+      <p className="card fleet-form">Record servicing, repairs and invoices under Company cars → Maintenance history.</p>
       <div className="page-toolbar registry-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search registration, model, category or owner" /></label><button className="button button-primary" onClick={() => setEditing(null)}><Plus size={16} /> Add vehicle</button></div>
       <section className="card registry-section"><SectionHeader kicker="Fleet master data" title="Registered vehicles" />
         <div className="registry-card-grid">
@@ -1180,6 +1190,7 @@ function VehicleForm({
   // empty number input to Number immediately produces 0, which prevented an
   // existing (seeded) reading from being cleared and replaced naturally.
   const [mileage, setMileage] = useState(() => String(vehicle?.mileage ?? ""));
+  const [serviceDueDate,setServiceDueDate]=useState(vehicle?.serviceDueDate ? malaysiaDate(new Date(vehicle.serviceDueDate)) : "");
   const [serviceAt, setServiceAt] = useState(() => String(vehicle?.serviceAt ?? 10000));
   const [status, setStatus] = useState<VehicleInput["status"]>(
     vehicle?.status === "SERVICE_DUE" || vehicle?.status === "OUT_OF_SERVICE"
@@ -1205,7 +1216,7 @@ function VehicleForm({
       setError("Enter the next service mileage as a whole number.");
       return;
     }
-    const savedStatus = status === "AVAILABLE" && actualMileage >= nextServiceMileage
+    const savedStatus = status === "AVAILABLE" && (actualMileage >= nextServiceMileage || Boolean(serviceDueDate && new Date(serviceDueDate+"T23:59:59+08:00") <= new Date()))
       ? "SERVICE_DUE"
       : status;
     try {
@@ -1217,6 +1228,7 @@ function VehicleForm({
         assigned,
         mileage: actualMileage,
         serviceAt: nextServiceMileage,
+        serviceDueDate: serviceDueDate ? new Date(serviceDueDate+"T23:59:59+08:00").toISOString() : null,
         status: savedStatus,
         photo,
       });
@@ -1246,6 +1258,7 @@ function VehicleForm({
         </div>
       </div>
       <VehiclePhotoField photo={photo} onChange={setPhoto} />
+      <label className="field">Next service date<input type="date" value={serviceDueDate} onChange={e=>setServiceDueDate(e.target.value)}/></label>
       <div className="form-grid">
         <label className="field">
           <span>Registration / plate number</span>
