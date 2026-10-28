@@ -1,3 +1,4 @@
+import { EmailOverview, EmailDelivery } from "./EmailCentre";
 import { CurrentUsageCards, RemoveVehicleUsage, isOpenVehicleUsage } from "./VehicleUsageActions";
 import { FleetAccess } from "./FleetAccess";
 import { DepartmentHods } from "./DepartmentHods";
@@ -30,7 +31,7 @@ import { EmployeeEmailImport } from "./EmployeeEmailImport";
 import { TrainingAttendance } from "./TrainingAttendance";
 import { TrainingDeleteButton } from "./TrainingDeleteButton";
 import { TrainingCalendar } from "./TrainingCalendar";
-import { EmailAutomation } from "./EmailAutomation";
+import { EmailAutomation, EmailConnectionSettings } from "./EmailAutomation";
 import { TrainingPlanner } from "./TrainingPlanner";
 import { malaysiaDate } from "./calendar-utils";
 import { toCalendarSession } from "./training-data";
@@ -42,7 +43,7 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-automation" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
+  "training-planner" | "training-records" | "email-overview" | "email-automation" | "email-delivery" | "email-settings" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   overview: { title: "Dashboard", eyebrow: "HR Digital" },
@@ -51,12 +52,15 @@ const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   "training-calendar": { title: "Training calendar", eyebrow: "Learning & development" },
   "training-planner": { title: "Plan training", eyebrow: "Learning & development" },
   "training-records": { title: "Employee training records", eyebrow: "Learning & development" },
-  "email-automation": { title: "Email automation", eyebrow: "Learning & development" },
-  "notes-library": { title: "Training evaluations & notes", eyebrow: "Learning & development" },
+  "email-overview": { title: "Email overview", eyebrow: "Email centre" },
+  "email-delivery": { title: "Delivery status", eyebrow: "Email centre" },
+  "email-settings": { title: "Connection settings", eyebrow: "Email centre" },
+  "email-automation": { title: "Email templates", eyebrow: "Email centre" },
+  "notes-library": { title: "Evaluation submissions", eyebrow: "Email centre" },
   fleet: { title: "Car usage", eyebrow: "Company cars" },
   "fleet-qr": { title: "Fleet QR", eyebrow: "Company cars" },
   "fleet-maintenance": { title: "Maintenance history", eyebrow: "Company cars" },
-  "department-hods": { title: "Department HODs", eyebrow: "People" },
+  "department-hods": { title: "Recipients & HODs", eyebrow: "Email centre" },
   "fleet-status": { title: "Vehicle status", eyebrow: "Company cars" },
   "fleet-registry": { title: "Manage cars", eyebrow: "Company cars" },
   "usage-history": { title: "Trip history", eyebrow: "Company cars" },
@@ -68,9 +72,16 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "training-calendar", label: "Training calendar", icon: CalendarDays },
   { id: "training-planner", label: "Plan training", icon: CalendarCheck2 },
   { id: "training-records", label: "Training records", icon: GraduationCap },
-  { id: "department-hods", label: "Department HODs", icon: UserCog },
-  { id: "email-automation", label: "Email automation", icon: MailCheck },
-  { id: "notes-library", label: "Evaluations & notes", icon: Library }
+
+];
+
+const emailNav: Array<{id:View;label:string;icon:LucideIcon}> = [
+  {id:"email-overview",label:"Overview",icon:LayoutDashboard},
+  {id:"email-automation",label:"Email templates",icon:FileText},
+  {id:"email-delivery",label:"Delivery status",icon:MailCheck},
+  {id:"notes-library",label:"Evaluation submissions",icon:ClipboardCheck},
+  {id:"department-hods",label:"Recipients & HODs",icon:UserCog},
+  {id:"email-settings",label:"Connection settings",icon:Settings2},
 ];
 
 const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
@@ -149,6 +160,7 @@ function App() {
 function AdminApp() {
   const initialVehicleId = new URLSearchParams(window.location.search).get("vehicle") ?? undefined;
   const [activeView, setActiveView] = useState<View>(initialVehicleId ? "fleet" : "overview");
+  const [emailOpen,setEmailOpen]=useState(false);
   const [trainingOpen, setTrainingOpen] = useState(false);
   const [fleetOpen, setFleetOpen] = useState(Boolean(initialVehicleId));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -181,7 +193,8 @@ function AdminApp() {
   const navigate = (view: View) => {
     setActiveView(view);
     setMobileNavOpen(false);
-    if (view.startsWith("training") || view === "email-automation" || view === "notes-library") setTrainingOpen(true);
+    if (view.startsWith("training")) setTrainingOpen(true);
+    if (emailNav.some(item=>item.id===view)) setEmailOpen(true);
     if (view.startsWith("fleet") || view === "usage-history") setFleetOpen(true);
   };
 
@@ -199,7 +212,7 @@ function AdminApp() {
 
   return (
     <div className="app-shell">
-      <Sidebar activeView={activeView} trainingOpen={trainingOpen} fleetOpen={fleetOpen} mobileOpen={mobileNavOpen}
+      <Sidebar emailOpen={emailOpen} onEmailToggle={()=>setEmailOpen(open=>!open)} activeView={activeView} trainingOpen={trainingOpen} fleetOpen={fleetOpen} mobileOpen={mobileNavOpen}
         onTrainingToggle={() => setTrainingOpen((open) => !open)} onFleetToggle={() => setFleetOpen((open) => !open)} onNavigate={navigate} onClose={() => setMobileNavOpen(false)} />
       <main className="workspace" ref={workspaceRef}>
         <Topbar meta={viewMeta[activeView]} onMenu={() => setMobileNavOpen(true)}
@@ -215,6 +228,9 @@ function AdminApp() {
             setNotice(message); setTrainingError(""); api.getDashboard().then(setDashboard).catch(() => {}); navigate("training-calendar");
           }} />}
           {activeView === "training-records" && <TrainingRecords sessions={calendarSessions} onDelete={deleteTraining} onRefresh={() => { void loadTraining(); api.getDashboard().then(setDashboard).catch(() => {}); }} />}
+          {activeView === "email-overview" && <EmailOverview onOpen={navigate}/>}
+          {activeView === "email-delivery" && <EmailDelivery/>}
+          {activeView === "email-settings" && <EmailConnectionSettings showNotice={setNotice}/>}
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}
           {activeView === "notes-library" && <NotesLibrary showNotice={setNotice} />}
           {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
@@ -232,11 +248,12 @@ function AdminApp() {
   );
 }
 
-function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingToggle, onFleetToggle, onNavigate, onClose }: {
-  activeView: View; trainingOpen: boolean; fleetOpen: boolean; mobileOpen: boolean; onTrainingToggle: () => void; onFleetToggle: () => void;
+function Sidebar({ emailOpen,onEmailToggle,activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingToggle, onFleetToggle, onNavigate, onClose }: {
+  emailOpen:boolean;onEmailToggle:()=>void; activeView: View; trainingOpen: boolean; fleetOpen: boolean; mobileOpen: boolean; onTrainingToggle: () => void; onFleetToggle: () => void;
   onNavigate: (view: View) => void; onClose: () => void;
 }) {
   const inTraining = trainingNav.some((item) => item.id === activeView);
+  const inEmail=emailNav.some(item=>item.id===activeView);
   const inFleet = fleetNav.some((item) => item.id === activeView);
   return <>
     {mobileOpen && <button className="nav-backdrop" onClick={onClose} aria-label="Close navigation" />}
@@ -258,6 +275,8 @@ function Sidebar({ activeView, trainingOpen, fleetOpen, mobileOpen, onTrainingTo
             <item.icon size={15} /><span>{item.label}</span></button>)}
           </div>
         </div>
+        <button className={`nav-item nav-parent ${inEmail?"active-parent":""}`} onClick={onEmailToggle} aria-expanded={emailOpen} aria-controls="email-navigation"><span className="nav-icon"><MailCheck size={18}/></span><span>Email</span><ChevronDown className={emailOpen?"rotate":""} size={16}/></button>
+        <div id="email-navigation" className={`nav-children ${emailOpen?"open":""}`} inert={!emailOpen}><div className="nav-children-content">{emailNav.map(item=><button key={item.id} className={`nav-child ${activeView===item.id?"active":""}`} onClick={()=>onNavigate(item.id)}><item.icon size={15}/><span>{item.label}</span></button>)}</div></div>
         <button className={`nav-item nav-parent ${inFleet ? "active-parent" : ""}`} onClick={onFleetToggle} aria-expanded={fleetOpen} aria-controls="car-navigation">
           <span className="nav-icon"><CarFront size={18} /></span><span>Company cars</span><ChevronDown className={fleetOpen ? "rotate" : ""} size={16} />
         </button>

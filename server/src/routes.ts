@@ -229,6 +229,12 @@ export const createRouter = () => {
     const failures = await prisma.trainingEmailJob.findMany({ where: { status: "FAILED", session: { archivedAt: null } }, select: { id: true, recipient: true, lastError: true, session: { select: { course: { select: { name: true } } } } }, orderBy: { updatedAt: "desc" }, take: 10 });
     res.json({ enabled: trainingEmailEnabled(), ready: trainingEmailReady(), counts: Object.fromEntries(groups.map(group => [group.status, group._count])), failures });
   }));
+  router.get("/training-email/deliveries",asyncHandler(async(req,res)=>{
+    const query=z.object({page:z.coerce.number().int().min(0).max(100000).default(0),status:z.enum(["all","PENDING","SENDING","SENT","FAILED","CANCELLED"]).default("all"),search:z.string().trim().max(200).default("")}).parse(req.query);
+    const where:import("@prisma/client").Prisma.TrainingEmailJobWhereInput={session:{archivedAt:null},...(query.status!=="all"?{status:query.status}:{}),...(query.search?{OR:[{recipient:{contains:query.search,mode:"insensitive"}},{employee:{name:{contains:query.search,mode:"insensitive"}}},{employee:{employeeId:{contains:query.search,mode:"insensitive"}}},{session:{course:{name:{contains:query.search,mode:"insensitive"}}}}]}:{})};
+    const [rows,total]=await Promise.all([prisma.trainingEmailJob.findMany({where,select:{id:true,kind:true,recipient:true,status:true,dueAt:true,sentAt:true,lastError:true,employee:{select:{name:true,employeeId:true}},session:{select:{course:{select:{name:true}}}}},orderBy:[{updatedAt:"desc"},{id:"desc"}],skip:query.page*25,take:25}),prisma.trainingEmailJob.count({where})]);
+    res.json({rows,total});
+  }));
   router.post("/training-email/retry", asyncHandler(async (_req, res) => {
     if (!trainingEmailReady()) throw new HttpError(503, "Configure SMTP and enable training emails before retrying.");
     const result = await prisma.trainingEmailJob.updateMany({ where: { status: "FAILED", expiresAt: { gt: new Date() }, session: { archivedAt: null } }, data: { status: "PENDING", attempts: 0, dueAt: new Date(), lastError: null } });

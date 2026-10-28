@@ -416,3 +416,17 @@ The main recipient is shown as a plain-language role appropriate to the email ty
 Add a detail inserts a labelled chip such as Training name or Participant name into the text being edited. HR never needs to type merge-variable syntax; the editor stores the existing supported placeholders behind the scenes. Pasted text is treated as plain text. More options contains existing external Cc addresses, Bcc, reply-to, restore-original and sample sending. Delivery diagnostics are collapsed under Delivery settings (system administrator). Sample sending still excludes every Cc/Bcc shortcut and employee copy.
 
 Deployment requires rebuilding the app and applying the normal Prisma db push, which adds ccSuperior, ccParticipant and ccEmployeeIds with empty/false defaults. Existing ccHod, manual Cc/Bcc, reply-to settings and email wording are preserved. No production recipients or messages were changed during development.
+
+
+### Email centre sidebar
+
+Email now has its own expandable section beside Training and Company cars. Its pages are:
+
+- Overview: queued/failed email actions, outstanding/overdue participant evaluations, submitted evaluations and shortcuts to the other email pages.
+- Email templates: the visual editor, recipient shortcuts and sample-email preview.
+- Delivery status: delivery service status, retry controls, and searchable, paginated scheduled email records with participant, recipient, schedule, last-send time and errors. Sent means accepted by the mail server; it does not confirm inbox delivery or reading. Recurring jobs can be queued after a send, with last sent shown separately.
+- Evaluation submissions: participant forms, notes/attachments, HOD delivery and three-month review status. Filters include outstanding participant forms, forms past the one-week deadline, due superior reviews, submitted forms and missing HODs. Future training, inactive employees and non-required attendance no longer appear as outstanding work.
+- Recipients & HODs: the employee-based department HOD selector, also available from Employees department cards.
+- Connection settings: email connection checks and administrator test tools.
+
+The overview fetches submission counts separately, without loading participant notes or attachments. Email-related links have moved out of the Training submenu. Existing email templates, messages, schedules and evaluation records are retained. Deploy/rebuild the app and API to enable the new pages; this change adds no database fields.
