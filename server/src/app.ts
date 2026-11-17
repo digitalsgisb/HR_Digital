@@ -1,5 +1,6 @@
 import { createTrainingPortalRouter, createTrainingReviewRouter } from "./training-portal.js";
 import { createTrainingEmailSettingsRouter } from "./training-email-settings.js";
+import { createTrainingEmailTrackerRouter } from "./training-email-tracker.js";
 import { createFleetWorkflowRouter } from "./fleet-workflow.js";
 import cors from "cors";
 import express from "express";
@@ -27,6 +28,7 @@ export const createApp = () => {
   app.use("/api", createFleetWorkflowRouter());
   app.use("/api", createTrainingReviewRouter());
   app.use("/api", createTrainingEmailSettingsRouter());
+  app.use("/api", createTrainingEmailTrackerRouter());
   app.use("/api", createRouter());
 
   if (env.nodeEnv === "production") {
