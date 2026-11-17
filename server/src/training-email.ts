@@ -56,6 +56,8 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
     if (["HOD_SUMMARY","SUPERIOR_REVIEW"].includes(job.kind) && !z.string().email().safeParse(reviewAction?reviewerEmail:hodEmail).success) {
       await db.trainingEmailJob.updateMany({where:owned,data:{status:"PENDING",attempts:0,dueAt:new Date(now.getTime()+86400000),claimToken:null,lockedAt:null,lastError:"Missing HOD / superior email. Update Department HODs or the employee profile; delivery will retry automatically."}}); continue;
     }
+    // Logged even when SMTP fails before the recipient/CC are resolved.
+    const attempt = { recipient: job.recipient, cc: [] as string[], messageId: null as string | null };
     try {
       const dateFormat = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "long", year: "numeric" });
       const timeFormat = new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -76,12 +78,27 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
       const extraPeople=settings.ccEmployeeIds.length?await db.employee.findMany({where:{id:{in:settings.ccEmployeeIds},status:"ACTIVE"},select:{email:true}}):[];
       const extraEmails=[...extraPeople.flatMap(person=>person.email?[person.email]:[]),...(settings.ccSuperior?[reviewerEmail]:[]),...(settings.ccParticipant&&job.employee.email?[job.employee.email]:[])];
       if(settings.ccEmployeeIds.length&&!(await db.trainingEmailJob.count({where:{...owned,session:{archivedAt:null}}})))continue;
-      const result = await sendMail({ from: env.smtpFrom, to: recipient, ...trainingEmailCopies(settings,recipient,hodEmail,extraEmails), replyTo:settings.replyTo||undefined, messageId: `<training-${job.id}${(job.kind==="SUMMARY_REMINDER"||reviewAction)?`-${job.sentAt?.getTime()||0}`:""}@hr-digital.local>`, subject:content.subject, text:content.text, html:content.html, attachments: [...files.map(file=>({filename:file.name,content:Buffer.from(file.data.split(",")[1],"base64"),contentType:file.data.slice(5,file.data.indexOf(";")),contentDisposition:"attachment" as const})),{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }] });
+      const copies = trainingEmailCopies(settings,recipient,hodEmail,extraEmails);
+      const messageId = `<training-${job.id}${(job.kind==="SUMMARY_REMINDER"||reviewAction)?`-${job.sentAt?.getTime()||0}`:""}@hr-digital.local>`;
+      Object.assign(attempt, { recipient, cc: copies.cc ? copies.cc.split(", ") : [], messageId });
+      const result = await sendMail({ from: env.smtpFrom, to: recipient, ...copies, replyTo:settings.replyTo||undefined, messageId, subject:content.subject, text:content.text, html:content.html, attachments: [...files.map(file=>({filename:file.name,content:Buffer.from(file.data.split(",")[1],"base64"),contentType:file.data.slice(5,file.data.indexOf(";")),contentDisposition:"attachment" as const})),{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }] });
       if (result.rejected?.length) throw new Error("Recipient rejected");
+      await recordTrainingEmailEvent(db, job, attempt, "SENT");
       await db.trainingEmailJob.updateMany({ where: owned, data: { status: job.kind === "SUMMARY_REMINDER" || reviewAction ? "PENDING" : "SENT", ...(job.kind === "SUMMARY_REMINDER" || reviewAction ? {dueAt:nextSummaryReminder(reviewAction?reviewDueDate(session.dateEnd!):session.dateEnd!,now),attempts:0} : {}), recipient, sentAt: new Date(), claimToken: null, lockedAt: null, lastError: null } });
-    } catch {
+    } catch (error) {
+      await recordTrainingEmailEvent(db, job, attempt, "FAILED", error instanceof Error ? error.message : "SMTP delivery failed.");
       await db.trainingEmailJob.updateMany({ where: owned, data: { status: job.attempts >= 5 && !["SUMMARY_REMINDER","SUPERIOR_REVIEW"].includes(job.kind) ? "FAILED" : "PENDING", ...(["SUMMARY_REMINDER","SUPERIOR_REVIEW"].includes(job.kind) && job.attempts >= 5 ? {attempts:0} : {}), dueAt: new Date(Date.now() + Math.min(60, 2 ** job.attempts) * 60000), claimToken: null, lockedAt: null, lastError: "SMTP delivery failed. Check connection, sender permissions and provider limits." } });
     }
+  }
+}
+
+// History must never change delivery state: a logging failure is reported but
+// does not turn an accepted message into a retry (which would send a duplicate).
+async function recordTrainingEmailEvent(db: typeof prisma, job: { id: string; sessionId: string; employeeId: string; kind: string }, attempt: { recipient: string; cc: string[]; messageId: string | null }, outcome: "SENT" | "FAILED", error?: string) {
+  try {
+    await db.trainingEmailEvent.create({ data: { jobId: job.id, sessionId: job.sessionId, employeeId: job.employeeId, kind: job.kind, recipient: attempt.recipient, cc: attempt.cc, outcome, messageId: attempt.messageId, error: error?.slice(0, 500) ?? null } });
+  } catch {
+    console.error("Training email history could not be recorded. Apply the latest database update.");
   }
 }
 

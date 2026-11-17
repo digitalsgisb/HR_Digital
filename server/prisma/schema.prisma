@@ -164,11 +164,32 @@ model TrainingEmailJob {
   lockedAt    DateTime?
   sentAt      DateTime?
   lastError   String?
+  events      TrainingEmailEvent[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@unique([sessionId, employeeId, kind])
   @@index([status, dueAt])
+}
+
+// One row per SMTP hand-off attempt. Jobs keep only their latest state, and
+// recurring reminders reuse the same job, so this is the delivery history.
+model TrainingEmailEvent {
+  id         String   @id @default(cuid())
+  jobId      String
+  job        TrainingEmailJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  sessionId  String
+  employeeId String
+  kind       String
+  recipient  String
+  cc         String[] @default([])
+  outcome    String
+  messageId  String?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([jobId])
 }
 
 model TrainingEmailTemplate {

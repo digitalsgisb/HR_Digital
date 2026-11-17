@@ -1,4 +1,5 @@
 import { EmailOverview, EmailDelivery } from "./EmailCentre";
+import { TrainingEmailTracker } from "./TrainingEmailTracker";
 import { CurrentUsageCards, RemoveVehicleUsage, isOpenVehicleUsage } from "./VehicleUsageActions";
 import { FleetAccess } from "./FleetAccess";
 import { DepartmentHods } from "./DepartmentHods";
@@ -43,7 +44,7 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-overview" | "email-automation" | "email-delivery" | "email-settings" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
+  "training-planner" | "training-records" | "email-overview" | "email-tracker" | "email-automation" | "email-delivery" | "email-settings" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
 
 const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   overview: { title: "Dashboard", eyebrow: "HR Digital" },
@@ -53,6 +54,7 @@ const viewMeta: Record<View, { title: string; eyebrow: string }> = {
   "training-planner": { title: "Plan training", eyebrow: "Learning & development" },
   "training-records": { title: "Employee training records", eyebrow: "Learning & development" },
   "email-overview": { title: "Email overview", eyebrow: "Email centre" },
+  "email-tracker": { title: "Training tracker", eyebrow: "Email centre" },
   "email-delivery": { title: "Delivery status", eyebrow: "Email centre" },
   "email-settings": { title: "Connection settings", eyebrow: "Email centre" },
   "email-automation": { title: "Email templates", eyebrow: "Email centre" },
@@ -77,6 +79,7 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
 
 const emailNav: Array<{id:View;label:string;icon:LucideIcon}> = [
   {id:"email-overview",label:"Overview",icon:LayoutDashboard},
+  {id:"email-tracker",label:"Training tracker",icon:Activity},
   {id:"email-automation",label:"Email templates",icon:FileText},
   {id:"email-delivery",label:"Delivery status",icon:MailCheck},
   {id:"notes-library",label:"Evaluation submissions",icon:ClipboardCheck},
@@ -169,6 +172,7 @@ function AdminApp() {
   const [selectedDate, setSelectedDate] = useState(malaysiaDate);
   const [notice, setNotice] = useState("");
   const [historyVehicleId, setHistoryVehicleId] = useState<string | null>(null);
+  const [tracker, setTracker] = useState<{ sessionId: string | null; visit: number }>({ sessionId: null, visit: 0 });
   const workspaceRef = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
@@ -196,6 +200,8 @@ function AdminApp() {
     if (view.startsWith("training")) setTrainingOpen(true);
     if (emailNav.some(item=>item.id===view)) setEmailOpen(true);
     if (view.startsWith("fleet") || view === "usage-history") setFleetOpen(true);
+    // Every visit starts fresh: the list, or the training openTracker chose.
+    if (view === "email-tracker") setTracker(current => ({ sessionId: null, visit: current.visit + 1 }));
   };
 
   const deleteTraining = async (id: string) => {
@@ -203,6 +209,11 @@ function AdminApp() {
     setCalendarSessions(current => current.filter(session => session.id !== id));
     setNotice("Training deleted. Pending emails were cancelled.");
     api.getDashboard().then(setDashboard).catch(() => setDashboard(null));
+  };
+
+  const openTracker = (sessionId: string | null) => {
+    navigate("email-tracker");
+    setTracker(current => ({ ...current, sessionId }));
   };
 
   const openHistory = (vehicleId: string) => {
@@ -222,13 +233,14 @@ function AdminApp() {
           {activeView === "overview" && <Overview dashboard={dashboard} sessions={calendarSessions} navigate={navigate} />}
           {activeView === "employees" && <EmployeesDatabase showNotice={setNotice} onAssignmentsChanged={() => { void loadTraining(); }} />}
           {activeView === "training-overview" && <TrainingOverview dashboard={dashboard} sessions={calendarSessions} navigate={navigate} />}
-          {activeView === "training-calendar" && <TrainingCalendar sessions={calendarSessions} selectedDate={selectedDate} setSelectedDate={setSelectedDate} navigate={navigate} onDelete={deleteTraining} onRefresh={() => { void loadTraining(); api.getDashboard().then(setDashboard).catch(() => {}); }} />}
+          {activeView === "training-calendar" && <TrainingCalendar onTrack={openTracker} sessions={calendarSessions} selectedDate={selectedDate} setSelectedDate={setSelectedDate} navigate={navigate} onDelete={deleteTraining} onRefresh={() => { void loadTraining(); api.getDashboard().then(setDashboard).catch(() => {}); }} />}
           {activeView === "training-planner" && <TrainingPlanner initialDate={selectedDate} onCreate={(session, message) => {
             setCalendarSessions((current) => [...current, session]); setSelectedDate(session.date);
             setNotice(message); setTrainingError(""); api.getDashboard().then(setDashboard).catch(() => {}); navigate("training-calendar");
           }} />}
           {activeView === "training-records" && <TrainingRecords sessions={calendarSessions} onDelete={deleteTraining} onRefresh={() => { void loadTraining(); api.getDashboard().then(setDashboard).catch(() => {}); }} />}
-          {activeView === "email-overview" && <EmailOverview onOpen={navigate}/>}
+          {activeView === "email-overview" && <EmailOverview onOpen={view => view === "email-tracker" ? openTracker(null) : navigate(view)}/>}
+          {activeView === "email-tracker" && <TrainingEmailTracker key={tracker.visit} initialSessionId={tracker.sessionId} showNotice={setNotice}/>}
           {activeView === "email-delivery" && <EmailDelivery/>}
           {activeView === "email-settings" && <EmailConnectionSettings showNotice={setNotice}/>}
           {activeView === "email-automation" && <EmailAutomation showNotice={setNotice} />}

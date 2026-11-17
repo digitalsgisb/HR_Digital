@@ -27,16 +27,54 @@ test("early sessions, late creation, historical plans and invalid recipients", (
 // This fixture models persistent conditional updates. No production database or
 // SMTP connection is used by these worker tests.
 function fixture() {
-  const row = { id: "job-1", employeeId: "employee-1", status: "PENDING", claimToken: null as string | null, lockedAt: null as Date | null, attempts: 0, kind: "INVITATION", expiresAt: new Date("2099-02-01"), dueAt: new Date("2025-01-01"), sentAt: null as Date | null, lastError: null as string | null, employee: { email: "person@example.test", status: "ACTIVE", name: "Person", employeeId: "EMP-1" }, session: { archivedAt: null as Date | null, dateStart: new Date("2099-01-02T01:00Z"), dateEnd: new Date("2099-01-02T04:00Z"), course: { name: "Safety" }, venue: "Training room", trainerName: "Trainer", detailsToken:"details-token-for-test-123456", attendanceToken:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", completions: [{ employeeId: "employee-1", status: "REQUIRED",summaryToken:"summary-token-for-test-123456",summarySubmittedAt:null as Date|null }] } };
+  const row = { id: "job-1", sessionId: "session-1", employeeId: "employee-1", status: "PENDING", claimToken: null as string | null, lockedAt: null as Date | null, attempts: 0, kind: "INVITATION", expiresAt: new Date("2099-02-01"), dueAt: new Date("2025-01-01"), sentAt: null as Date | null, lastError: null as string | null, employee: { email: "person@example.test", status: "ACTIVE", name: "Person", employeeId: "EMP-1" }, session: { archivedAt: null as Date | null, dateStart: new Date("2099-01-02T01:00Z"), dateEnd: new Date("2099-01-02T04:00Z"), course: { name: "Safety" }, venue: "Training room", trainerName: "Trainer", detailsToken:"details-token-for-test-123456", attendanceToken:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", completions: [{ employeeId: "employee-1", status: "REQUIRED",summaryToken:"summary-token-for-test-123456",summarySubmittedAt:null as Date|null }] } };
   const matches = (where: any) => (!where.id || where.id === row.id) && (typeof where.status === "string" ? row.status === where.status : !where.status?.in || where.status.in.includes(row.status)) && (!where.claimToken || where.claimToken === row.claimToken) && (!where.expiresAt?.lte || row.expiresAt <= where.expiresAt.lte) && (!where.attempts?.gte || row.attempts >= where.attempts.gte) && (!where.attempts?.lt || row.attempts < where.attempts.lt) && (!where.dueAt?.lte || row.dueAt <= where.dueAt.lte) && (!where.expiresAt?.gt || row.expiresAt > where.expiresAt.gt) && (!where.lockedAt || (!!row.lockedAt && row.lockedAt < where.lockedAt.lt)) && (!where.session || !row.session.archivedAt);
-  const db = { trainingEmailTemplate:{findUnique:async()=>null}, trainingEmailJob: {
+  const events: any[] = [];
+  const db = { trainingEmailTemplate:{findUnique:async()=>null}, trainingEmailEvent:{async create({data}:any){events.push(data);return data;}}, trainingEmailJob: {
     async updateMany({ where, data }: any) { if (!matches(where)) return { count: 0 }; const { attempts, ...rest } = data; Object.assign(row, rest); if (attempts?.increment) row.attempts += attempts.increment; return { count: 1 }; },
     async findMany({where}: any) { return matches(where) ? [{id: row.id}] : []; },
     async findUniqueOrThrow() { return { ...row }; },
     async count({where}: any) { return Number(matches(where)); }
   } } as unknown as typeof prisma;
-  return { row, db };
+  return { row, db, events };
 }
+
+test("worker keeps a history row for every send attempt, including recurring reminders", async () => {
+  const old = { ...env }; Object.assign(env, { emailTransport: "smtp", smtpHost: "localhost", smtpUser: "" });
+  try {
+    const sent = fixture();
+    await processTrainingEmails(new Date(), sent.db, async () => ({ rejected: [] }));
+    assert.equal(sent.events.length, 1);
+    assert.deepEqual({ ...sent.events[0], messageId: undefined }, { jobId: "job-1", sessionId: "session-1", employeeId: "employee-1", kind: "INVITATION", recipient: "person@example.test", cc: [], outcome: "SENT", messageId: undefined, error: null });
+    assert.match(sent.events[0].messageId, /^<training-job-1@hr-digital\.local>$/);
+
+    const failed = fixture();
+    await processTrainingEmails(new Date(), failed.db, async () => { throw new Error("Connection refused"); });
+    assert.equal(failed.events.length, 1); assert.equal(failed.events[0].outcome, "FAILED"); assert.equal(failed.events[0].error, "Connection refused");
+    assert.equal(failed.row.status, "PENDING");
+
+    // Recurring reminders reuse one job; each send must still be logged.
+    const recurring = fixture(); recurring.row.kind = "SUMMARY_REMINDER";
+    recurring.row.session.dateStart = new Date("2025-01-01T01:00Z"); recurring.row.session.dateEnd = new Date("2025-01-01T04:00Z");
+    await processTrainingEmails(new Date(), recurring.db, async () => ({ rejected: [] }));
+    recurring.row.dueAt = new Date("2025-01-01");
+    await processTrainingEmails(new Date(), recurring.db, async () => ({ rejected: [] }));
+    assert.equal(recurring.row.status, "PENDING");
+    assert.equal(recurring.events.filter(event => event.outcome === "SENT").length, 2);
+  } finally { Object.assign(env, old); }
+});
+
+test("a history write failure never turns an accepted email into a retry", async () => {
+  const old = { ...env }; Object.assign(env, { emailTransport: "smtp", smtpHost: "localhost", smtpUser: "" });
+  const originalError = console.error; console.error = () => {};
+  try {
+    const { row, db } = fixture(); (db as any).trainingEmailEvent.create = async () => { throw new Error("table missing"); };
+    let sends = 0;
+    await processTrainingEmails(new Date(), db, async () => { sends++; return { rejected: [] }; });
+    await processTrainingEmails(new Date(), db, async () => { sends++; return { rejected: [] }; });
+    assert.equal(sends, 1); assert.equal(row.status, "SENT");
+  } finally { Object.assign(env, old); console.error = originalError; }
+});
 
 test("worker claims once across concurrent ticks and renders a real invitation", async () => {
   const old = { ...env }; Object.assign(env, { emailTransport: "smtp", smtpHost: "localhost", smtpUser: "" });
