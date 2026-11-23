@@ -2,6 +2,7 @@ import {publicTrainingPage,publicTrainingStyles} from "./public-training-ui.js";
 import {trainingDetailsHeader,trainingDetailsPage, type PublicTrainingDetails} from "./training-details-view.js";
 import { departmentWithHod } from "./department-hod.js";
 import { participantFields, reviewerFields, evaluationSchema, reviewSchema, missingFields, reviewDueDate, resolvedHod, resolvedHodName, type EvaluationField } from "./training-evaluation.js";
+import { workingMorningFrom } from "./training-email-schedule.js";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "./prisma.js";
@@ -62,7 +63,7 @@ export function createTrainingPortalRouter() {
         await prisma.$transaction(async (tx) => { const saved = await tx.trainingCompletion.updateMany({ where: { id: record.id, summarySubmittedAt: null, session: { archivedAt: null }, status: { in: ["REQUIRED", "COMPLETED"] } }, data: { summaryLearning: input.learning, summaryApplication: input.application, summaryFeedback: input.feedback, summaryNotes: input.notes, summaryAttachments: input.attachments, ...(input.evaluation?{evaluation: input.evaluation}:{}), ...(input.submit ? { summarySubmittedAt: new Date() } : {}) } }); if (!saved.count)
             throw new AttendanceError(409, "Summary changed. Please reload."); if (input.submit) {
             await tx.trainingEmailJob.updateMany({ where: { sessionId: record.sessionId, employeeId: record.employeeId, kind: { in: ["FOLLOW_UP", "SUMMARY_REMINDER"] }, status: { in: ["PENDING", "FAILED"] } }, data: { status: "CANCELLED" } });
-            await tx.trainingEmailJob.upsert({where:{sessionId_employeeId_kind:{sessionId:record.sessionId,employeeId:record.employeeId,kind:"SUPERIOR_REVIEW"}},create:{sessionId:record.sessionId,employeeId:record.employeeId,kind:"SUPERIOR_REVIEW",recipient:record.employee.superiorEmail||resolvedHod(record.employee),dueAt:reviewDueDate(record.session.dateEnd!),expiresAt:new Date("9999-12-31")},update:{}});
+            await tx.trainingEmailJob.upsert({where:{sessionId_employeeId_kind:{sessionId:record.sessionId,employeeId:record.employeeId,kind:"SUPERIOR_REVIEW"}},create:{sessionId:record.sessionId,employeeId:record.employeeId,kind:"SUPERIOR_REVIEW",recipient:record.employee.superiorEmail||resolvedHod(record.employee),dueAt:workingMorningFrom(reviewDueDate(record.session.dateEnd!)),expiresAt:new Date("9999-12-31")},update:{}});
             await tx.trainingEmailJob.upsert({ where: { sessionId_employeeId_kind: { sessionId: record.sessionId, employeeId: record.employeeId, kind: "HOD_SUMMARY" } }, create: { sessionId: record.sessionId, employeeId: record.employeeId, kind: "HOD_SUMMARY", recipient: resolvedHod(record.employee), dueAt: new Date(), expiresAt: new Date("9999-12-31") }, update: {} });
         } });
         res.json({ message: input.submit ? "Summary submitted. Thank you!" : "Draft saved. You can return using the same link." });

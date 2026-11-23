@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma.js";
 import { processTrainingEmails, trainingEmailReady } from "./training-email.js";
+import { reminderProgress } from "./training-email-schedule.js";
 
 // Emails in the order a participant receives them.
 export const trackerKinds = ["INVITATION", "REMINDER", "FOLLOW_UP", "SUMMARY_REMINDER", "HOD_SUMMARY", "SUPERIOR_REVIEW"] as const;
@@ -120,7 +121,7 @@ export function createTrainingEmailTrackerRouter() {
         employeeId: record.employeeId, staffId: record.employee.employeeId, name: record.employee.name || record.employee.employeeId,
         department: record.employee.department.name, email: record.employee.email, employeeStatus: record.employee.status,
         attendance: record.status, checkedInAt: record.checkedInAt, summarySubmittedAt: record.summarySubmittedAt, reviewSubmittedAt: record.reviewSubmittedAt,
-        emails: Object.fromEntries(session.emailJobs.filter(job => job.employeeId === record.employeeId).map(job => [job.kind, { ...job, state: emailState(job), sends: sends(job.id) }])),
+        emails: Object.fromEntries(session.emailJobs.filter(job => job.employeeId === record.employeeId).map(job => [job.kind, { ...job, state: emailState(job), sends: sends(job.id), ...reminderProgress(job.kind, sends(job.id)) }])),
         history: events.filter(event => event.employeeId === record.employeeId)
       }))
     });

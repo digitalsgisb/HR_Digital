@@ -4,7 +4,7 @@ import { createApp } from "./app.js";
 import { prisma } from "./prisma.js";
 import { summarySchema } from "./training-portal.js";
 import { maintenanceSchema } from "./fleet-workflow.js";
-import { nextSummaryReminder } from "./training-email.js";
+import { nextReminderAt, reminderProgress, workingMorningFrom } from "./training-email-schedule.js";
 test("HR can remove current and past usage without losing evidence, mileage or newer reservations", async t => {
     const restore: Array<() => void> = [];
     const replace = (target: any, key: string, handler: any) => { const previous = target[key]; target[key] = handler; restore.push(() => target[key] = previous); };
@@ -71,11 +71,21 @@ test("employee ID lookup returns only the active employee's name and canonical I
     assert.equal((await identify(" ")).status, 400);
     assert.equal((await identify("x".repeat(101))).status, 400);
 });
-test("three-day cadence stays anchored to training end and skips missed reminders", () => {
-    const end = new Date("2026-10-01T04:00:00Z");
-    assert.equal(nextSummaryReminder(end, end).toISOString(), "2026-10-04T04:00:00.000Z");
-    assert.equal(nextSummaryReminder(end, new Date("2026-10-04T04:00:00Z")).toISOString(), "2026-10-07T04:00:00.000Z");
-    assert.equal(nextSummaryReminder(end, new Date("2026-10-12T10:00:00Z")).toISOString(), "2026-10-13T04:00:00.000Z");
+test("reminders follow three days after the last send at 09:00 Malaysia time, skipping weekends", () => {
+    // Thu 1 Oct 12:00 MYT + 3 days = Sun 4 Oct, moved to Mon 5 Oct 09:00 MYT.
+    assert.equal(nextReminderAt(new Date("2026-10-01T04:00:00Z")).toISOString(), "2026-10-05T01:00:00.000Z");
+    assert.equal(nextReminderAt(new Date("2026-10-05T01:00:00Z")).toISOString(), "2026-10-08T01:00:00.000Z");
+    // Wed 7 Oct 18:00 MYT + 3 days = Sat 10 Oct, moved to Mon 12 Oct.
+    assert.equal(nextReminderAt(new Date("2026-10-07T10:00:00Z")).toISOString(), "2026-10-12T01:00:00.000Z");
+    // Late UTC evening is already the next Malaysian day (Fri 2 Oct 04:00 MYT).
+    assert.equal(nextReminderAt(new Date("2026-10-01T20:00:00Z")).toISOString(), "2026-10-05T01:00:00.000Z");
+    assert.equal(workingMorningFrom(new Date("2026-10-01T00:00:00Z")).toISOString(), "2026-10-01T01:00:00.000Z");
+    assert.equal(workingMorningFrom(new Date("2026-10-01T04:00:00Z")).toISOString(), "2026-10-02T01:00:00.000Z");
+    assert.equal(workingMorningFrom(new Date("2026-10-03T04:00:00Z")).toISOString(), "2026-10-05T01:00:00.000Z");
+    assert.deepEqual(reminderProgress("SUMMARY_REMINDER", 4), { reminders: 4, escalated: false });
+    assert.deepEqual(reminderProgress("SUMMARY_REMINDER", 5), { reminders: 5, escalated: true });
+    assert.deepEqual(reminderProgress("SUPERIOR_REVIEW", 5), { reminders: 4, escalated: false });
+    assert.deepEqual(reminderProgress("FOLLOW_UP", 1), { reminders: 0, escalated: false });
     assert.equal(summarySchema.safeParse({ submit: true, notes: "Only notes" }).success, false);
     assert.equal(summarySchema.safeParse({ notes: "Draft notes" }).success, true);
     assert.equal(summarySchema.safeParse({ attachments: [{ name: "bad.html", data: "data:text/html;base64,eA==" }] }).success, false);

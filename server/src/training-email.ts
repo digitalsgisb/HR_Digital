@@ -1,6 +1,6 @@
 import { departmentWithHod } from "./department-hod.js";
 import { trainingEmailTemplate, renderConfiguredTrainingEmail, trainingEmailCopies } from "./training-email-templates.js";
-import { participantFields, resolvedHod, resolvedHodName, reviewDueDate } from "./training-evaluation.js";
+import { participantFields, resolvedHod, resolvedHodName } from "./training-evaluation.js";
 import { trainingPortalUrl } from "./training-portal.js";
 import { attendanceUrl } from "./attendance.js";
 import { z } from "zod";
@@ -10,7 +10,7 @@ import type { Prisma } from "@prisma/client";
 import { env } from "./env.js";
 import { prisma } from "./prisma.js";
 import { emailLogo, emailLogoCid } from "./email-template.js";
-import { eligibleTrainingEmailRecipient, trainingEmailSchedule } from "./training-email-schedule.js";
+import { ESCALATE_FROM_REMINDER, eligibleTrainingEmailRecipient, nextReminderAt, trainingEmailSchedule } from "./training-email-schedule.js";
 
 export const trainingEmailEnabled = () => process.env.EMAIL_AUTOMATION_ENABLED !== "false";
 export const trainingEmailReady = () => trainingEmailEnabled() && env.emailTransport === "smtp" && !!env.smtpHost && (!env.smtpUser || !!env.smtpPassword);
@@ -18,9 +18,40 @@ export const trainingEmailReady = () => trainingEmailEnabled() && env.emailTrans
 export async function queueTrainingEmails(tx: Prisma.TransactionClient, session: { id: string; dateStart: Date; dateEnd: Date | null }, notify = true, now = new Date()) {
   const participants = await tx.trainingCompletion.findMany({ where: { sessionId: session.id }, include: { employee: true } });
   const recipients = participants.filter(record => eligibleTrainingEmailRecipient(record.employee, record.status));
-  const schedule = notify ? trainingEmailSchedule(session.dateStart, session.dateEnd, now) : [];
+  const schedule = notify ? trainingEmailSchedule(session.dateStart, now) : [];
   const result = await tx.trainingEmailJob.createMany({ data: recipients.flatMap(record => schedule.map(job => ({ ...job, sessionId: session.id, employeeId: record.employeeId, recipient: record.employee.email!.trim().toLowerCase() }))), skipDuplicates: true });
   return { queued: result.count, recipients: recipients.length, withoutEmail: participants.length - recipients.length, enabled: trainingEmailReady(), historical: session.dateStart <= now, requested: notify };
+}
+
+const FOREVER = new Date("9999-12-31");
+const activeJobStatuses = ["PENDING", "SENDING", "FAILED"];
+
+// Every participant HR has not excluded (ABSENT / EXCUSED / NOT_REQUIRED) is asked
+// to evaluate once the training has ended, whether or not they checked in and
+// whatever the plan's notify setting was. Run on every worker tick, this also
+// catches up past training, people added after the event and changed end dates.
+export async function ensureEvaluationEmails(db = prisma, now = new Date()) {
+  const outstanding = await db.trainingCompletion.findMany({
+    where: { summarySubmittedAt: null, status: { in: ["REQUIRED", "COMPLETED"] }, employee: { status: "ACTIVE", email: { not: null } }, session: { archivedAt: null, dateEnd: { lte: now } } },
+    select: { sessionId: true, employeeId: true, status: true, employee: { select: { email: true, status: true } } }
+  });
+  const eligible = outstanding.filter(record => eligibleTrainingEmailRecipient(record.employee, record.status));
+  if (!eligible.length) return 0;
+  const jobs = await db.trainingEmailJob.findMany({ where: { kind: { in: ["FOLLOW_UP", "SUMMARY_REMINDER"] }, sessionId: { in: [...new Set(eligible.map(record => record.sessionId))] } }, select: { sessionId: true, employeeId: true, kind: true, status: true } });
+  let queued = 0;
+  for (const record of eligible) {
+    const own = jobs.filter(job => job.sessionId === record.sessionId && job.employeeId === record.employeeId);
+    if (own.some(job => activeJobStatuses.includes(job.status))) continue;
+    const key = (kind: string) => ({ sessionId_employeeId_kind: { sessionId: record.sessionId, employeeId: record.employeeId, kind } });
+    const recipient = record.employee.email!.trim().toLowerCase();
+    // Already asked once (reminders were stopped, e.g. marked absent and later restored): resume reminders.
+    const kind = own.some(job => job.kind === "FOLLOW_UP" && job.status === "SENT") ? "SUMMARY_REMINDER" : "FOLLOW_UP";
+    const dueAt = kind === "FOLLOW_UP" ? now : nextReminderAt(now);
+    const reset = { status: "PENDING", dueAt, expiresAt: FOREVER, attempts: 0, claimToken: null, lockedAt: null, lastError: null, recipient };
+    await db.trainingEmailJob.upsert({ where: key(kind), create: { sessionId: record.sessionId, employeeId: record.employeeId, kind, recipient, dueAt, expiresAt: FOREVER }, update: reset });
+    queued++;
+  }
+  return queued;
 }
 
 const transport = nodemailer.createTransport({ host: env.smtpHost, port: env.smtpPort, secure: env.smtpSecure, requireTLS: env.smtpRequireTls,
@@ -52,7 +83,8 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
     }
     if(reviewAction && completion.reviewSubmittedAt){await db.trainingEmailJob.updateMany({where:owned,data:{status:"CANCELLED",claimToken:null,lockedAt:null}});continue;}
     const summaryAction = ["FOLLOW_UP","SUMMARY_REMINDER"].includes(job.kind);
-    if (summaryAction && (completion?.summarySubmittedAt || (job.kind === "FOLLOW_UP" && job.session.dateEnd && now.getTime() >= job.session.dateEnd.getTime()+3*86400000))) { await db.trainingEmailJob.updateMany({where:owned,data:{status:"CANCELLED",claimToken:null,lockedAt:null}}); continue; }
+    const recurring = job.kind === "SUMMARY_REMINDER" || reviewAction;
+    if (summaryAction && completion?.summarySubmittedAt) { await db.trainingEmailJob.updateMany({where:owned,data:{status:"CANCELLED",claimToken:null,lockedAt:null}}); continue; }
     if (["HOD_SUMMARY","SUPERIOR_REVIEW"].includes(job.kind) && !z.string().email().safeParse(reviewAction?reviewerEmail:hodEmail).success) {
       await db.trainingEmailJob.updateMany({where:owned,data:{status:"PENDING",attempts:0,dueAt:new Date(now.getTime()+86400000),claimToken:null,lockedAt:null,lastError:"Missing HOD / superior email. Update Department HODs or the employee profile; delivery will retry automatically."}}); continue;
     }
@@ -76,7 +108,10 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
       const recipientName=hodSummary?hodName:reviewAction?(job.employee.superiorEmail?job.employee.superiorName||"Reviewer":hodName):details.name;
       const content=renderConfiguredTrainingEmail(settings,details,actionUrl,false,summaryText,recipientName);
       const extraPeople=settings.ccEmployeeIds.length?await db.employee.findMany({where:{id:{in:settings.ccEmployeeIds},status:"ACTIVE"},select:{email:true}}):[];
-      const extraEmails=[...extraPeople.flatMap(person=>person.email?[person.email]:[]),...(settings.ccSuperior?[reviewerEmail]:[]),...(settings.ccParticipant&&job.employee.email?[job.employee.email]:[])];
+      // Reminder number for this send. The three-month review's first email is the request itself.
+      const previousSends = recurring ? await db.trainingEmailEvent.count({ where: { jobId: job.id, outcome: "SENT" } }).catch(() => 0) : 0;
+      const escalate = recurring && (reviewAction ? previousSends : previousSends + 1) >= ESCALATE_FROM_REMINDER;
+      const extraEmails=[...(escalate?[hodEmail,job.employee.superiorEmail??""]:[]),...extraPeople.flatMap(person=>person.email?[person.email]:[]),...(settings.ccSuperior?[reviewerEmail]:[]),...(settings.ccParticipant&&job.employee.email?[job.employee.email]:[])];
       if(settings.ccEmployeeIds.length&&!(await db.trainingEmailJob.count({where:{...owned,session:{archivedAt:null}}})))continue;
       const copies = trainingEmailCopies(settings,recipient,hodEmail,extraEmails);
       const messageId = `<training-${job.id}${(job.kind==="SUMMARY_REMINDER"||reviewAction)?`-${job.sentAt?.getTime()||0}`:""}@hr-digital.local>`;
@@ -84,7 +119,12 @@ export async function processTrainingEmails(now = new Date(), db = prisma, sendM
       const result = await sendMail({ from: env.smtpFrom, to: recipient, ...copies, replyTo:settings.replyTo||undefined, messageId, subject:content.subject, text:content.text, html:content.html, attachments: [...files.map(file=>({filename:file.name,content:Buffer.from(file.data.split(",")[1],"base64"),contentType:file.data.slice(5,file.data.indexOf(";")),contentDisposition:"attachment" as const})),{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }] });
       if (result.rejected?.length) throw new Error("Recipient rejected");
       await recordTrainingEmailEvent(db, job, attempt, "SENT");
-      await db.trainingEmailJob.updateMany({ where: owned, data: { status: job.kind === "SUMMARY_REMINDER" || reviewAction ? "PENDING" : "SENT", ...(job.kind === "SUMMARY_REMINDER" || reviewAction ? {dueAt:nextSummaryReminder(reviewAction?reviewDueDate(session.dateEnd!):session.dateEnd!,now),attempts:0} : {}), recipient, sentAt: new Date(), claimToken: null, lockedAt: null, lastError: null } });
+      await db.trainingEmailJob.updateMany({ where: owned, data: { status: recurring ? "PENDING" : "SENT", ...(recurring ? {dueAt:nextReminderAt(now),attempts:0} : {}), recipient, sentAt: new Date(), claimToken: null, lockedAt: null, lastError: null } });
+      if (job.kind === "FOLLOW_UP") {
+        // Never let this fail the delivered email (that would resend it); the sweep re-creates a missing reminder.
+        const reminder = { dueAt: nextReminderAt(now), expiresAt: FOREVER, recipient };
+        await db.trainingEmailJob.upsert({ where: { sessionId_employeeId_kind: { sessionId: job.sessionId, employeeId: job.employeeId, kind: "SUMMARY_REMINDER" } }, create: { sessionId: job.sessionId, employeeId: job.employeeId, kind: "SUMMARY_REMINDER", ...reminder }, update: { ...reminder, status: "PENDING", attempts: 0, claimToken: null, lockedAt: null, lastError: null } }).catch(() => console.error("Evaluation reminder could not be scheduled; it will be retried."));
+      }
     } catch (error) {
       await recordTrainingEmailEvent(db, job, attempt, "FAILED", error instanceof Error ? error.message : "SMTP delivery failed.");
       await db.trainingEmailJob.updateMany({ where: owned, data: { status: job.attempts >= 5 && !["SUMMARY_REMINDER","SUPERIOR_REVIEW"].includes(job.kind) ? "FAILED" : "PENDING", ...(["SUMMARY_REMINDER","SUPERIOR_REVIEW"].includes(job.kind) && job.attempts >= 5 ? {attempts:0} : {}), dueAt: new Date(Date.now() + Math.min(60, 2 ** job.attempts) * 60000), claimToken: null, lockedAt: null, lastError: "SMTP delivery failed. Check connection, sender permissions and provider limits." } });
@@ -105,12 +145,7 @@ async function recordTrainingEmailEvent(db: typeof prisma, job: { id: string; se
 export function startTrainingEmailWorker() {
   if (!env.databaseUrl || !trainingEmailEnabled()) return () => {};
   let busy = false;
-  const tick = async () => { if (busy) return; busy = true; try { await processTrainingEmails(); } catch { console.error("Training email queue could not be processed. Check database connectivity and schema."); } finally { busy = false; } };
+  const tick = async () => { if (busy) return; busy = true; try { await ensureEvaluationEmails(); await processTrainingEmails(); } catch { console.error("Training email queue could not be processed. Check database connectivity and schema."); } finally { busy = false; } };
   const timer = setInterval(() => { void tick(); }, 60000); timer.unref(); void tick();
   return () => clearInterval(timer);
-}
-
- export function nextSummaryReminder(end: Date, now: Date) {
- const interval = 3 * 86400000;
- return new Date(end.getTime() + (Math.floor(Math.max(0, now.getTime()-end.getTime())/interval)+1)*interval);
 }

@@ -12,7 +12,7 @@ type TrainingSummary = {
   emails: { sent: number; scheduled: number; failed: number; sends: number; lastSentAt: string | null };
   byKind: Record<string, KindCounts>;
 };
-type EmailCell = { id: string; kind: string; state: "SCHEDULED" | "SENDING" | "SENT" | "RECURRING" | "FAILED" | "CANCELLED"; recipient: string; dueAt: string; sentAt: string | null; lastError: string | null; sends: number };
+type EmailCell = { id: string; kind: string; state: "SCHEDULED" | "SENDING" | "SENT" | "RECURRING" | "FAILED" | "CANCELLED"; recipient: string; dueAt: string; sentAt: string | null; lastError: string | null; sends: number; reminders: number; escalated: boolean };
 type HistoryEvent = { id: string; kind: string; recipient: string; cc: string[]; outcome: "SENT" | "FAILED"; error: string | null; createdAt: string };
 type Participant = {
   employeeId: string; staffId: string; name: string; department: string; email: string | null; employeeStatus: string;
@@ -129,7 +129,7 @@ function TrainingEmailDetail({ id, onBack, showNotice }: { id: string; onBack: (
             {person.history.length ? <ol className="tracker-history">{person.history.map(event => <li key={event.id} className={event.outcome.toLowerCase()}><strong>{kindLabel[event.kind] ?? event.kind}</strong><span>{event.outcome === "SENT" ? "Sent" : "Failed"} · {when(event.createdAt)}</span><span>To {event.recipient}{event.cc.length ? ` · CC ${event.cc.join(", ")}` : ""}</span>{event.error && <span className="form-error">{event.error}</span>}</li>)}</ol> : <p>No emails have been sent to this participant yet. Sends are recorded from this update onwards.</p>}
           </td></tr>}</Fragment>)}</tbody></table></div>
         {!people.length && <p className="tracker-empty">No participants match this filter.</p>}
-        <p className="field-help tracker-empty">“Sent” means the mail server accepted the email; it does not confirm the email was opened. Evaluation reminders repeat every three days until the participant submits.</p>
+        <p className="field-help tracker-empty">“Sent” means the mail server accepted the email; it does not confirm the email was opened. Evaluation reminders go out every three days at 9:00 am (weekends move to Monday) until the participant submits. From the 5th reminder the HOD and immediate superior are copied.</p>
       </section>
     </>}
   </section>;
@@ -137,9 +137,12 @@ function TrainingEmailDetail({ id, onBack, showNotice }: { id: string; onBack: (
 
 function Cell({ cell, busy, onRetry }: { cell?: EmailCell; busy: boolean; onRetry: (jobId: string) => void }) {
   if (!cell) return <span className="tracker-state muted">—</span>;
-  const detail = cell.state === "SCHEDULED" ? `Due ${when(cell.dueAt)}` : cell.state === "RECURRING" ? `Last ${when(cell.sentAt!)} · next ${when(cell.dueAt)}` : cell.sentAt ? when(cell.sentAt) : null;
+  const next = cell.state === "SCHEDULED" || cell.state === "RECURRING" ? `next ${when(cell.dueAt)}` : null;
+  const detail = cell.state === "SCHEDULED" ? `Due ${when(cell.dueAt)}` : cell.state === "RECURRING" ? `Last ${when(cell.sentAt!)} · ${next}` : cell.sentAt ? when(cell.sentAt) : null;
   return <div className="tracker-cell" title={cell.lastError ?? undefined}>
-    <span className={`tracker-state ${cell.state.toLowerCase()}`}>{stateLabel[cell.state]}{cell.sends > 1 ? ` ×${cell.sends}` : ""}</span>
+    <span className={`tracker-state ${cell.state.toLowerCase()}`}>{stateLabel[cell.state]}{cell.sends > 1 && !cell.reminders ? ` ×${cell.sends}` : ""}</span>
+    {cell.reminders > 0 && <small><strong>Reminder {cell.reminders}</strong>{cell.escalated ? "" : ` · HOD copied from #5`}</small>}
+    {cell.escalated && <span className="tracker-state escalated">Escalated to HOD</span>}
     {detail && <small>{detail}</small>}
     {cell.lastError && cell.state !== "SENT" && <small className="form-error">{cell.lastError}</small>}
     {cell.state === "FAILED" && <button className="tracker-retry" disabled={busy} onClick={() => onRetry(cell.id)}><RotateCcw size={12} />Retry</button>}

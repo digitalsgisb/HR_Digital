@@ -18,8 +18,9 @@ test("plan API queues eligible participants, supports opt-out and archives train
     assert.equal(plan.notes,input.notes);assert.equal(plan.attendanceEnabled,true);
     const detailsPage=await fetch(root.replace(/\/api$/,"")+`/training/details/${plan.detailsToken}`);
     const detailsHtml=await detailsPage.text();assert.equal(detailsPage.status,200);assert.match(detailsHtml,/data:image\/png;base64/);assert.match(detailsHtml,/About this training/);assert.match(detailsHtml,/What happens next/);assert.match(detailsHtml,/practical safety exercises/);assert.match(detailsHtml,/&lt;script&gt;not executable&lt;\/script&gt;/);assert.doesNotMatch(detailsHtml,/<script>not executable/);assert.match(detailsHtml,new RegExp(`/attendance/${plan.attendanceToken}`));assert.doesNotMatch(detailsHtml,/qa@example.test|QA Participant|Primary navigation/);
-    assert.equal(plan.emailDelivery.queued, 4); assert.equal(plan.emailDelivery.withoutEmail, 1);
-    assert.equal(fixture.jobs.length, 4); assert.ok(fixture.jobs.every(job => job.recipient === "qa@example.test"));
+    // Invitation + attendance reminder; evaluation emails are queued by the sweep after training ends.
+    assert.equal(plan.emailDelivery.queued, 2); assert.equal(plan.emailDelivery.withoutEmail, 1);
+    assert.equal(fixture.jobs.length, 2); assert.ok(fixture.jobs.every(job => job.recipient === "qa@example.test"));
     assert.equal((await post({...input,notifyParticipants:false})).emailDelivery.queued, 0);
     assert.equal((await post({...input,dateStart:"2020-01-02T01:00:00.000Z",dateEnd:"2020-01-02T04:00:00.000Z"})).emailDelivery.queued, 0);
     fixture.sessions[0].completions[0].status = "COMPLETED";

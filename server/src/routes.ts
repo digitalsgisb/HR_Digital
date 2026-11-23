@@ -744,8 +744,12 @@ export const createRouter = () => {
       const id = routeParam(req.params.id);
       const existing = await prisma.trainingSession.findFirst({ where: { id, archivedAt: null } });
       if (!existing) throw new HttpError(404, "Training was not found.");
-      const datesChanged = existing.dateStart.toISOString() !== new Date(input.dateStart).toISOString() || (existing.dateEnd?.toISOString() ?? null) !== (input.dateEnd ? new Date(input.dateEnd).toISOString() : null);
-      if (datesChanged && await prisma.trainingEmailJob.count({ where: { sessionId: id } })) throw new HttpError(409, "This training has email schedules. Delete it and create a new plan with the revised date so participants receive the correct invitation.");
+      const startChanged = existing.dateStart.toISOString() !== new Date(input.dateStart).toISOString();
+      const endChanged = (existing.dateEnd?.toISOString() ?? null) !== (input.dateEnd ? new Date(input.dateEnd).toISOString() : null);
+      // Invitations already carry the start date, so a new start needs a new plan. A
+      // changed end only moves evaluation emails that have not gone out yet.
+      if (startChanged && await prisma.trainingEmailJob.count({ where: { sessionId: id, kind: { in: ["INVITATION", "REMINDER"] } } })) throw new HttpError(409, "This training has email schedules. Delete it and create a new plan with the revised date so participants receive the correct invitation.");
+      if (startChanged || endChanged) await prisma.trainingEmailJob.updateMany({ where: { sessionId: id, kind: { in: ["FOLLOW_UP", "SUMMARY_REMINDER"] }, sentAt: null, status: { in: ["PENDING", "FAILED"] } }, data: { status: "CANCELLED", lastError: "Training date changed; rescheduled for the new end time." } });
       const session = await prisma.trainingSession.update({
         where: { id, archivedAt: null },
         data: {
