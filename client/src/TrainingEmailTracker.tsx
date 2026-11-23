@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, MapPin, RefreshCw, RotateCcw } from "lucide-react";
 import { workflowRequest } from "./FleetAccess";
+import { errorText, optimistic } from "./optimistic";
 
 type Phase = "UPCOMING" | "IN_PROGRESS" | "FOLLOW_UP";
 type KindCounts = { sent: number; scheduled: number; failed: number; cancelled: number };
@@ -51,7 +52,7 @@ function TrainingEmailList({ onOpen }: { onOpen: (id: string) => void }) {
   useEffect(() => { void load(); return () => { request.current++; }; }, [scope]);
   const failed = rows?.reduce((sum, row) => sum + row.emails.failed, 0) ?? 0;
   return <section className="page-stack">
-    <div className="module-intro email-intro"><div><span className="module-kicker">Email centre</span><h2>Training tracker</h2><p>Follow each current training from invitation to evaluation: who has been emailed, what is still scheduled and who has not submitted.</p></div><button className="button button-light" disabled={busy} onClick={() => void load()}><RefreshCw size={16} />Refresh</button></div>
+    <div className="module-intro email-intro"><div><h2>Training tracker</h2><p>Follow each current training from invitation to evaluation: who has been emailed, what is still scheduled and who has not submitted.</p></div><button className="button button-light" disabled={busy} onClick={() => void load()}><RefreshCw size={16} />Refresh</button></div>
     <div className="page-toolbar"><div className="segmented"><button className={scope === "current" ? "active" : ""} onClick={() => setScope("current")}>Current training</button><button className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>All training</button></div>{failed > 0 && <span className="tracker-alert">{failed} failed {failed === 1 ? "email needs" : "emails need"} attention</span>}</div>
     {error && <p role="alert" className="form-error">{error}</p>}
     {busy && !rows && <p role="status">Loading training…</p>}
@@ -78,17 +79,27 @@ function TrainingEmailDetail({ id, onBack, showNotice }: { id: string; onBack: (
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "failed" | "outstanding" | "no-email">("all");
-  const load = async () => {
-    setBusy(true); setError("");
+  const load = async (quiet = false) => {
+    if (!quiet) setBusy(true); setError("");
     try { setData(await workflowRequest<TrainingDetail>(`/training-email/trainings/${encodeURIComponent(id)}`)); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not load this training."); }
     finally { setBusy(false); }
   };
   useEffect(() => { void load(); }, [id]);
-  const retry = async (jobId: string) => {
-    setBusy(true);
-    try { await workflowRequest(`/training-email/jobs/${encodeURIComponent(jobId)}/retry`, {}); showNotice("Email queued for another attempt."); await load(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Could not retry the email."); setBusy(false); }
+  const setCellState = (jobId: string, state: EmailCell["state"]) => setData(current => current && {
+    ...current,
+    participants: current.participants.map(person => ({ ...person, emails: Object.fromEntries(Object.entries(person.emails).map(([kind, cell]) => [kind, cell.id === jobId ? { ...cell, state } : cell])) })),
+  });
+  const retry = (jobId: string) => {
+    setError("");
+    void optimistic(() => {
+      setCellState(jobId, "SCHEDULED");
+      showNotice("Email queued for another attempt.");
+      return () => setCellState(jobId, "FAILED");
+    }, () => workflowRequest(`/training-email/jobs/${encodeURIComponent(jobId)}/retry`, {}), { ids: [jobId] }).then(result => {
+      if (result.ok) void load(true);
+      else setError(`The email was not queued. ${errorText(result.error, "Please try again.")}`);
+    });
   };
   const ended = data ? new Date(data.dateEnd ?? data.dateStart).getTime() < Date.now() : false;
   const outstanding = (person: Participant) => ended && !person.summarySubmittedAt && person.employeeStatus === "ACTIVE" && ["REQUIRED", "COMPLETED"].includes(person.attendance);

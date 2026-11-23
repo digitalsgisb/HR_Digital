@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { workflowRequest } from "./FleetAccess";
 import { api } from "./api";
+import { errorText, optimistic } from "./optimistic";
 import { InlineEmailText, emailDetailLabels, type InlineEmailHandle } from "./InlineEmailText";
 import type { EmailTestStatus } from "@hr-training/shared";
 import type { Employee } from "./types";
@@ -24,9 +25,11 @@ export function EmailTemplateEditor({showNotice}:{showNotice:(value:string)=>voi
  const current=templates.find(t=>t.kind===selected),draft=drafts[selected];
  const update=(changes:Partial<Draft>)=>{setDrafts(all=>({...all,[selected]:{...all[selected],...changes}}));setPreview(undefined);setMessage("");};
  const dirty=!!current&&!!draft&&JSON.stringify(payloadOf(draft))!==JSON.stringify(payloadOf(draftOf(current)));
- const run=async(action:"save"|"preview"|"test")=>{if(!draft)return;setBusy(true);setError("");setMessage("");try{const template=payloadOf(draft);
-  if(action==="save"){const saved=await workflowRequest<Template>(`/training-email/templates/${selected}`,template,"PUT");setTemplates(all=>all.map(t=>t.kind===selected?saved:t));setDrafts(all=>({...all,[selected]:draftOf(saved)}));setMessage("Template saved. Upcoming emails will use your changes.");showNotice("Email template saved.");}
-  else if(action==="preview")setPreview(await workflowRequest<{subject:string;html:string}>("/training-email/templates/preview",{kind:selected,template}));
+ const save=()=>{if(!draft||!current)return;const kind=selected,template=payloadOf(draft),before=current;setError("");setMessage("");
+  void optimistic(()=>{setTemplates(all=>all.map(t=>t.kind===kind?{...t,...template}:t));setMessage("Template saved. Upcoming emails will use your changes.");showNotice("Email template saved.");return()=>setTemplates(all=>all.map(t=>t.kind===kind?before:t));},()=>workflowRequest<Template>(`/training-email/templates/${kind}`,template,"PUT"))
+   .then(result=>{if(result.ok){setTemplates(all=>all.map(t=>t.kind===kind?result.value:t));return;}setMessage("");setError(`Template was not saved. ${errorText(result.error,"Please try again.")}`);});};
+ const run=async(action:"save"|"preview"|"test")=>{if(!draft)return;if(action==="save")return save();setBusy(true);setError("");setMessage("");try{const template=payloadOf(draft);
+  if(action==="preview")setPreview(await workflowRequest<{subject:string;html:string}>("/training-email/templates/preview",{kind:selected,template}));
   else{const result=await workflowRequest<{status:string}>("/training-email/templates/test",{kind:selected,template,recipient:testEmail});setMessage(result.status==="captured"?"Sample saved in the test inbox. No email was sent.":"Sample sent to your test address only. Nobody in Cc was copied.");}
  }catch(e){setError(e instanceof Error?e.message:"Could not save. Please try again.");}finally{setBusy(false);}};
  const primary=selected==="HOD_SUMMARY"?"Participant’s HOD":selected==="SUPERIOR_REVIEW"?"Immediate superior":"Training participant";

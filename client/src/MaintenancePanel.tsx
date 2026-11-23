@@ -57,5 +57,5 @@ export function MaintenancePage() {
  const [vehicles,setVehicles]=useState<Vehicle[]>([]), [error,setError]=useState("");
  const load=async()=>{setError("");try{setVehicles(await workflowRequest<Vehicle[]>("/vehicles"));}catch(e){setError(e instanceof Error?e.message:"Could not load cars.");}};
  useEffect(()=>{void load();},[]);
- return <section className="page-stack"><div className="module-intro"><div><span className="module-kicker">Company cars</span><h2>Maintenance history</h2><p>Select a car to record servicing, repairs and invoices, and review its maintenance history.</p></div></div>{error?<div className="card fleet-form"><p role="alert">{error}</p><button onClick={()=>void load()}>Retry</button></div>:<MaintenancePanel vehicles={vehicles} onChanged={load}/>}</section>;
+ return <section className="page-stack"><div className="module-intro"><div><h2>Maintenance history</h2><p>Select a car to record servicing, repairs and invoices, and review its maintenance history.</p></div></div>{error?<div className="card fleet-form"><p role="alert">{error}</p><button onClick={()=>void load()}>Retry</button></div>:<MaintenancePanel vehicles={vehicles} onChanged={load}/>}</section>;
 }

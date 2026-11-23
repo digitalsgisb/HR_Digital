@@ -2,6 +2,7 @@ import { DepartmentHodAssignment, departmentHodLabel } from "./DepartmentHods";
 import { createPortal } from "react-dom";
 import { useOrganizationFilter, organizationLabel } from "./OrganizationFilters";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useSyncState } from "./optimistic";
 import { flushSync } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, MailCheck, UserRound, UsersRound } from "lucide-react";
 import type { Department, Employee } from "./types";
@@ -14,6 +15,7 @@ function DepartmentEmployees({ name, members, open, transitionName, onOpen, anim
   onOpen: (employee: Employee) => void; animateChange: AnimateChange;
 }) {
   const [requestedPage, setPage] = useState(0);
+  const { pending } = useSyncState();
   const gridRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const pageCount = Math.ceil(members.length / pageSize);
@@ -40,13 +42,12 @@ function DepartmentEmployees({ name, members, open, transitionName, onOpen, anim
     <div className="department-expansion-inner"><div className="department-body">
       <div className="department-page-viewport" style={{ minHeight: pageCount > 1 ? layout.height : undefined }}>
         <div className="employee-card-grid department-page-grid" key={page} ref={gridRef} style={{ viewTransitionName: open ? transitionName : "none" }}>
-          {members.slice(start, start + pageSize).map((person) => <button className="employee-card" key={person.id} onClick={() => onOpen(person)}>
+          {members.slice(start, start + pageSize).map((person) => <button className="employee-card" key={person.id} data-pending={pending.has(person.id) || undefined} onClick={() => onOpen(person)}>
             <span className="employee-card-avatar"><UserRound size={22} /></span>
             <span className="employee-card-identity"><strong>{person.name || "Name not recorded"}</strong><small>{person.employeeId}</small></span>
-            <span className={`employment-status ${person.status.toLowerCase().replaceAll("_", "-")}`}>{person.status.toLowerCase().replaceAll("_", " ")}</span>
+            {person.status !== "ACTIVE" && <span className={`employment-status ${person.status.toLowerCase().replaceAll("_", "-")}`}>{person.status.toLowerCase().replaceAll("_", " ")}</span>}
             <span className="employee-card-role">{[person.role || "Role not recorded", organizationLabel(person)].filter(Boolean).join(" · ")}{person.base ? ` · ${person.base}` : ""}</span>
             <span className={`employee-card-email ${person.email ? "" : "missing"}`}><MailCheck size={15} />{person.email || "No email address"}</span>
-            <span className="employee-card-action">View profile →</span>
           </button>)}
         </div>
       </div>
@@ -65,7 +66,6 @@ export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter
 }) {
   const [editingHod,setEditingHod]=useState<Department|null>(null);
   const [hodMessage,setHodMessage]=useState("");
-  const [hodSaving,setHodSaving]=useState(false);
   const [department, setDepartment] = useState("");
   const [emailFilter, setEmailFilter] = useState(initialEmailFilter);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -122,6 +122,6 @@ export function EmployeeDirectory({ employees, query, onOpen, initialEmailFilter
         <div id={`department-content-${index}`}><DepartmentEmployees key={JSON.stringify([name, query, department, emailFilter, statusFilter, members.map(person => person.id)])} name={name} members={members} open={open} transitionName={`department-employees-${index}`} onOpen={onOpen} animateChange={animateChange} /></div>
       </section>;
     })}</div>
-    {editingHod&&createPortal(<div className="fleet-dialog-backdrop"><section className="fleet-dialog" role="dialog" aria-modal="true" aria-label={`Assign HOD for ${editingHod.name}`}><header><div><span>{editingHod.name}</span><strong>Choose department HOD</strong></div><button aria-label="Close HOD assignment" disabled={hodSaving} onClick={()=>setEditingHod(null)}>×</button></header><div className="fleet-form"><DepartmentHodAssignment key={editingHod.id} department={editingHod} employees={employees} onBusyChange={setHodSaving} onSaved={async row=>{setHodSaving(true);try{await onDepartmentChanged?.();setHodMessage(`${row.name} HOD updated.`);setEditingHod(null);}finally{setHodSaving(false);}}}/></div></section></div>,document.body)}
+    {editingHod&&createPortal(<div className="fleet-dialog-backdrop"><section className="fleet-dialog" role="dialog" aria-modal="true" aria-label={`Assign HOD for ${editingHod.name}`}><header><div><span>{editingHod.name}</span><strong>Choose department HOD</strong></div><button aria-label="Close HOD assignment" onClick={()=>setEditingHod(null)}>×</button></header><div className="fleet-form"><DepartmentHodAssignment key={editingHod.id} department={editingHod} employees={employees} onApply={local=>{const department=editingHod;setEditingHod(null);setHodMessage(`${local.name} HOD updated.`);return()=>setEditingHod(department);}} onSaved={async()=>{await onDepartmentChanged?.();}} onFailed={message=>setHodMessage(message)}/></div></section></div>,document.body)}
   </section>;
 }

@@ -7,7 +7,8 @@ import { MaintenancePage } from "./MaintenancePanel";
 import { TrainingSummaries } from "./TrainingSummaries";
 import { ProductionRosterImport } from "./ProductionRosterImport";
 import { useOrganizationFilter } from "./OrganizationFilters";
-import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { errorText, optimistic, pendingId, useHiddenIds, useSyncState } from "./optimistic";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity, ArrowRight, Bell, BookOpenCheck, CalendarCheck2, CalendarDays, CarFront, Check,
@@ -46,27 +47,27 @@ import {
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
   "training-planner" | "training-records" | "email-overview" | "email-tracker" | "email-automation" | "email-delivery" | "email-settings" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
 
-const viewMeta: Record<View, { title: string; eyebrow: string }> = {
-  overview: { title: "Dashboard", eyebrow: "HR Digital" },
-  employees: { title: "Employees", eyebrow: "People" },
-  "training-overview": { title: "Training overview", eyebrow: "Learning & development" },
-  "training-calendar": { title: "Training calendar", eyebrow: "Learning & development" },
-  "training-planner": { title: "Plan training", eyebrow: "Learning & development" },
-  "training-records": { title: "Employee training records", eyebrow: "Learning & development" },
-  "email-overview": { title: "Email overview", eyebrow: "Email centre" },
-  "email-tracker": { title: "Training tracker", eyebrow: "Email centre" },
-  "email-delivery": { title: "Delivery status", eyebrow: "Email centre" },
-  "email-settings": { title: "Connection settings", eyebrow: "Email centre" },
-  "email-automation": { title: "Email templates", eyebrow: "Email centre" },
-  "notes-library": { title: "Evaluation submissions", eyebrow: "Email centre" },
-  fleet: { title: "Car usage", eyebrow: "Company cars" },
-  "fleet-qr": { title: "Fleet QR", eyebrow: "Company cars" },
-  "fleet-maintenance": { title: "Maintenance history", eyebrow: "Company cars" },
-  "department-hods": { title: "Recipients & HODs", eyebrow: "Email centre" },
-  "fleet-status": { title: "Vehicle status", eyebrow: "Company cars" },
-  "fleet-registry": { title: "Manage cars", eyebrow: "Company cars" },
-  "usage-history": { title: "Trip history", eyebrow: "Company cars" },
-  administration: { title: "Settings", eyebrow: "HR Digital" }
+const viewMeta: Record<View, { title: string }> = {
+  overview: { title: "Dashboard" },
+  employees: { title: "Employees" },
+  "training-overview": { title: "Training overview" },
+  "training-calendar": { title: "Training calendar" },
+  "training-planner": { title: "Plan training" },
+  "training-records": { title: "Employee training records" },
+  "email-overview": { title: "Email overview" },
+  "email-tracker": { title: "Training tracker" },
+  "email-delivery": { title: "Delivery status" },
+  "email-settings": { title: "Connection settings" },
+  "email-automation": { title: "Email templates" },
+  "notes-library": { title: "Evaluation submissions" },
+  fleet: { title: "Car usage" },
+  "fleet-qr": { title: "Fleet QR" },
+  "fleet-maintenance": { title: "Maintenance history" },
+  "department-hods": { title: "Recipients & HODs" },
+  "fleet-status": { title: "Vehicle status" },
+  "fleet-registry": { title: "Manage cars" },
+  "usage-history": { title: "Trip history" },
+  administration: { title: "Settings" }
 };
 
 const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
@@ -95,6 +96,19 @@ const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "fleet-registry", label: "Manage cars", icon: CarFront },
   { id: "usage-history", label: "Trip history", icon: Clock3 }
 ];
+
+const navSections: Array<{ label: string; home: View; items: Array<{ id: View }> }> = [
+  { label: "Training", home: "training-overview", items: trainingNav },
+  { label: "Email", home: "email-overview", items: emailNav },
+  { label: "Company cars", home: "fleet", items: fleetNav },
+];
+
+/** Ancestors of a page, root first. The current page itself is the heading, not a crumb. */
+const breadcrumbFor = (view: View): Array<{ label: string; view: View }> => {
+  if (view === "overview") return [];
+  const section = navSections.find((item) => item.items.some((child) => child.id === view));
+  return [{ label: "Dashboard", view: "overview" }, ...(section ? [{ label: section.label, view: section.home }] : [])];
+};
 
 const formatLongDate = (value: string) =>
   new Intl.DateTimeFormat("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
@@ -170,7 +184,8 @@ function AdminApp() {
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
   const [calendarSessions, setCalendarSessions] = useState<CalendarSession[]>([]);
   const [selectedDate, setSelectedDate] = useState(malaysiaDate);
-  const [notice, setNotice] = useState("");
+  const [notice, setNoticeState] = useState<Notice | null>(null);
+  const setNotice: ShowNotice = useCallback((text, tone = "success") => setNoticeState(text ? { id: Date.now(), text, tone } : null), []);
   const [historyVehicleId, setHistoryVehicleId] = useState<string | null>(null);
   const [tracker, setTracker] = useState<{ sessionId: string | null; visit: number }>({ sessionId: null, visit: 0 });
   const workspaceRef = useRef<HTMLElement>(null);
@@ -190,7 +205,7 @@ function AdminApp() {
   useEffect(() => { api.getDashboard().then(setDashboard).catch(() => setDashboard(null)); void loadTraining(); }, []);
   useEffect(() => {
     if (!notice) return;
-    const timeout = window.setTimeout(() => setNotice(""), 3600);
+    const timeout = window.setTimeout(() => setNoticeState(null), notice.tone === "error" ? 6000 : 3600);
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
@@ -205,10 +220,19 @@ function AdminApp() {
   };
 
   const deleteTraining = async (id: string) => {
-    await api.deleteTrainingSession(id);
-    setCalendarSessions(current => current.filter(session => session.id !== id));
-    setNotice("Training deleted. Pending emails were cancelled.");
-    api.getDashboard().then(setDashboard).catch(() => setDashboard(null));
+    const index = calendarSessions.findIndex(session => session.id === id);
+    const removed = calendarSessions[index];
+    void optimistic(
+      () => {
+        setCalendarSessions(current => current.filter(session => session.id !== id));
+        setNotice("Training deleted. Pending emails were cancelled.");
+        return () => setCalendarSessions(current => current.some(session => session.id === id) || !removed ? current : [...current.slice(0, index), removed, ...current.slice(index)]);
+      },
+      () => api.deleteTrainingSession(id),
+    ).then(result => {
+      if (result.ok) api.getDashboard().then(setDashboard).catch(() => setDashboard(null));
+      else setNotice(`Training was not deleted. ${errorText(result.error, "Check the connection and try again.")}`, "error");
+    });
   };
 
   const openTracker = (sessionId: string | null) => {
@@ -226,7 +250,7 @@ function AdminApp() {
       <Sidebar emailOpen={emailOpen} onEmailToggle={()=>setEmailOpen(open=>!open)} activeView={activeView} trainingOpen={trainingOpen} fleetOpen={fleetOpen} mobileOpen={mobileNavOpen}
         onTrainingToggle={() => setTrainingOpen((open) => !open)} onFleetToggle={() => setFleetOpen((open) => !open)} onNavigate={navigate} onClose={() => setMobileNavOpen(false)} />
       <main className="workspace" ref={workspaceRef}>
-        <Topbar meta={viewMeta[activeView]} onMenu={() => setMobileNavOpen(true)}
+        <Topbar meta={viewMeta[activeView]} crumbs={breadcrumbFor(activeView)} onNavigate={navigate} onMenu={() => setMobileNavOpen(true)}
           onSettings={() => navigate("administration")} showNotice={setNotice} />
         <div className="page-stage" key={activeView}>
           {activeView.startsWith("training") && (trainingLoading ? <p className="training-empty" role="status">Loading training…</p> : trainingError ? <div className="form-error" role="alert">{trainingError}<button type="button" onClick={() => { void loadTraining(); }}>Retry</button></div> : null)}
@@ -255,7 +279,7 @@ function AdminApp() {
           {activeView === "administration" && <Administration showNotice={setNotice} />}
         </div>
       </main>
-      {notice && <div className="toast" role="status"><CheckCircle2 size={18} /><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss notification"><X size={16} /></button></div>}
+      <Toast notice={notice} onDismiss={() => setNoticeState(null)} />
     </div>
   );
 }
@@ -301,7 +325,7 @@ function Sidebar({ emailOpen,onEmailToggle,activeView, trainingOpen, fleetOpen, 
         <NavButton icon={Settings2} label="Settings" active={activeView === "administration"} onClick={() => onNavigate("administration")} />
       </nav>
       <div className="sidebar-footer">
-        <span className="copyright"><span className="copyright-badge">©</span><span>Digital Transformation Unit</span></span>
+        <span className="copyright">© Digital Transformation Unit</span>
       </div>
     </aside>
   </>;
@@ -311,9 +335,9 @@ function NavButton({ icon: Icon, label, active, onClick }: { icon: LucideIcon; l
   return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}><span className="nav-icon"><Icon size={18} /></span><span>{label}</span></button>;
 }
 
-function Topbar({ meta, onMenu, onSettings, showNotice }: {
-  meta: { title: string; eyebrow: string }; onMenu: () => void; onSettings: () => void;
-  showNotice: (message: string) => void;
+function Topbar({ meta, crumbs, onNavigate, onMenu, onSettings, showNotice }: {
+  meta: { title: string }; crumbs: Array<{ label: string; view: View }>; onNavigate: (view: View) => void; onMenu: () => void; onSettings: () => void;
+  showNotice: ShowNotice;
 }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [permission, setPermission] = useState<BrowserNotificationPermission>(getNotificationPermission);
@@ -338,13 +362,13 @@ function Topbar({ meta, onMenu, onSettings, showNotice }: {
   const sendTestNotification = async () => {
     if (permission !== "granted") return enableNotifications();
     const delivered = await showSystemNotification("HR Digital", "Notifications are working on this device.");
-    showNotice(delivered ? "Test notification sent successfully." : "The browser could not display the test notification.");
+    showNotice(delivered ? "Test notification sent." : "The browser could not display the test notification.");
   };
 
-  return <header className="topbar"><div className="topbar-title"><button className="mobile-menu" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div><p>{meta.eyebrow}</p><h1>{meta.title}</h1></div></div><div className="topbar-actions"><span className="today-label">{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date())}</span><div className="topbar-notifications"><button className={`topbar-icon ${notificationsOpen ? "active" : ""}`} onClick={() => { setPermission(getNotificationPermission()); setNotificationsOpen((open) => !open); }} aria-label="Notifications" aria-expanded={notificationsOpen}><Bell size={18} /><i /></button>{notificationsOpen && <section className="notification-panel" role="dialog" aria-label="Notification centre"><header><div><strong>Notifications</strong><span>{permission === "granted" ? "Device alerts active" : "Device alerts need permission"}</span></div><button onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={16} /></button></header><div className={`notification-permission ${permission}`}><Bell size={17} /><div><strong>{permission === "granted" ? "PC & PWA notifications are on" : permission === "denied" ? "Notifications are blocked" : permission === "unsupported" ? "Notifications unavailable" : "Enable alerts on this device"}</strong><span>{permission === "granted" ? "Alerts can appear even when HR Digital is installed as an app." : permission === "denied" ? "Open this site's browser settings and change Notifications to Allow." : permission === "unsupported" ? "Use a current version of Chrome, Edge or another compatible browser." : "Allow training, employee and vehicle reminders to appear on your PC."}</span></div>{permission === "granted" ? <button onClick={sendTestNotification}>Test</button> : permission === "default" ? <button onClick={enableNotifications}>Enable</button> : null}</div><div className="notification-feed">{notificationFeed.map((item, index) => <article key={item.title}><span className={index === 0 ? "unread" : ""}><Bell size={15} /></span><div><strong>{item.title}</strong><p>{item.detail}</p></div><time>{item.time}</time></article>)}</div></section>}</div><button className="topbar-icon" onClick={onSettings} aria-label="Settings"><Settings2 size={18} /></button><div className="user-chip"><span>SA</span><div><strong>System Admin</strong><small>HR operations</small></div></div></div></header>;
+  return <header className="topbar"><div className="topbar-title"><button className="mobile-menu" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button><div className="topbar-heading">{crumbs.length > 0 && <nav className="breadcrumb" aria-label="Breadcrumb"><ol>{crumbs.map((crumb) => <li key={crumb.view}><button type="button" onClick={() => onNavigate(crumb.view)}>{crumb.label}</button><ChevronRight size={13} aria-hidden="true" /></li>)}</ol></nav>}<h1 key={meta.title}>{meta.title}</h1></div></div><div className="topbar-actions"><SyncIndicator /><span className="today-label">{new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", weekday: "short", day: "numeric", month: "short", year: "numeric" }).format(new Date())}</span><div className="topbar-notifications"><button className={`topbar-icon ${notificationsOpen ? "active" : ""}`} onClick={() => { setPermission(getNotificationPermission()); setNotificationsOpen((open) => !open); }} aria-label="Notifications" aria-expanded={notificationsOpen}><Bell size={18} /></button>{notificationsOpen && <section className="notification-panel" role="dialog" aria-label="Notification centre"><header><div><strong>Notifications</strong><span>{permission === "granted" ? "Device alerts active" : "Device alerts need permission"}</span></div><button onClick={() => setNotificationsOpen(false)} aria-label="Close notifications"><X size={16} /></button></header><div className={`notification-permission ${permission}`}><Bell size={17} /><div><strong>{permission === "granted" ? "PC & PWA notifications are on" : permission === "denied" ? "Notifications are blocked" : permission === "unsupported" ? "Notifications unavailable" : "Enable alerts on this device"}</strong><span>{permission === "granted" ? "Alerts can appear even when HR Digital is installed as an app." : permission === "denied" ? "Open this site's browser settings and change Notifications to Allow." : permission === "unsupported" ? "Use a current version of Chrome, Edge or another compatible browser." : "Allow training, employee and vehicle reminders to appear on your PC."}</span></div>{permission === "granted" ? <button onClick={sendTestNotification}>Test</button> : permission === "default" ? <button onClick={enableNotifications}>Enable</button> : null}</div><div className="notification-feed">{notificationFeed.map((item, index) => <article key={item.title}><span className={index === 0 ? "unread" : ""}><Bell size={15} /></span><div><strong>{item.title}</strong><p>{item.detail}</p></div><time>{item.time}</time></article>)}</div></section>}</div><button className="topbar-icon" onClick={onSettings} aria-label="Settings"><Settings2 size={18} /></button><div className="user-chip"><span>SA</span><div><strong>System Admin</strong><small>HR operations</small></div></div></div></header>;
 }
 
-function Administration({ showNotice }: { showNotice: (message: string) => void }) {
+function Administration({ showNotice }: { showNotice: ShowNotice }) {
   const [settings, setSettings] = useState<AdminSettings>(loadAdminSettings);
   const update = <K extends keyof AdminSettings>(key: K, value: AdminSettings[K]) =>
     setSettings((current) => ({ ...current, [key]: value }));
@@ -352,33 +376,33 @@ function Administration({ showNotice }: { showNotice: (message: string) => void 
   const save = (event: FormEvent) => {
     event.preventDefault();
     window.localStorage.setItem("hr-digital-admin-settings", JSON.stringify(settings));
-    showNotice("Administration settings saved successfully.");
+    showNotice("Settings saved.");
   };
 
   return <form className="page-stack admin-page" onSubmit={save}>
-    <div className="module-intro admin-intro"><div><span className="module-kicker"><LockKeyhole size={15} /> Restricted administration</span><h2>Manage HR Digital settings</h2><p>Update company details, email reminders, uploads and access settings.</p></div><span className="admin-access"><ShieldCheck size={17} /> Full access</span></div>
+    <div className="module-intro admin-intro"><div><h2>Manage HR Digital settings</h2><p>Update company details, email reminders, uploads and access settings.</p></div></div>
     <div className="admin-grid">
-      <section className="card admin-panel"><SectionHeader kicker="Platform" title="System preferences" />
+      <section className="card admin-panel"><SectionHeader title="System preferences" />
         <label className="field"><span>Organisation name</span><input value={settings.organisation} onChange={(event) => update("organisation", event.target.value)} /></label>
         <label className="field"><span>Default site</span><input value={settings.site} onChange={(event) => update("site", event.target.value)} /></label>
         <label className="field"><span>Timezone</span><select value={settings.timezone} onChange={(event) => update("timezone", event.target.value)}><option value="Asia/Kuala_Lumpur">Asia/Kuala Lumpur (MYT)</option><option value="UTC">UTC</option></select></label>
       </section>
-      <section className="card admin-panel"><SectionHeader kicker="Services" title="Feature controls" />
+      <section className="card admin-panel"><SectionHeader title="Feature controls" />
         <SettingToggle icon={MailCheck} title="Automated training email" detail="Allow scheduled invites, reminders and follow-ups." checked={settings.emailEnabled} onChange={(value) => update("emailEnabled", value)} />
         <SettingToggle icon={FileText} title="Employee note uploads" detail="Allow employees to upload training evidence and notes." checked={settings.uploadsEnabled} onChange={(value) => update("uploadsEnabled", value)} />
         <SettingToggle icon={ShieldCheck} title="Administration audit log" detail="Record sensitive configuration and access changes." checked={settings.auditEnabled} onChange={(value) => update("auditEnabled", value)} />
       </section>
-      <section className="card admin-panel"><SectionHeader kicker="Security" title="Access & sessions" />
-        <div className="admin-status-row"><span><UserCog size={18} /></span><div><strong>System Admin</strong><small>Full platform administration</small></div><em>Active</em></div>
-        <div className="admin-status-row"><span><LockKeyhole size={18} /></span><div><strong>Session policy</strong><small>Never expires · administrator-controlled termination</small></div><em>Enforced</em></div>
+      <section className="card admin-panel"><SectionHeader title="Access & sessions" />
+        <div className="admin-status-row"><span><UserCog size={18} /></span><div><strong>System Admin</strong><small>Full platform administration</small></div></div>
+        <div className="admin-status-row"><span><LockKeyhole size={18} /></span><div><strong>Session policy</strong><small>Never expires. Only an administrator can end it.</small></div></div>
         <button type="button" className="button button-secondary" onClick={() => showNotice("All other administrator sessions have been terminated.")}>Terminate other sessions</button>
       </section>
-      <section className="card admin-panel"><SectionHeader kicker="Infrastructure" title="AI PC server" />
-        <div className="server-health"><span><ServerCog size={25} /></span><div><strong>Production server online</strong><small>Application, database and background services are healthy.</small></div><em>Healthy</em></div>
+      <section className="card admin-panel"><SectionHeader title="AI PC server" />
+        <div className="server-health"><span><ServerCog size={25} /></span><div><strong>Production server online</strong><small>Application, database and background services are healthy.</small></div></div>
         <dl className="admin-facts"><div><dt>Environment</dt><dd>Linux · Docker Compose</dd></div><div><dt>Data region</dt><dd>On-premise</dd></div><div><dt>Update channel</dt><dd>Stable</dd></div></dl>
       </section>
     </div>
-    <div className="admin-savebar"><div><strong>Configuration controls unlocked</strong><span>Changes are limited to System Admin accounts.</span></div><button className="button button-primary" type="submit"><Check size={16} /> Save settings</button></div>
+    <div className="admin-savebar"><span>Changes apply to this browser.</span><button className="button button-primary" type="submit"><Check size={16} /> Save settings</button></div>
   </form>;
 }
 
@@ -390,18 +414,56 @@ function Overview({ dashboard, sessions, navigate }: { dashboard: DashboardSumma
   const stats = dashboard?.stats;
   const today = malaysiaDate();
   const upcoming = sessions.filter((session) => session.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0, 4);
-  return <section className="page-stack"><article className="hero-card"><div className="hero-glow" /><div className="hero-copy"><p className="live-label">HR operations</p><h2>Good day, <em>HR team.</em></h2><p>Manage employees, training and company cars.</p><div className="hero-actions"><button className="button button-light" onClick={() => navigate("training-planner")}><Plus size={17} />Plan training</button><button className="button button-ghost" onClick={() => navigate("training-calendar")}><CalendarDays size={17} />Open calendar</button></div></div></article>
+  return <section className="page-stack"><article className="hero-card"><div className="hero-glow" /><div className="hero-copy"><h2>Good day, HR team.</h2><p>Manage employees, training and company cars.</p><div className="hero-actions"><button className="button button-light" onClick={() => navigate("training-planner")}><Plus size={17} />Plan training</button><button className="button button-ghost" onClick={() => navigate("training-calendar")}><CalendarDays size={17} />Open calendar</button></div></div></article>
     <div className="metric-grid"><MetricCard icon={UsersRound} label="Active employees" value={stats?.activeEmployees ?? "—"} detail={stats ? stats.departments + " departments" : "Waiting for server"} tone="burgundy" onClick={() => navigate("employees")} /><MetricCard icon={GraduationCap} label="Training hours" value={stats?.totalTrainingHours ?? "—"} detail="Completed training records" tone="blue" /><MetricCard icon={CalendarCheck2} label="Saved sessions" value={stats?.sessions ?? "—"} detail="Training calendar" tone="violet" onClick={() => navigate("training-calendar")} /><MetricCard icon={ClipboardCheck} label="Completed records" value={stats?.completedRecords ?? "—"} detail="Saved attendance records" tone="green" onClick={() => navigate("training-records")} /></div>
-    <div className="content-grid overview-grid"><section className="card"><SectionHeader kicker="Training" title="Training hours by department" action="View records" onAction={() => navigate("training-records")} />{dashboard?.departmentHours.length ? <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><BarChart data={dashboard.departmentHours} layout="vertical" margin={{right:22,left:12}}><CartesianGrid horizontal={false} stroke="#ece8e6" /><XAxis type="number" /><YAxis type="category" dataKey="department" width={100} /><Tooltip /><Bar dataKey="hours" fill="#17181a" radius={[0,6,6,0]} barSize={16} /></BarChart></ResponsiveContainer></div> : <p className="training-empty">No completed training records to display.</p>}</section><section className="card"><SectionHeader kicker="Calendar" title="Upcoming training" action="Full calendar" onAction={() => navigate("training-calendar")} /><div className="timeline-list">{upcoming.length ? upcoming.map((session) => <SessionTimeline key={session.id} session={session} />) : <p className="training-empty">No upcoming training scheduled.</p>}</div></section></div>
+    <div className="content-grid overview-grid"><section className="card"><SectionHeader title="Training hours by department" action="View records" onAction={() => navigate("training-records")} />{dashboard?.departmentHours.length ? <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><BarChart data={dashboard.departmentHours} layout="vertical" margin={{right:22,left:12}}><CartesianGrid horizontal={false} stroke="#ece8e6" /><XAxis type="number" /><YAxis type="category" dataKey="department" width={100} /><Tooltip /><Bar dataKey="hours" fill="#17181a" radius={[0,6,6,0]} barSize={16} /></BarChart></ResponsiveContainer></div> : <p className="training-empty">No completed training records to display.</p>}</section><section className="card"><SectionHeader title="Upcoming training" action="Full calendar" onAction={() => navigate("training-calendar")} /><div className="timeline-list">{upcoming.length ? upcoming.map((session) => <SessionTimeline key={session.id} session={session} />) : <p className="training-empty">No upcoming training scheduled.</p>}</div></section></div>
   </section>;
 }
 
-function MetricCard({ icon: Icon, label, value, detail, tone, trend, onClick, selected }: { icon: LucideIcon; label: string; value: string | number; detail: string; tone: string; trend?: boolean; onClick?: () => void; selected?: boolean }) {
-  const content = <><span className={`metric-icon ${tone}`}><Icon size={20} /></span><div><p>{label}</p><strong>{value}</strong><small className={trend ? "positive" : ""}>{trend && "↗ "}{detail}</small></div><ChevronRight size={17} /></>;
+function MetricCard({ icon: Icon, label, value, detail, tone, onClick, selected }: { icon: LucideIcon; label: string; value: string | number; detail: string; tone: string; onClick?: () => void; selected?: boolean }) {
+  const content = <><span className={`metric-icon ${tone}`}><Icon size={20} /></span><div><p>{label}</p><strong>{value}</strong><small>{detail}</small></div>{onClick && <ChevronRight size={17} />}</>;
   return onClick ? <button type="button" className="metric-card metric-card-button" aria-pressed={selected} onClick={onClick}>{content}</button> : <article className="metric-card">{content}</article>;
 }
-function SectionHeader({ kicker, title, action, onAction }: { kicker: string; title: string; action?: string; onAction?: () => void }) {
-  return <header className="section-header"><div><p>{kicker}</p><h2>{title}</h2></div>{action && <button onClick={onAction}>{action}<ArrowRight size={15} /></button>}</header>;
+function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+  return <header className="section-header"><h2>{title}</h2>{action && <button onClick={onAction}>{action}<ArrowRight size={15} /></button>}</header>;
+}
+
+type NoticeTone = "success" | "error";
+type Notice = { id: number; text: string; tone: NoticeTone };
+export type ShowNotice = (message: string, tone?: NoticeTone) => void;
+
+function Toast({ notice, onDismiss }: { notice: Notice | null; onDismiss: () => void }) {
+  const [shown, setShown] = useState<Notice | null>(notice);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (notice) { setShown(notice); setLeaving(false); return; }
+    setLeaving(true);
+    const timeout = window.setTimeout(() => { setShown(null); setLeaving(false); }, 200);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+  if (!shown) return null;
+  const life = shown.tone === "error" ? 6000 : 3600;
+  return <div key={shown.id} className={`toast ${shown.tone}`} data-leaving={leaving || undefined} role={shown.tone === "error" ? "alert" : "status"} style={{ ["--toast-life" as string]: `${life}ms` }}>
+    {shown.tone === "error" ? <CircleAlert size={18} /> : <CheckCircle2 size={18} />}<span>{shown.text}</span>
+    <button onClick={onDismiss} aria-label="Dismiss notification"><X size={16} /></button>
+  </div>;
+}
+
+function SyncIndicator() {
+  const { inFlight, last, settledAt } = useSyncState();
+  const [, refresh] = useState(0);
+  const recent = Date.now() - settledAt < 1800;
+  useEffect(() => {
+    if (inFlight || !settledAt) return;
+    const timeout = window.setTimeout(() => refresh((value) => value + 1), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [inFlight, settledAt]);
+  const state = inFlight ? "saving" : recent && last === "ok" ? "saved" : recent && last === "error" ? "failed" : "idle";
+  return <span className={`sync-indicator ${state}`} role="status" aria-live="polite">
+    {state === "saving" && <><i className="sync-spinner" aria-hidden="true" />Saving</>}
+    {state === "saved" && <><Check size={14} />Saved</>}
+    {state === "failed" && <><CircleAlert size={14} />Not saved</>}
+  </span>;
 }
 function SessionTimeline({ session }: { session: CalendarSession }) {
   return <article className="timeline-item"><div className="date-tile"><strong>{new Date(`${session.date}T08:00:00`).getDate()}</strong><span>{new Intl.DateTimeFormat("en", { month: "short" }).format(new Date(session.date + "T08:00:00"))}</span></div><div className="timeline-copy"><strong>{session.title}</strong><span>{session.time}–{session.endTime} · {session.venue}</span><div><i className={`category-dot ${session.category.toLowerCase()}`} />{session.attendees.length} participants</div></div><span className={`status-badge ${session.status.toLowerCase().replace(" ", "-")}`}>{session.status}</span></article>;
@@ -420,19 +482,39 @@ function TrainingOverview({ dashboard, sessions, navigate }: { dashboard: Dashbo
   const today = malaysiaDate();
   const upcoming = sessions.filter((session) => session.date >= today && session.status !== "Completed").length;
   const completed = sessions.filter((session) => session.status === "Completed").length;
-  return <section className="page-stack"><div className="module-intro training-intro"><div><span className="module-kicker"><GraduationCap size={15} />Training</span><h2>Manage employee training</h2><p>Plan sessions and keep employee training records.</p></div><button className="button button-light" onClick={() => navigate("training-planner")}><Plus size={17} />Plan training</button></div><div className="metric-grid"><MetricCard icon={CalendarDays} label="Saved sessions" value={sessions.length} detail="All dates" tone="blue" onClick={() => navigate("training-calendar")} /><MetricCard icon={CalendarCheck2} label="Upcoming sessions" value={upcoming} detail="Today onwards" tone="green" onClick={() => navigate("training-calendar")} /><MetricCard icon={Clock3} label="Training hours" value={dashboard?.stats.totalTrainingHours ?? "—"} detail="Completed records" tone="violet" /><MetricCard icon={CheckCircle2} label="Completed sessions" value={completed} detail="All participants completed" tone="burgundy" /></div><section className="card feature-hub"><SectionHeader kicker="Training" title="Training tools" /><div className="feature-grid">{trainingNav.slice(1).map((item) => <button key={item.id} onClick={() => navigate(item.id)}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><p>{featureDescription[item.id]}</p></div><ArrowRight size={17} /></button>)}</div></section>{!sessions.length && <section className="card training-empty"><CalendarDays size={28} /><h3>No training scheduled yet</h3><p>Create your first training plan to get started.</p></section>}</section>;
+  return <section className="page-stack"><div className="module-intro training-intro"><div><h2>Manage employee training</h2><p>Plan sessions and keep employee training records.</p></div><button className="button button-light" onClick={() => navigate("training-planner")}><Plus size={17} />Plan training</button></div><div className="metric-grid"><MetricCard icon={CalendarDays} label="Saved sessions" value={sessions.length} detail="All dates" tone="blue" onClick={() => navigate("training-calendar")} /><MetricCard icon={CalendarCheck2} label="Upcoming sessions" value={upcoming} detail="Today onwards" tone="green" onClick={() => navigate("training-calendar")} /><MetricCard icon={Clock3} label="Training hours" value={dashboard?.stats.totalTrainingHours ?? "—"} detail="Completed records" tone="violet" /><MetricCard icon={CheckCircle2} label="Completed sessions" value={completed} detail="All participants completed" tone="burgundy" /></div><section className="card feature-hub"><SectionHeader title="Training tools" /><div className="feature-grid">{trainingNav.slice(1).map((item) => <button key={item.id} onClick={() => navigate(item.id)}><span><item.icon size={21} /></span><div><strong>{item.label}</strong><p>{featureDescription[item.id]}</p></div><ArrowRight size={17} /></button>)}</div></section>{!sessions.length && <section className="card training-empty"><CalendarDays size={28} /><h3>No training scheduled yet</h3><p>Create your first training plan to get started.</p></section>}</section>;
 }
 
 const employeeStatusLabel = (status: Employee["status"]) => status.toLowerCase().replaceAll("_", " ").replace(/^./, (value) => value.toUpperCase());
 
-function EmployeesDatabase({ showNotice, onAssignmentsChanged }: { showNotice: (message: string) => void; onAssignmentsChanged: () => void }) {
+const employeeFromInput = (input: EmployeeInput, existing?: Employee): Employee => ({
+  ...existing,
+  id: existing?.id ?? pendingId(),
+  employeeId: input.employeeId,
+  name: input.name || null,
+  email: input.email || null,
+  superiorName: input.superiorName || null,
+  superiorEmail: input.superiorEmail || null,
+  hodName: input.hodName || null,
+  hodEmail: input.hodEmail || null,
+  company: input.company || null,
+  base: input.base || null,
+  section: input.section || null,
+  group: input.group || null,
+  line: input.line || null,
+  role: input.role || null,
+  status: input.status,
+  department: existing && existing.department.name === input.department ? existing.department : { id: `pending-department:${input.department}`, code: "", name: input.department },
+});
+
+function EmployeesDatabase({ showNotice, onAssignmentsChanged }: { showNotice: ShowNotice; onAssignmentsChanged: () => void }) {
   const [query, setQuery] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [preview, setPreview] = useState<EmployeeImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const [profile, setProfile] = useState<Employee | null>(null);
   const [editor, setEditor] = useState<Employee | null | undefined>(undefined);
-  const [removing, setRemoving] = useState(false);
+  const [draft, setDraft] = useState<EmployeeInput>();
   const [error, setError] = useState("");
 
   const [quickFilter, setQuickFilter] = useState({ kind: "all", version: 0 });
@@ -451,42 +533,71 @@ function EmployeesDatabase({ showNotice, onAssignmentsChanged }: { showNotice: (
   const previewFile = async (file?: File) => { if (!file) return; setPreview(null); setImporting(true); try { const result = await api.previewEmployeeImport(file); setPreview(result); showNotice(`${result.meta.validRows} valid employee records are ready to import.`); } catch (cause) { showNotice(cause instanceof Error ? cause.message : "The spreadsheet could not be read. Choose an .xlsx or .csv file."); } finally { setImporting(false); } };
   const commit = async () => { if (!preview?.rows.length) return; setImporting(true); try { const result = await api.commitEmployeeImport(preview.rows); await refresh(); showNotice(`${result.imported} employee records were imported.`); setPreview(null); } catch (cause) { showNotice(cause instanceof Error ? cause.message : "The import could not be saved. Please try again."); } finally { setImporting(false); } };
 
-  const profileDialog = profile ? createPortal(<div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !removing) setProfile(null); }}><section className="fleet-dialog employee-profile-dialog" role="dialog" aria-modal="true" aria-label={`${profile.name ?? profile.employeeId} employee profile`}><header><div><span>{profile.employeeId}</span><strong>Employee profile</strong></div><button onClick={() => setProfile(null)} aria-label="Close"><X size={19} /></button></header><div className="employee-profile-body"><div className="profile-identity"><Avatar initials={(profile.name ?? profile.employeeId).split(" ").map((part) => part[0]).slice(0, 2).join("")} /><div><h2>{profile.name || "Name not recorded"}</h2><p>{profile.role || "Role not recorded"} · {profile.department.name}</p></div><span className={`employment-status ${profile.status.toLowerCase().replaceAll("_", "-")}`}>{employeeStatusLabel(profile.status)}</span></div><div className="profile-details"><div><span>Company</span><strong>{profile.company || "Not recorded"}</strong></div><div><span>Base</span><strong>{profile.base || "Not recorded"}</strong></div><div><span>Email</span><strong>{profile.email || "Not recorded"}</strong></div><div><span>Section</span><strong>{profile.section || "Not assigned"}</strong></div><div><span>Group</span><strong>{profile.group || "Not assigned"}</strong></div><div><span>Production line</span><strong>{profile.line || "Not assigned"}</strong></div><div><span>Employee ID</span><strong>{profile.employeeId}</strong></div><div><span>Department</span><strong>{profile.department.name}</strong></div></div>{(() => { const training = trainingFor(profile); return training ? <section className="profile-training"><div><span>Training completion</span><strong>{training.completed} / {training.required}</strong></div><div><span>Learning hours</span><strong>{training.hours} hours</strong></div><div><span>Next requirement</span><strong>{training.nextDue}</strong></div><div><span>Training attention</span><strong>{training.risk}</strong></div></section> : <section className="profile-training-empty"><GraduationCap size={22} /><span>No training summary is linked to this employee yet.</span></section>; })()} {error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="profile-actions"><button className="button button-danger-outline" disabled={removing || profile.status === "INACTIVE"} onClick={async () => { try { setRemoving(true); setError(""); await api.removeEmployee(profile.id); await refresh(); showNotice(`${profile.name ?? profile.employeeId} was removed from the active directory. Training history was retained.`); setProfile(null); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to remove this employee."); } finally { setRemoving(false); } }}><Trash2 size={16} />{removing ? "Removing…" : "Remove from active directory"}</button><button className="button button-primary" onClick={() => { setEditor(profile); setProfile(null); }}><Pencil size={16} /> Edit profile & status</button></footer></div></section></div>, document.body) : null;
+  const removeEmployee = (before: Employee) => {
+    const name = before.name ?? before.employeeId;
+    setProfile(null);
+    void optimistic(() => {
+      setEmployees((current) => current.map((person) => person.id === before.id ? { ...person, status: "INACTIVE" } : person));
+      showNotice(`${name} was removed from the active directory. Training history was kept.`);
+      return () => setEmployees((current) => current.map((person) => person.id === before.id ? before : person));
+    }, () => api.removeEmployee(before.id), { ids: [before.id] }).then((result) => {
+      if (!result.ok) showNotice(`${name} was not removed. ${errorText(result.error, "Check the connection and try again.")}`, "error");
+    });
+  };
 
-  const editorDialog = editor !== undefined ? createPortal(<div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditor(undefined); }}><section className="fleet-dialog employee-profile-dialog" role="dialog" aria-modal="true" aria-label={editor ? "Edit employee" : "Add employee"}><header><div><span>{editor?.employeeId ?? "People directory"}</span><strong>{editor ? "Edit employee profile" : "Add a new employee"}</strong></div><button onClick={() => setEditor(undefined)} aria-label="Close"><X size={19} /></button></header><EmployeeForm employee={editor ?? undefined} onSubmit={async (input) => { const saved = editor ? await api.updateEmployee(editor.id, input) : await api.createEmployee(input); await refresh(); showNotice(editor ? `${saved.name ?? saved.employeeId}'s profile was updated.` : `${saved.name ?? saved.employeeId} was added to the people directory.`); setEditor(undefined); }} /></section></div>, document.body) : null;
+  const saveEmployee = (input: EmployeeInput) => {
+    const existing = editor ?? undefined;
+    const local = employeeFromInput(input, existing);
+    const name = local.name || local.employeeId;
+    setEditor(undefined); setDraft(undefined);
+    void optimistic(() => {
+      setEmployees((current) => existing ? current.map((person) => person.id === existing.id ? local : person) : [local, ...current]);
+      showNotice(existing ? `${name}'s profile was updated.` : `${name} was added to the people directory.`);
+      return () => setEmployees((current) => existing ? current.map((person) => person.id === existing.id ? existing : person) : current.filter((person) => person.id !== local.id));
+    }, () => existing ? api.updateEmployee(existing.id, input) : api.createEmployee(input), { ids: [local.id] }).then((result) => {
+      if (result.ok) { void refresh().catch(() => {}); return; }
+      showNotice(`${name} was not saved. ${errorText(result.error, "Check the details and try again.")}`, "error");
+      setDraft(input); setEditor(existing ?? null);
+    });
+  };
+
+  const profileDialog = profile ? createPortal(<div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setProfile(null); }}><section className="fleet-dialog employee-profile-dialog" role="dialog" aria-modal="true" aria-label={`${profile.name ?? profile.employeeId} employee profile`}><header><div><span>{profile.employeeId}</span><strong>Employee profile</strong></div><button onClick={() => setProfile(null)} aria-label="Close"><X size={19} /></button></header><div className="employee-profile-body"><div className="profile-identity"><Avatar initials={(profile.name ?? profile.employeeId).split(" ").map((part) => part[0]).slice(0, 2).join("")} /><div><h2>{profile.name || "Name not recorded"}</h2><p>{profile.role || "Role not recorded"} · {profile.department.name}</p></div><span className={`employment-status ${profile.status.toLowerCase().replaceAll("_", "-")}`}>{employeeStatusLabel(profile.status)}</span></div><div className="profile-details"><div><span>Company</span><strong>{profile.company || "Not recorded"}</strong></div><div><span>Base</span><strong>{profile.base || "Not recorded"}</strong></div><div><span>Email</span><strong>{profile.email || "Not recorded"}</strong></div><div><span>Section</span><strong>{profile.section || "Not assigned"}</strong></div><div><span>Group</span><strong>{profile.group || "Not assigned"}</strong></div><div><span>Production line</span><strong>{profile.line || "Not assigned"}</strong></div><div><span>Employee ID</span><strong>{profile.employeeId}</strong></div><div><span>Department</span><strong>{profile.department.name}</strong></div></div>{(() => { const training = trainingFor(profile); return training ? <section className="profile-training"><div><span>Training completion</span><strong>{training.completed} / {training.required}</strong></div><div><span>Learning hours</span><strong>{training.hours} hours</strong></div><div><span>Next requirement</span><strong>{training.nextDue}</strong></div><div><span>Training attention</span><strong>{training.risk}</strong></div></section> : <section className="profile-training-empty"><GraduationCap size={22} /><span>No training summary is linked to this employee yet.</span></section>; })()} {error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="profile-actions"><button className="button button-danger-outline" disabled={profile.status === "INACTIVE"} onClick={() => removeEmployee(profile)}><Trash2 size={16} />Remove from active directory</button><button className="button button-primary" onClick={() => { setEditor(profile); setProfile(null); }}><Pencil size={16} /> Edit profile & status</button></footer></div></section></div>, document.body) : null;
+
+  const editorDialog = editor !== undefined ? createPortal(<div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setEditor(undefined); setDraft(undefined); } }}><section className="fleet-dialog employee-profile-dialog" role="dialog" aria-modal="true" aria-label={editor ? "Edit employee" : "Add employee"}><header><div><span>{editor?.employeeId ?? "People directory"}</span><strong>{editor ? "Edit employee profile" : "Add a new employee"}</strong></div><button onClick={() => { setEditor(undefined); setDraft(undefined); }} aria-label="Close"><X size={19} /></button></header><EmployeeForm employee={editor ?? undefined} draft={draft} onSubmit={async (input) => saveEmployee(input)} /></section></div>, document.body) : null;
 
   return <><section className="page-stack"><div className="page-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search employees, departments or emails" /></label><div className="toolbar-actions"><label className="button button-secondary upload-button"><Upload size={16} />{importing ? "Reading…" : "Import employees"}<input type="file" accept=".csv,.xlsx" disabled={importing} onChange={(e) => { void previewFile(e.target.files?.[0]); e.target.value = ""; }} /></label><EmployeeEmailImport employees={employees} onImported={refresh} showNotice={showNotice} /><button className="button button-primary" onClick={() => setEditor(null)}><Plus size={16} /> Add employee</button></div></div><ProductionRosterImport onSaved={async () => { await refresh(); onAssignmentsChanged(); }} />{preview && <ImportPreview preview={preview} busy={importing} onImport={() => { void commit(); }} onDismiss={() => setPreview(null)} />}<div className="metric-grid compact-metrics"><MetricCard icon={UsersRound} label="Active employees" onClick={() => chooseFilter("active")} selected={quickFilter.kind === "active"} value={String(activeCount)} detail={`${employees.length} total records`} tone="burgundy" /><MetricCard icon={UsersRound} label="Departments" onClick={() => chooseFilter("departments")} selected={quickFilter.kind === "departments"} value={new Set(employees.map((person) => person.department.name)).size} detail="Browse by department below" tone="violet" /><MetricCard icon={MailCheck} label="With email" onClick={() => chooseFilter("with")} selected={quickFilter.kind === "with"} value={employees.filter((person) => person.email).length} detail="Email address recorded" tone="green" /><MetricCard icon={UserCog} label="Without email" onClick={() => chooseFilter("without")} selected={quickFilter.kind === "without"} value={employees.filter((person) => !person.email).length} detail="Included in employee records" tone="blue" /></div><div className="employee-directory-anchor" ref={directoryRef}><EmployeeDirectory onDepartmentChanged={refresh} key={quickFilter.version} employees={employees} query={query} initialEmailFilter={quickFilter.kind === "with" || quickFilter.kind === "without" ? quickFilter.kind : "all"} initialStatus={quickFilter.kind === "active" ? "ACTIVE" : "all"} onOpen={(person) => { setError(""); setProfile(person); }} /></div></section>{profileDialog}{editorDialog}</>;
 }
 
-function EmployeeForm({ employee, onSubmit }: { employee?: Employee; onSubmit: (input: EmployeeInput) => Promise<void> }) {
-  const [employeeId, setEmployeeId] = useState(employee?.employeeId ?? "");
-  const [name, setName] = useState(employee?.name ?? "");
-  const [email, setEmail] = useState(employee?.email ?? "");
-  const [superiorName, setSuperiorName] = useState(employee?.superiorName ?? "");
-  const [superiorEmail, setSuperiorEmail] = useState(employee?.superiorEmail ?? "");
-  const [hodName, setHodName] = useState(employee?.hodName ?? "");
-  const [hodEmail, setHodEmail] = useState(employee?.hodEmail ?? "");
-  const [company, setCompany] = useState(employee?.company ?? "");
-  const [base, setBase] = useState(employee?.base ?? "");
-  const [department, setDepartment] = useState(employee?.department.name ?? "");
-  const [section, setSection] = useState(employee?.section ?? "");
-  const [group, setGroup] = useState(employee?.group ?? "");
-  const [line, setLine] = useState(employee?.line ?? "");
-  const [role, setRole] = useState(employee?.role ?? "");
-  const [status, setStatus] = useState<Employee["status"]>(employee?.status ?? "ACTIVE");
+function EmployeeForm({ employee, draft, onSubmit }: { employee?: Employee; draft?: EmployeeInput; onSubmit: (input: EmployeeInput) => Promise<void> }) {
+  const initial = draft ?? (employee ? { ...employee, department: employee.department.name } : undefined);
+  const [employeeId, setEmployeeId] = useState(initial?.employeeId ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [email, setEmail] = useState(initial?.email ?? "");
+  const [superiorName, setSuperiorName] = useState(initial?.superiorName ?? "");
+  const [superiorEmail, setSuperiorEmail] = useState(initial?.superiorEmail ?? "");
+  const [hodName, setHodName] = useState(initial?.hodName ?? "");
+  const [hodEmail, setHodEmail] = useState(initial?.hodEmail ?? "");
+  const [company, setCompany] = useState(initial?.company ?? "");
+  const [base, setBase] = useState(initial?.base ?? "");
+  const [department, setDepartment] = useState(initial?.department ?? "");
+  const [section, setSection] = useState(initial?.section ?? "");
+  const [group, setGroup] = useState(initial?.group ?? "");
+  const [line, setLine] = useState(initial?.line ?? "");
+  const [role, setRole] = useState(initial?.role ?? "");
+  const [status, setStatus] = useState<Employee["status"]>(initial?.status ?? "ACTIVE");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, superiorName, superiorEmail, hodName, hodEmail, company, base, department, section, group, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="registry-note"><UserRound size={22} /><div><strong>{employee ? "Maintain the master employee record" : "Create a master employee record"}</strong><small>Status controls whether the employee appears in active workforce workflows; historical training records are always retained.</small></div></div><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>HOD name override (optional)</span><input value={hodName} onChange={event=>setHodName(event.target.value)} /></label><label className="field"><span>HOD email override (blank uses department HOD)</span><input type="email" value={hodEmail} onChange={event=>setHodEmail(event.target.value)} /></label><label className="field"><span>Immediate superior</span><input value={superiorName} onChange={e=>setSuperiorName(e.target.value)} /></label><label className="field"><span>Immediate superior email (three-month review)</span><input type="email" value={superiorEmail} onChange={e=>setSuperiorEmail(e.target.value)} /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / job type</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label><label className="field"><span>Base</span><input value={base} onChange={(event) => setBase(event.target.value)} /></label><label className="field"><span>Production section</span><select value={section} onChange={event => { setSection(event.target.value); setLine(""); setGroup(""); }}><option value="">Not assigned</option><option>Conversion</option><option>Roll Making</option></select></label>{section !== "Roll Making" && <label className="field"><span>Group</span><input value={group} onChange={event => setGroup(event.target.value)} /></label>}{section !== "Roll Making" && <label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label>}<label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span><ShieldCheck size={16} /> Changes are saved to the central people directory.</span><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
+  return <form className="fleet-form employee-form" onSubmit={async (event) => { event.preventDefault(); try { setBusy(true); setError(""); await onSubmit({ employeeId, name, email, superiorName, superiorEmail, hodName, hodEmail, company, base, department, section, group, line, role, status }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save this employee."); } finally { setBusy(false); } }}><div className="form-grid"><label className="field"><span>Employee ID</span><input value={employeeId} onChange={(event) => setEmployeeId(event.target.value.toUpperCase())} required /></label><label className="field"><span>Full name</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Email</span><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="employee@company.com" /></label><label className="field"><span>HOD name override (optional)</span><input value={hodName} onChange={event=>setHodName(event.target.value)} /></label><label className="field"><span>HOD email override (blank uses department HOD)</span><input type="email" value={hodEmail} onChange={event=>setHodEmail(event.target.value)} /></label><label className="field"><span>Immediate superior</span><input value={superiorName} onChange={e=>setSuperiorName(e.target.value)} /></label><label className="field"><span>Immediate superior email (three-month review)</span><input type="email" value={superiorEmail} onChange={e=>setSuperiorEmail(e.target.value)} /></label><label className="field"><span>Department</span><input value={department} onChange={(event) => setDepartment(event.target.value)} required /></label><label className="field"><span>Role / job type</span><input value={role} onChange={(event) => setRole(event.target.value)} /></label><label className="field"><span>Company</span><input value={company} onChange={(event) => setCompany(event.target.value)} /></label><label className="field"><span>Base</span><input value={base} onChange={(event) => setBase(event.target.value)} /></label><label className="field"><span>Production section</span><select value={section} onChange={event => { setSection(event.target.value); setLine(""); setGroup(""); }}><option value="">Not assigned</option><option>Conversion</option><option>Roll Making</option></select></label>{section !== "Roll Making" && <label className="field"><span>Group</span><input value={group} onChange={event => setGroup(event.target.value)} /></label>}{section !== "Roll Making" && <label className="field"><span>Line / unit</span><input value={line} onChange={(event) => setLine(event.target.value)} /></label>}<label className="field span-2"><span>Employment status</span><select value={status} onChange={(event) => setStatus(event.target.value as Employee["status"])}><option value="ACTIVE">Active</option><option value="ON_LEAVE">On leave</option><option value="INACTIVE">Inactive</option><option value="RESIGNED">Resigned</option><option value="TERMINATED">Terminated</option></select><small className="field-help">Inactive, resigned and terminated employees remain available in historical training and audit records.</small></label></div>{error && <div className="form-error"><CircleAlert size={16} />{error}</div>}<footer className="fleet-form-actions"><span /><button className="button button-primary" disabled={busy}><CheckCircle2 size={16} />{busy ? "Saving…" : employee ? "Save employee changes" : "Add employee"}</button></footer></form>;
 }
 
 function TrainingRecords({ sessions, onDelete, onRefresh }: { sessions: CalendarSession[]; onDelete: (id: string) => Promise<void>; onRefresh: () => void }) {
   const [query, setQuery] = useState("");
   const organization = useOrganizationFilter(sessions.flatMap(session => session.attendees));
   const records = sessions.flatMap((session) => session.attendees.map((employee) => ({ session, employee }))).filter(({session,employee}) => organization.matches(employee) && (session.title + " " + employee.name + " " + employee.department + " " + (employee.section || "") + " " + (employee.line || "") + " " + (employee.group || "")).toLowerCase().includes(query.toLowerCase()));
-  return <section className="page-stack"><label className="search-field"><Search size={17} /><input placeholder="Search training, employee, section, line or group" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="directory-filters">{organization.controls}</div><section className="card data-card"><SectionHeader kicker="Training" title="Employee training records" />{records.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Employee</th><th>Department</th><th>Section</th><th>Line / unit</th><th>Group</th><th>Training</th><th>Date</th><th>Status</th><th>Check-in (Malaysia)</th><th>Hours</th><th>Manage</th></tr></thead><tbody>{records.map(({session,employee}) => <tr key={session.id + employee.id}><td>{employee.name}</td><td>{employee.department}</td><td>{employee.section || "—"}</td><td>{employee.line || "—"}</td><td>{employee.group || "—"}</td><td>{session.title}</td><td>{session.date}</td><td>{employee.status}</td><td>{employee.checkedInAt ? new Date(employee.checkedInAt).toLocaleString("en-MY", {timeZone:"Asia/Kuala_Lumpur"}) : "—"}</td><td>{employee.hours ?? 0}</td><td><TrainingAttendance sessionId={session.id} onRefresh={onRefresh}/><TrainingDeleteButton session={session} onDelete={onDelete} /></td></tr>)}</tbody></table></div> : <p className="training-empty">No training records found. Saved training plans and attendance records will appear here.</p>}</section></section>;
+  return <section className="page-stack"><label className="search-field"><Search size={17} /><input placeholder="Search training, employee, section, line or group" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="directory-filters">{organization.controls}</div><section className="card data-card"><SectionHeader title="Employee training records" />{records.length ? <div className="table-wrap"><table className="data-table"><thead><tr><th>Employee</th><th>Department</th><th>Section</th><th>Line / unit</th><th>Group</th><th>Training</th><th>Date</th><th>Status</th><th>Check-in (Malaysia)</th><th>Hours</th><th>Manage</th></tr></thead><tbody>{records.map(({session,employee}) => <tr key={session.id + employee.id}><td>{employee.name}</td><td>{employee.department}</td><td>{employee.section || "—"}</td><td>{employee.line || "—"}</td><td>{employee.group || "—"}</td><td>{session.title}</td><td>{session.date}</td><td>{employee.status}</td><td>{employee.checkedInAt ? new Date(employee.checkedInAt).toLocaleString("en-MY", {timeZone:"Asia/Kuala_Lumpur"}) : "—"}</td><td>{employee.hours ?? 0}</td><td><TrainingAttendance sessionId={session.id} onRefresh={onRefresh}/><TrainingDeleteButton session={session} onDelete={onDelete} /></td></tr>)}</tbody></table></div> : <p className="training-empty">No training records found. Saved training plans and attendance records will appear here.</p>}</section></section>;
 }
 
-function NotesLibrary({ showNotice }: { showNotice: (message: string) => void }) {
+function NotesLibrary({ showNotice }: { showNotice: ShowNotice }) {
   return <TrainingSummaries />;
 }
 
@@ -535,7 +646,7 @@ function FleetTracker({
   onOpenHistory,
 }: {
   mode?: "usage" | "status";
-  showNotice: (message: string) => void;
+  showNotice: ShowNotice;
   initialVehicleId?: string;
   onOpenRegistry: () => void;
   onOpenHistory: (vehicleId: string) => void;
@@ -553,6 +664,8 @@ function FleetTracker({
   >(null);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+  const [vehicleDraft, setVehicleDraft] = useState<VehicleInput>();
+  const { pending } = useSyncState();
   const [loading, setLoading] = useState(true);
   const [fleetError, setFleetError] = useState("");
 
@@ -630,6 +743,7 @@ function FleetTracker({
   };
   const closeDialog = () => {
     setDialog(null);
+    setVehicleDraft(undefined);
     if (initialVehicleId)
       window.history.replaceState({}, "", window.location.pathname);
   };
@@ -679,18 +793,21 @@ function FleetTracker({
               {dialog === "vehicle" && (
                 <VehicleForm
                   vehicle={editingVehicle}
+                  draft={vehicleDraft}
                   onSubmit={async (input) => {
-                    const saved = editingVehicle
-                      ? await api.updateVehicle(editingVehicle.id, input)
-                      : await api.createVehicle(input);
-                    const rows = await refreshFleet();
-                    setSelectedVehicleId(saved.id || rows[0]?.id || "");
-                    showNotice(
-                      editingVehicle
-                        ? `${saved.plate} vehicle details were updated.`
-                        : `${saved.plate} was added to the fleet.`,
-                    );
+                    const existing = editingVehicle;
+                    const local = vehicleFromInput(input, existing);
+                    setVehicleDraft(undefined);
                     closeDialog();
+                    void optimistic(() => {
+                      setFleetVehicles((current) => existing ? current.map((vehicle) => vehicle.id === existing.id ? local : vehicle) : [...current, local]);
+                      showNotice(existing ? `${local.plate} details were updated.` : `${local.plate} was added to the fleet.`);
+                      return () => setFleetVehicles((current) => existing ? current.map((vehicle) => vehicle.id === existing.id ? existing : vehicle) : current.filter((vehicle) => vehicle.id !== local.id));
+                    }, () => existing ? api.updateVehicle(existing.id, input) : api.createVehicle(input), { ids: [local.id] }).then((result) => {
+                      if (result.ok) { setFleetVehicles((current) => current.map((vehicle) => vehicle.id === local.id ? result.value : vehicle)); return; }
+                      showNotice(`${local.plate} was not saved. ${errorText(result.error, "Check the details and try again.")}`, "error");
+                      setVehicleDraft(input); setEditingVehicleId(existing?.id ?? null); setDialog("vehicle");
+                    });
                   }}
                 />
               )}
@@ -742,9 +859,7 @@ function FleetTracker({
       <section className={`page-stack ${mode === "status" ? "fleet-status-page" : "fleet-usage-page"}`}>
         <div className="module-intro fleet-intro">
           <div>
-            <span className="module-kicker">
-              <CarFront size={15} /> Company cars
-            </span>
+            
             <h2>{mode === "status" ? "Vehicle availability & servicing" : "Track company car trips"}</h2>
             <p>
               {mode === "status" ? "Check availability, current mileage and service targets for every company car." : "Start a trip, complete the car checks and record the odometer reading when you return."}
@@ -769,7 +884,7 @@ function FleetTracker({
         {mode === "status" && fleetError && <div className="form-error" role="alert">{fleetError}<button type="button" onClick={() => { void refreshFleet(); }}>Retry</button></div>}
         {mode === "usage" && <CurrentUsageCards trips={trips} vehicles={fleetVehicles} disabled={loading || !!fleetError} onRemoved={async () => { await refreshFleet(); showNotice("Usage removed. The fleet status has been updated."); }} onHistory={onOpenHistory} onReturn={trip => { setSelectedVehicleId(trip.vehicleId); setDialog("complete"); }} />}
 {mode === "usage" && <>        <section className="card trip-launcher" aria-label="Choose a car and start a trip">
-          <div><span className="module-kicker"><Route size={16} /> Ready to drive?</span><h2>Choose your car & start a trip</h2><p>Record the driver, destination and starting mileage before leaving.</p></div>
+          <div><h2>Choose your car & start a trip</h2><p>Record the driver, destination and starting mileage before leaving.</p></div>
           <div className="trip-launcher-controls">
             <label className="field"><span>Company car</span><select value={selectedVehicle?.id ?? ""} disabled={loading || !fleetVehicles.length} onChange={(event) => setSelectedVehicleId(event.target.value)}>
               {!fleetVehicles.length && <option value="">{loading ? "Loading cars…" : "No cars available"}</option>}
@@ -816,7 +931,6 @@ function FleetTracker({
         </div>
         <section className="card vehicle-section">
           <SectionHeader
-            kicker="Trip-ready fleet"
             title="Vehicle status"
           />
           <div className="vehicle-grid">
@@ -827,7 +941,7 @@ function FleetTracker({
                   ? Math.min(100, (vehicle.mileage / vehicle.serviceAt) * 100)
                   : 100;
               return (
-                <article key={vehicle.id} className="vehicle-card vehicle-card-interactive" onClick={event => { if ((event.target as HTMLElement).closest("button,a,input")) return; setEditingVehicleId(vehicle.id); setDialog("vehicle"); }}>
+                <article key={vehicle.id} data-pending={pending.has(vehicle.id) || undefined} className="vehicle-card vehicle-card-interactive" onClick={event => { if ((event.target as HTMLElement).closest("button,a,input")) return; setEditingVehicleId(vehicle.id); setDialog("vehicle"); }}>
                   <button className="vehicle-details-link" onClick={() => { setEditingVehicleId(vehicle.id); setDialog("vehicle"); }}>View / edit {vehicle.plate} details <Pencil size={15} /></button>
                   {vehicle.photo && <img className="vehicle-card-photo" src={vehicle.photo} alt={`${vehicle.plate} ${vehicle.model}`} />}
                   <header>
@@ -920,9 +1034,7 @@ function FleetTracker({
         </section>
 </>}{mode === "usage" && <>        <section className="card data-card">
           <SectionHeader
-            kicker="Auditable usage log"
             title="Recent journeys"
-            action="Export log"
           />
           <div className="table-wrap">
             <table className="data-table trip-table">
@@ -1028,14 +1140,48 @@ function FleetTracker({
   );
 }
 
-function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (message: string) => void; onOpenHistory: (vehicleId: string) => void }) {
+const vehicleFromInput = (input: VehicleInput, existing?: Vehicle): Vehicle => ({
+  ...(existing ?? { activeTrip: null }),
+  ...input,
+  id: existing?.id ?? pendingId(),
+  status: existing?.status === "IN_USE" ? "IN_USE" : input.status,
+}) as Vehicle;
+
+function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: ShowNotice; onOpenHistory: (vehicleId: string) => void }) {
   const fallback = makeFallbackFleet();
   const [vehicles, setVehicles] = useState<Vehicle[]>(fallback.vehicles);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Vehicle | null | undefined>(undefined);
   const [removing, setRemoving] = useState<Vehicle | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [vehicleDraft, setVehicleDraft] = useState<VehicleInput>();
+  const { pending } = useSyncState();
+
+  const saveVehicle = (input: VehicleInput) => {
+    const existing = editing ?? undefined;
+    const local = vehicleFromInput(input, existing);
+    setEditing(undefined); setVehicleDraft(undefined);
+    void optimistic(() => {
+      setVehicles((current) => existing ? current.map((vehicle) => vehicle.id === existing.id ? local : vehicle) : [...current, local]);
+      showNotice(existing ? `${local.plate} was updated.` : `${local.plate} was added to the vehicle registry.`);
+      return () => setVehicles((current) => existing ? current.map((vehicle) => vehicle.id === existing.id ? existing : vehicle) : current.filter((vehicle) => vehicle.id !== local.id));
+    }, () => existing ? api.updateVehicle(existing.id, input) : api.createVehicle(input), { ids: [local.id] }).then((result) => {
+      if (result.ok) { setVehicles((current) => current.map((vehicle) => vehicle.id === local.id ? result.value : vehicle)); return; }
+      showNotice(`${local.plate} was not saved. ${errorText(result.error, "Check the details and try again.")}`, "error");
+      setVehicleDraft(input); setEditing(existing ?? null);
+    });
+  };
+
+  const removeVehicle = (vehicle: Vehicle) => {
+    const index = vehicles.findIndex((item) => item.id === vehicle.id);
+    setRemoving(null);
+    void optimistic(() => {
+      setVehicles((current) => current.filter((item) => item.id !== vehicle.id));
+      showNotice(`${vehicle.plate} was removed from the registry. Trip history was kept.`);
+      return () => setVehicles((current) => current.some((item) => item.id === vehicle.id) ? current : [...current.slice(0, index), vehicle, ...current.slice(index)]);
+    }, () => api.removeVehicle(vehicle.id)).then((result) => {
+      if (!result.ok) showNotice(`${vehicle.plate} was not removed. ${errorText(result.error, "Check the connection and try again.")}`, "error");
+    });
+  };
 
   const refresh = async () => {
     try {
@@ -1054,39 +1200,23 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
   const serviceAttention = vehicles.filter((vehicle) => vehicle.status === "SERVICE_DUE" || vehicle.status === "OUT_OF_SERVICE").length;
 
   const editor = editing !== undefined ? createPortal(
-    <div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(undefined); }}>
+    <div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setEditing(undefined); setVehicleDraft(undefined); } }}>
       <section className="fleet-dialog" role="dialog" aria-modal="true" aria-label={editing ? "Edit vehicle" : "Add car"}>
-        <header><div><span>{editing?.plate ?? "Fleet registry"}</span><strong>{editing ? "Edit vehicle details" : "Register a new vehicle"}</strong></div><button onClick={() => setEditing(undefined)} aria-label="Close"><X size={19} /></button></header>
-        <VehicleForm vehicle={editing ?? undefined} onSubmit={async (input) => {
-          const saved = editing ? await api.updateVehicle(editing.id, input) : await api.createVehicle(input);
-          await refresh();
-          showNotice(editing ? `${saved.plate} was updated.` : `${saved.plate} was added to the vehicle registry.`);
-          setEditing(undefined);
-        }} />
+        <header><div><span>{editing?.plate ?? "Fleet registry"}</span><strong>{editing ? "Edit vehicle details" : "Register a new vehicle"}</strong></div><button onClick={() => { setEditing(undefined); setVehicleDraft(undefined); }} aria-label="Close"><X size={19} /></button></header>
+        <VehicleForm vehicle={editing ?? undefined} draft={vehicleDraft} onSubmit={async (input) => saveVehicle(input)} />
       </section>
     </div>, document.body,
   ) : null;
 
   const removalDialog = removing ? createPortal(
-    <div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setRemoving(null); }}>
+    <div className="fleet-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setRemoving(null); }}>
       <section className="fleet-dialog confirm-dialog" role="dialog" aria-modal="true" aria-label="Remove vehicle">
-        <header><div><span>{removing.plate}</span><strong>Remove vehicle from active registry?</strong></div><button onClick={() => setRemoving(null)} aria-label="Close" disabled={busy}><X size={19} /></button></header>
+        <header><div><span>{removing.plate}</span><strong>Remove vehicle from active registry?</strong></div><button onClick={() => setRemoving(null)} aria-label="Close"><X size={19} /></button></header>
         <div className="confirm-dialog-body">
           <span className="danger-icon"><Trash2 size={25} /></span>
           <div><h3>{removing.model}</h3><p>This vehicle will disappear from the active fleet and cannot start new trips. Its previous journeys, mileage evidence and audit history will be retained.</p></div>
           {removing.activeTrip && <div className="form-error span-all"><CircleAlert size={16} />Return the active trip before removing this vehicle.</div>}
-          {error && <div className="form-error span-all"><CircleAlert size={16} />{error}</div>}
-          <footer><button className="button button-secondary" onClick={() => setRemoving(null)} disabled={busy}>Cancel</button><button className="button button-danger" disabled={busy || Boolean(removing.activeTrip)} onClick={async () => {
-            try {
-              setBusy(true); setError("");
-              await api.removeVehicle(removing.id);
-              await refresh();
-              showNotice(`${removing.plate} was removed from the active vehicle registry. Trip history was retained.`);
-              setRemoving(null);
-            } catch (cause) {
-              setError(cause instanceof Error ? cause.message : "Unable to remove this vehicle.");
-            } finally { setBusy(false); }
-          }}><Trash2 size={16} />{busy ? "Removing…" : "Remove vehicle"}</button></footer>
+          <footer><button className="button button-secondary" onClick={() => setRemoving(null)}>Cancel</button><button className="button button-danger" disabled={Boolean(removing.activeTrip)} onClick={() => removeVehicle(removing)}><Trash2 size={16} />Remove vehicle</button></footer>
         </div>
       </section>
     </div>, document.body,
@@ -1094,7 +1224,7 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
 
   return <>
     <section className="page-stack">
-      <div className="module-intro fleet-intro registry-intro"><div><span className="module-kicker"><CarFront size={15} /> Vehicle registry</span><h2>Manage company cars</h2><p>Add cars and update their photos, mileage, service dates and availability.</p></div><button className="button button-light" onClick={() => setEditing(null)}><Plus size={17} /> Add car</button></div>
+      <div className="module-intro fleet-intro registry-intro"><div><h2>Manage company cars</h2><p>Add cars and update their photos, mileage, service dates and availability.</p></div></div>
       <div className="metric-grid compact-metrics">
         <MetricCard icon={CarFront} label="Active registry" value={String(vehicles.length)} detail="Company vehicles" tone="burgundy" />
         <MetricCard icon={CheckCircle2} label="Available" value={String(vehicles.filter((item) => item.status === "AVAILABLE").length)} detail="Ready for a trip" tone="green" />
@@ -1103,11 +1233,11 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
       </div>
       <p className="card fleet-form">Record servicing, repairs and invoices under Company cars → Maintenance history.</p>
       <div className="page-toolbar registry-toolbar"><label className="search-field"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search registration, model, category or owner" /></label><button className="button button-primary" onClick={() => setEditing(null)}><Plus size={16} /> Add vehicle</button></div>
-      <section className="card registry-section"><SectionHeader kicker="Fleet master data" title="Registered vehicles" />
+      <section className="card registry-section"><SectionHeader title="Registered vehicles" />
         <div className="registry-card-grid">
-          {visible.map((vehicle) => <article className="registry-vehicle-card" key={vehicle.id}>
-            <div className="registry-vehicle-photo">{vehicle.photo ? <img src={vehicle.photo} alt={`${vehicle.plate} ${vehicle.model}`} /> : <span><CarFront size={34} /><small>Photo not added</small></span>}<em className={vehicle.status.toLowerCase().replaceAll("_", "-")}>{fleetStatusLabel(vehicle.status)}</em></div>
-            <div className="registry-vehicle-copy"><div><span>{vehicle.category}</span><h3>{vehicle.plate}</h3><p>{vehicle.model}</p></div><dl><div><dt>Current odometer</dt><dd>{formatNumber(vehicle.mileage)} km</dd></div><div><dt>Next service</dt><dd>{formatNumber(vehicle.serviceAt)} km</dd></div><div><dt>Pool / owner</dt><dd>{vehicle.assigned}</dd></div></dl><footer><button className="button button-secondary" onClick={() => onOpenHistory(vehicle.id)}><Clock3 size={15} /> Usage history</button><button className="button button-secondary" onClick={() => setEditing(vehicle)}><Pencil size={15} /> Edit details</button><button className="button button-danger-outline" onClick={() => { setError(""); setRemoving(vehicle); }}><Trash2 size={15} /> Remove</button></footer></div>
+          {visible.map((vehicle) => <article className="registry-vehicle-card" key={vehicle.id} data-pending={pending.has(vehicle.id) || undefined}>
+            <div className="registry-vehicle-photo">{vehicle.photo ? <img src={vehicle.photo} alt={`${vehicle.plate} ${vehicle.model}`} /> : <span aria-label="No photo"><CarFront size={34} /></span>}<em className={vehicle.status.toLowerCase().replaceAll("_", "-")}>{fleetStatusLabel(vehicle.status)}</em></div>
+            <div className="registry-vehicle-copy"><div><span>{vehicle.category}</span><h3>{vehicle.plate}</h3><p>{vehicle.model}</p></div><dl><div><dt>Current odometer</dt><dd>{formatNumber(vehicle.mileage)} km</dd></div><div><dt>Next service</dt><dd>{formatNumber(vehicle.serviceAt)} km</dd></div><div><dt>Pool / owner</dt><dd>{vehicle.assigned}</dd></div></dl><footer><button className="button button-secondary" onClick={() => onOpenHistory(vehicle.id)}><Clock3 size={15} /> Usage history</button><button className="button button-secondary" onClick={() => setEditing(vehicle)}><Pencil size={15} /> Edit details</button><button className="button button-danger-outline" onClick={() => setRemoving(vehicle)}><Trash2 size={15} /> Remove</button></footer></div>
           </article>)}
           {!visible.length && <div className="registry-empty"><Search size={27} /><strong>No vehicle matched that search</strong><p>Try a plate number, model, category or assigned pool.</p></div>}
         </div>
@@ -1119,6 +1249,7 @@ function VehicleRegistryPage({ showNotice, onOpenHistory }: { showNotice: (messa
 }
 
 function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null }) {
+  const [hiddenTrips, hideTrip] = useHiddenIds();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [trips, setTrips] = useState<VehicleTrip[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState(initialVehicleId ?? "");
@@ -1170,10 +1301,10 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
   });
 
   return <section className="page-stack usage-history-page">
-    <div className="module-intro history-intro"><div><span className="module-kicker"><Clock3 size={15} /> Company cars</span><h2>Review past trips</h2><p>Select a car to see drivers, trips, mileage, inspections and photos.</p></div></div>
+    <div className="module-intro history-intro"><div><h2>Review past trips</h2><p>Select a car to see drivers, trips, mileage, inspections and photos.</p></div></div>
     {preview && <div className="history-preview" role="status">The fleet API is unavailable. Showing sample records until the server is connected.</div>}
     <div className="history-selector card">
-      <div><span className="history-kicker">Vehicle record</span><h3>{selectedVehicle?.plate ?? (loading ? "Loading vehicles…" : "No vehicle selected")}</h3><p>{selectedVehicle?.model ?? "Choose a vehicle to inspect its history."}{selectedVehicle?.archivedAt ? " · Archived" : ""}</p></div>
+      <div><h3>{selectedVehicle?.plate ?? (loading ? "Loading vehicles…" : "No vehicle selected")}</h3><p>{selectedVehicle?.model ?? "Choose a vehicle to inspect its history."}{selectedVehicle?.archivedAt ? " · Archived" : ""}</p></div>
       <label><span>Select company car</span><select value={selectedVehicleId} onChange={(event) => setSelectedVehicleId(event.target.value)} disabled={loading || vehicles.length === 0}>
         {vehicles.length === 0 && <option value="">No vehicles available</option>}
         {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} · {vehicle.model}{vehicle.archivedAt ? " (archived)" : ""}</option>)}
@@ -1186,10 +1317,10 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
       <div><span>Distance logged</span><strong>{formatNumber(totalDistance)} <em>km</em></strong><small>Completed journeys</small></div>
       <div><span>Latest use</span><strong className="history-last-used">{history[0] ? localDate(history[0].startedAt).split(",")[0] : "—"}</strong><small>{history[0] ? history[0].driverName : "No journeys yet"}</small></div>
     </div>
-    <section className="card history-log"><div className="history-log-heading"><div><span className="history-kicker">Audit trail</span><h3>{selectedVehicle?.plate ?? "Vehicle"} usage log</h3><p>{pastHistory.length} past journey{pastHistory.length === 1 ? "" : "s"} · newest first</p></div><ShieldCheck size={24} /></div>
+    <section className="card history-log"><div className="history-log-heading"><div><h3>{selectedVehicle?.plate ?? "Vehicle"} usage log</h3><p>{pastHistory.length} past journey{pastHistory.length === 1 ? "" : "s"} · newest first</p></div><ShieldCheck size={24} /></div>
       {loading && <div className="history-empty">Loading usage history…</div>}
       {!loading && pastHistory.length === 0 && <div className="history-empty"><Clock3 size={28} /><strong>No usage recorded for this car</strong><p>Trips will appear here after a driver starts using it.</p></div>}
-      {pastHistory.map((trip) => <article className="history-entry" key={trip.id}>
+      {pastHistory.map((trip) => <article className={`history-entry ${hiddenTrips.has(trip.id) ? "is-removed" : ""}`} key={trip.id}>
         <div className="history-entry-top"><span className="history-entry-icon"><Route size={18} /></span><div><strong>{trip.destination}</strong><small>{trip.purpose} · {trip.id.startsWith("TRIP-") ? trip.id : trip.id.slice(-8).toUpperCase()}</small></div><span className={`status-badge ${trip.status.toLowerCase().replaceAll("_", "-")}`}>{fleetStatusLabel(trip.status)}</span></div>
         <div className="history-entry-grid">
           <div><span>Driver</span><strong>{trip.driverName}</strong><small>{trip.driverEmployeeId} · {trip.passengers} passenger{trip.passengers === 1 ? "" : "s"}</small></div>
@@ -1198,7 +1329,7 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
           <div><span>Odometer</span><strong>{formatNumber(trip.odometerStart)} → {trip.odometerEnd == null ? "Pending" : formatNumber(trip.odometerEnd)} km</strong><small>{trip.odometerEnd == null ? "Distance pending" : `${formatNumber(Math.max(0, trip.odometerEnd - trip.odometerStart))} km travelled`}</small></div>
         </div>
         <div className="history-entry-footer"><div className="history-evidence">{trip.odometerPhotoBefore && <a href={trip.odometerPhotoBefore} target="_blank" rel="noreferrer"><Gauge size={14} /> Before photo</a>}{trip.odometerPhotoAfter && <a href={trip.odometerPhotoAfter} target="_blank" rel="noreferrer"><Gauge size={14} /> After photo</a>}{!trip.odometerPhotoBefore && !trip.odometerPhotoAfter && <span>No odometer photos saved</span>}</div>{(trip.notesBefore || trip.notesAfter) && <div className="history-notes">{trip.notesBefore && <p><strong>Before:</strong> {trip.notesBefore}</p>}{trip.notesAfter && <p><strong>After:</strong> {trip.notesAfter}</p>}</div>}</div>
-        <div className="history-usage-actions"><RemoveVehicleUsage trip={trip} disabled={preview} onRemoved={refreshHistory} /></div>
+        <div className="history-usage-actions"><RemoveVehicleUsage trip={trip} disabled={preview} onRemoved={refreshHistory} onHide={hideTrip} /></div>
         <details className="history-inspection"><summary>Inspection checklist</summary><div><div><strong>Before departure</strong>{Object.entries(trip.checksBefore).map(([check, passed]) => <span key={check}>{check.replace(/([A-Z])/g, " $1")} · {passed ? "Yes" : "No"}</span>)}</div><div><strong>After return</strong>{trip.checksAfter ? Object.entries(trip.checksAfter).map(([check, passed]) => <span key={check}>{check.replace(/([A-Z])/g, " $1")} · {passed ? "Yes" : "No"}</span>) : <span>Pending return</span>}</div></div></details>
       </article>)}
     </section>
@@ -1207,24 +1338,26 @@ function UsageHistory({ initialVehicleId }: { initialVehicleId: string | null })
 
 function VehicleForm({
   vehicle,
+  draft,
   onSubmit,
 }: {
   vehicle?: Vehicle;
+  draft?: VehicleInput;
   onSubmit: (input: VehicleInput) => Promise<void>;
 }) {
-  const [plate, setPlate] = useState(vehicle?.plate ?? "");
-  const [model, setModel] = useState(vehicle?.model ?? "");
-  const [category, setCategory] = useState(vehicle?.category ?? "Operations");
-  const [assigned, setAssigned] = useState(vehicle?.assigned ?? "Shared pool");
-  const [photo, setPhoto] = useState<string | null>(vehicle?.photo ?? null);
+  const [plate, setPlate] = useState(draft?.plate ?? vehicle?.plate ?? "");
+  const [model, setModel] = useState(draft?.model ?? vehicle?.model ?? "");
+  const [category, setCategory] = useState(draft?.category ?? vehicle?.category ?? "Operations");
+  const [assigned, setAssigned] = useState(draft?.assigned ?? vehicle?.assigned ?? "Shared pool");
+  const [photo, setPhoto] = useState<string | null>(draft ? draft.photo ?? null : vehicle?.photo ?? null);
   // Keep odometer inputs as text while they are being edited. Converting an
   // empty number input to Number immediately produces 0, which prevented an
   // existing (seeded) reading from being cleared and replaced naturally.
-  const [mileage, setMileage] = useState(() => String(vehicle?.mileage ?? ""));
-  const [serviceDueDate,setServiceDueDate]=useState(vehicle?.serviceDueDate ? malaysiaDate(new Date(vehicle.serviceDueDate)) : "");
-  const [serviceAt, setServiceAt] = useState(() => String(vehicle?.serviceAt ?? 10000));
+  const [mileage, setMileage] = useState(() => String(draft?.mileage ?? vehicle?.mileage ?? ""));
+  const [serviceDueDate,setServiceDueDate]=useState(() => { const due = draft ? draft.serviceDueDate : vehicle?.serviceDueDate; return due ? malaysiaDate(new Date(due)) : ""; });
+  const [serviceAt, setServiceAt] = useState(() => String(draft?.serviceAt ?? vehicle?.serviceAt ?? 10000));
   const [status, setStatus] = useState<VehicleInput["status"]>(
-    vehicle?.status === "SERVICE_DUE" || vehicle?.status === "OUT_OF_SERVICE"
+    draft ? draft.status : vehicle?.status === "SERVICE_DUE" || vehicle?.status === "OUT_OF_SERVICE"
       ? vehicle.status
       : "AVAILABLE",
   );
@@ -1949,7 +2082,7 @@ export function CompleteTripForm({
 }
 
 function FleetQrPage() {
-  return <section className="page-stack fleet-qr-page"><div className="module-intro fleet-intro"><div><span className="module-kicker"><QrCode size={16} /> Company cars</span><h2>One QR for all company cars</h2><p>Print this code at the key collection point. Employees scan it to choose a car, resume a trip or record a return.</p></div></div><section className="card fleet-qr-panel" aria-label="Shared fleet QR"><VehicleQr /></section></section>;
+  return <section className="page-stack fleet-qr-page"><div className="module-intro fleet-intro"><div><h2>One QR for all company cars</h2><p>Print this code at the key collection point. Employees scan it to choose a car, resume a trip or record a return.</p></div></div><section className="card fleet-qr-panel" aria-label="Shared fleet QR"><VehicleQr /></section></section>;
 }
 
 function VehicleQr() {

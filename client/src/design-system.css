@@ -1,0 +1,284 @@
+/*
+ * HR Digital design system
+ * Loaded after styles.css. Tokens here are the single source of truth for
+ * colour, type, radius, elevation, motion and the glass material.
+ *
+ * Principles
+ * - Black-first and quiet: colour is reserved for status (success, warning, danger).
+ * - Motion answers an action. One curve (ease-in-out), three durations, no ambient loops.
+ * - Glass only on surfaces that float above moving content: top bar, popovers,
+ *   dialogs, toasts and the save bar.
+ */
+
+:root {
+  /* Colour */
+  --ink: #17181a;
+  --ink-2: #3f3b3a;
+  --muted: #6f6866;
+  --subtle: #8f8784;
+  --canvas: #f3f1ef;
+  --panel: #ffffff;
+  --soft: #f7f5f3;
+  --line: #e5e0dd;
+  --line-strong: #cfc8c4;
+  --accent: #17181a;
+  --success: #157352;
+  --success-soft: #e8f5ee;
+  --warning: #9a6312;
+  --warning-soft: #fff2d9;
+  --danger: #b42318;
+  --danger-soft: #fdeceb;
+  --info: #2f67b3;
+  --info-soft: #eaf1fb;
+
+  /* Type scale (px, 1.125–1.2 steps) */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 19px;
+  --fs-2xl: 23px;
+  --fs-3xl: 28px;
+
+  /* Radius: nested surfaces step down one size */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* Elevation */
+  --shadow: 0 1px 2px rgba(23, 24, 26, .04), 0 6px 20px rgba(23, 24, 26, .045);
+  --shadow-hover: var(--shadow);
+  --shadow-float: 0 1px 1px rgba(23, 24, 26, .06), 0 24px 60px rgba(23, 24, 26, .18);
+
+  /* Motion */
+  --ease: cubic-bezier(.45, 0, .25, 1);
+  --dur-press: 120ms;
+  --dur-state: 200ms;
+  --dur-enter: 320ms;
+  --stagger: 40ms;
+
+  /* Liquid glass */
+  --glass-light: rgba(255, 255, 255, .6);
+  --glass-dark: rgba(26, 27, 30, .66);
+  --glass-blur: blur(24px) saturate(185%);
+  --glass-edge-light: rgba(255, 255, 255, .7);
+  --glass-edge-dark: rgba(255, 255, 255, .14);
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, .8), inset 0 -1px 0 rgba(255, 255, 255, .2);
+  --glass-shine-dark: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 -1px 0 rgba(255, 255, 255, .04);
+}
+
+body { background: var(--canvas); color: var(--ink); -webkit-font-smoothing: antialiased; }
+:is(button, input, select, textarea, a, [tabindex]):focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* ---------- Materials ---------- */
+
+.glass,
+.topbar,
+.notification-panel,
+.segmented,
+.fleet-dialog > header {
+  background: var(--glass-light);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-edge-light);
+  box-shadow: var(--glass-shine);
+}
+.glass-dark,
+.toast,
+.admin-savebar {
+  color: #fff;
+  background: var(--glass-dark);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge-dark);
+  box-shadow: var(--glass-shine-dark), var(--shadow-float);
+}
+.topbar { border-bottom: 1px solid rgba(23, 24, 26, .07); box-shadow: var(--glass-shine); }
+.notification-panel { box-shadow: var(--glass-shine), var(--shadow-float); }
+.fleet-dialog > header { color: var(--ink); border-bottom: 1px solid var(--line); }
+.fleet-dialog > header span { color: var(--muted); letter-spacing: 0; text-transform: none; font-size: var(--fs-sm); font-weight: 600; }
+.fleet-dialog > header button { color: var(--ink); background: rgba(23, 24, 26, .05); border-color: transparent; }
+.segmented button.active { color: #fff; background: var(--ink); }
+.fleet-dialog-backdrop,
+:is(.training-delete-dialog, .training-attendance-dialog, .usage-remove-dialog)::backdrop {
+  background: rgba(14, 15, 16, .32);
+  -webkit-backdrop-filter: blur(6px) saturate(140%);
+  backdrop-filter: blur(6px) saturate(140%);
+}
+
+/* ---------- Decoration ----------
+ * Kept: the sidebar gradient, glow and orbit ring, and the banner rings and glow (styles.css).
+ * Removed: the pulsing active nav item and the banners' own entrance (the page stagger covers it).
+ */
+
+.nav-item.active { animation: none; }
+.brand-lockup { animation: none; }
+.hero-card, .module-intro { animation: none; }
+.button-primary { box-shadow: none; }
+.summary-hero { background: var(--ink); }
+
+/* Hover never moves layout; it clarifies what is clickable. */
+:is(.button, .metric-card, .note-card, .vehicle-card, .registry-vehicle-card, .feature-grid button,
+    .timeline-item, .hero-signals > div, .tracker-card):hover { transform: none; }
+:is(.metric-card, .note-card, .registry-vehicle-card, .tracker-card):hover { box-shadow: var(--shadow); }
+:is(.metric-card-button, .feature-grid button, .timeline-item, .vehicle-card-interactive, .employee-card, .tracker-card):hover { border-color: var(--line-strong); }
+
+/* ---------- Motion ---------- */
+
+/* Press feedback on every control. */
+:is(.button, .row-action, .segmented button, .vehicle-actions button, .topbar-icon, .metric-card-button,
+    .employee-card, .feature-grid button, .calendar-day, .nav-item, .nav-child) {
+  transition: transform var(--dur-press) var(--ease), background-color var(--dur-state) var(--ease),
+    border-color var(--dur-state) var(--ease), color var(--dur-state) var(--ease),
+    box-shadow var(--dur-state) var(--ease), opacity var(--dur-state) var(--ease);
+}
+:is(.button, .row-action, .segmented button, .vehicle-actions button, .topbar-icon, .metric-card-button,
+    .employee-card, .feature-grid button):active:not(:disabled) { transform: scale(.97); }
+:is(.nav-item, .nav-child, .calendar-day):active { transform: scale(.985); }
+
+/* One orchestrated entrance per page: the stage fades, its card groups stagger in. */
+.page-stage { animation: dsFade var(--dur-enter) var(--ease) both; }
+.page-stage :is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid,
+    .current-usage-grid, .admin-grid, .employee-card-grid, .history-summary) > * {
+  animation: dsRise var(--dur-enter) var(--ease) both;
+  animation-delay: calc(var(--i, 0) * var(--stagger));
+}
+:is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid, .current-usage-grid,
+    .admin-grid, .employee-card-grid, .history-summary, .notification-feed, .nav-children-content) > :nth-child(2) { --i: 1; }
+:is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid, .current-usage-grid,
+    .admin-grid, .employee-card-grid, .history-summary, .notification-feed, .nav-children-content) > :nth-child(3) { --i: 2; }
+:is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid, .current-usage-grid,
+    .admin-grid, .employee-card-grid, .history-summary, .notification-feed, .nav-children-content) > :nth-child(4) { --i: 3; }
+:is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid, .current-usage-grid,
+    .admin-grid, .employee-card-grid, .history-summary, .notification-feed, .nav-children-content) > :nth-child(5) { --i: 4; }
+:is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid, .current-usage-grid,
+    .admin-grid, .employee-card-grid, .history-summary, .notification-feed, .nav-children-content) > :nth-child(6) { --i: 5; }
+:is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid, .current-usage-grid,
+    .admin-grid, .employee-card-grid, .history-summary, .notification-feed, .nav-children-content) > :nth-child(7) { --i: 6; }
+:is(.metric-grid, .registry-card-grid, .vehicle-grid, .timeline-list, .feature-grid, .current-usage-grid,
+    .admin-grid, .employee-card-grid, .history-summary, .notification-feed, .nav-children-content) > :nth-child(n+8) { --i: 7; }
+
+/* Opening a navigation group reveals its children in sequence. */
+.sidebar .nav-children.open .nav-child {
+  animation: dsSlide var(--dur-state) var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+.nav-children { transition: grid-template-rows var(--dur-enter) var(--ease), opacity var(--dur-state) var(--ease); }
+.nav-parent svg:last-child { transition: transform var(--dur-state) var(--ease); }
+
+/* Popovers and dialogs */
+.notification-panel { animation: dsPop var(--dur-state) var(--ease) both; transform-origin: top right; }
+.notification-feed > * { animation: dsRise var(--dur-state) var(--ease) both; animation-delay: calc(var(--i, 0) * var(--stagger)); }
+.fleet-dialog-backdrop { animation: dsFade var(--dur-state) var(--ease) both; }
+.fleet-dialog { animation: dsDialog var(--dur-enter) var(--ease) both; }
+:is(.training-delete-dialog, .training-attendance-dialog, .usage-remove-dialog)[open] { animation: dsDialog var(--dur-enter) var(--ease) both; }
+:is(.training-delete-dialog, .training-attendance-dialog, .usage-remove-dialog)[open]::backdrop { animation: dsFade var(--dur-state) var(--ease) both; }
+
+/* New or restored records ease in where they land. */
+:is(.data-table tbody tr, .registry-vehicle-card, .employee-card, .current-usage-card, .history-entry, .timeline-item) {
+  transition: opacity var(--dur-state) var(--ease), transform var(--dur-state) var(--ease),
+    display var(--dur-state) allow-discrete, background-color var(--dur-state) var(--ease);
+}
+@starting-style {
+  :is(.data-table tbody tr, .registry-vehicle-card, .employee-card, .current-usage-card, .history-entry, .timeline-item) {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Optimistic feedback: pending records breathe, removed records fold away. */
+[data-pending="true"] { animation: dsPending 1.1s var(--ease) infinite alternate; pointer-events: none; }
+.is-removed { display: none; opacity: 0; transform: scale(.98); }
+
+/* Errors nudge once so the eye finds them. */
+.form-error { animation: dsNudge 320ms var(--ease) both; }
+
+/* Toast */
+.toast {
+  right: 24px; bottom: 24px; grid-template-columns: auto 1fr auto; overflow: hidden;
+  border-radius: var(--r-md); font-size: var(--fs-base); line-height: 1.45;
+  animation: dsToastIn var(--dur-enter) var(--ease) both;
+}
+.toast[data-leaving] { animation: dsToastOut var(--dur-state) var(--ease) both; }
+.toast > svg { color: #6fd8b3; animation: dsPop var(--dur-enter) var(--ease) both; animation-delay: 80ms; }
+.toast.error > svg { color: #ff9b91; }
+.toast::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; transform-origin: left;
+  background: rgba(255, 255, 255, .28);
+  animation: dsDrain var(--toast-life, 3600ms) linear both;
+}
+.toast button { width: 28px; height: 28px; border-radius: var(--r-sm); color: rgba(255, 255, 255, .7); transition: background-color var(--dur-state) var(--ease); }
+.toast button:hover { background: rgba(255, 255, 255, .1); }
+
+/* Save status in the top bar */
+.sync-indicator {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 11px;
+  border-radius: var(--r-pill); color: var(--muted); font-size: var(--fs-sm); font-weight: 650;
+  background: var(--glass-light); border: 1px solid var(--glass-edge-light); box-shadow: var(--glass-shine);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  transition: opacity var(--dur-state) var(--ease), transform var(--dur-state) var(--ease), color var(--dur-state) var(--ease);
+}
+.sync-indicator.idle { opacity: 0; transform: translateY(-4px); pointer-events: none; }
+.sync-indicator.saved { color: var(--success); }
+.sync-indicator.failed { color: var(--danger); }
+.sync-indicator.saved svg, .sync-indicator.failed svg { animation: dsPop var(--dur-enter) var(--ease) both; }
+.sync-spinner { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: dsSpin .8s linear infinite; }
+
+/* Toggles and progress move on the same curve */
+.setting-toggle > i, .setting-toggle > i::after { transition-timing-function: var(--ease); transition-duration: var(--dur-state); }
+:is(.progress-track, .service-meter, .table-progress, .ocr-progress) i { transition: width var(--dur-enter) var(--ease); }
+
+/* Restyled labels: no tracked-out capitals as decoration */
+:is(.data-table th, .status-badge, .employment-status, .registry-vehicle-photo > em, .vehicle-card header > em,
+    .admin-status-row em, .calendar-weekdays span, .profile-details span, .nav-section-label) {
+  letter-spacing: 0; text-transform: none;
+}
+.data-table th { font-weight: 650; color: var(--muted); }
+.status-badge, .employment-status { font-weight: 650; }
+
+@keyframes dsFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dsRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dsSlide { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@keyframes dsPop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes dsDialog { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes dsToastIn { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes dsToastOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes dsDrain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes dsPending { from { opacity: .5; } to { opacity: .8; } }
+@keyframes dsNudge { 0% { opacity: 0; transform: translateX(0); } 30% { opacity: 1; transform: translateX(-4px); } 60% { transform: translateX(3px); } 100% { transform: none; } }
+@keyframes dsSpin { to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+  .toast { left: 12px; right: 12px; bottom: 12px; }
+  .sync-indicator { padding: 0 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
+  [data-pending="true"] { opacity: .6; }
+}
+
+.copyright { letter-spacing: 0; text-transform: none; font-weight: 600; color: #8d9194; font-size: var(--fs-sm); }
+.module-intro { min-height: 0; padding: 24px 28px; align-items: center; }
+.module-intro h2 { margin-top: 0; }
+.registry-vehicle-copy > div > span, .file-type em, .qr-sheet > span { letter-spacing: 0; text-transform: none; }
+.admin-savebar > span { margin: 0; color: rgba(255, 255, 255, .78); font-size: var(--fs-base); }
+
+/* Breadcrumb: the path to the current page; the heading below names the page itself. */
+.topbar-heading { display: grid; gap: 3px; min-width: 0; }
+.breadcrumb ol { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.breadcrumb li { display: flex; align-items: center; gap: 2px; color: var(--subtle); }
+.breadcrumb button {
+  padding: 2px 4px; margin-left: -4px; border: 0; border-radius: var(--r-xs); color: var(--muted); background: transparent;
+  font-size: var(--fs-sm); font-weight: 600;
+  transition: color var(--dur-state) var(--ease), background-color var(--dur-state) var(--ease);
+}
+.breadcrumb li + li button { margin-left: 0; }
+.breadcrumb button:hover { color: var(--ink); background: rgba(23, 24, 26, .05); }
+.breadcrumb svg { flex: 0 0 auto; }
+.topbar-heading h1 { animation: dsSlide var(--dur-state) var(--ease) both; }
+@media (max-width: 760px) { .breadcrumb li:first-child { display: none; } }
