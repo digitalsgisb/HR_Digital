@@ -382,6 +382,18 @@ Closing the browser tab no longer loses an employee's place in the shared **Flee
 
 Emails use the existing SMTP settings and are disabled with `EMAIL_AUTOMATION_ENABLED=false`. Links use `CLIENT_ORIGIN`; set optional `FLEET_BASE_URL` (origin only) if employees reach the app on a different address. Identity is still the employee ID only, and the trip link itself is not tied to a login, so treat it like a key reference. The schema adds nullable `VehicleTrip` columns (`resumeToken` with a unique index, link-email and reminder timestamps, `returnRemindersSent`); Docker startup applies them through the existing schema push. Existing trips are not changed until they are found again.
 
+### Company car booking (25 November 2026)
+
+Employees can now book a car for later as well as take one straight away, from the same **Fleet QR** form.
+
+- **When.** Choose **Now** (collect the key straight away, as before) or **Later**: a start and return time in Malaysia time, on 30-minute steps, up to 14 days ahead. A booking lasts at most 3 days. Each employee can hold one booking or open trip at a time.
+- **Clashes.** Only cars free for the whole window are offered; the others are listed with the reason (for example "Booked 2:00 pm – 5:00 pm"). There is no buffer, so a booking may start exactly when the previous one is due back. A car that is out past its return time stays unavailable for anyone taking it now, but does not block later bookings.
+- **Check-in.** On the day, the employee opens their trip link (emailed, or saved on the phone) and taps **Check in and collect key** from 30 minutes before the start. The car must be back from the previous driver and cleared for use. Check-in records the car's current odometer, then the trip continues as an ordinary reservation.
+- **No-shows.** A booking not checked in within 30 minutes of its start is released automatically and the employee (or their HOD when they have no email) is emailed. "Book now" reservations are still never released automatically, because the key may already be out.
+- **HR.** **Company cars → Car usage** has an **Upcoming bookings** list. HR can create a booking for any active employee (now or later), change a booking's car, times, destination or purpose, and cancel it. The employee is emailed about each change or cancellation. **Remove usage** on a booking also cancels it with an email. Archiving a car is blocked while it has upcoming bookings.
+
+The schema adds `BOOKED` and `NO_SHOW` trip statuses and nullable `VehicleTrip.bookedFrom`, `noticeKind` and `noticeDueAt` columns with indexes; Docker startup applies them through the existing schema push. The no-show release runs every minute even when email automation is turned off.
+
 ### Vehicle details, maintenance and training evaluation (FR-HR-002 Rev 2)
 
 - Company cars → Vehicle status: click a car card or its View / edit details button to edit its photo, registration, model, pool, mileage, service target/date and operational status. Trip controls remain separate actions.

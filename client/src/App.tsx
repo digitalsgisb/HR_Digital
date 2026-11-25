@@ -2,6 +2,7 @@ import { EmailOverview, EmailDelivery } from "./EmailCentre";
 import { TrainingEmailTracker } from "./TrainingEmailTracker";
 import { CurrentUsageCards, RemoveVehicleUsage, isOpenVehicleUsage } from "./VehicleUsageActions";
 import { FleetAccess } from "./FleetAccess";
+import { VehicleBookings } from "./VehicleBookings";
 import { DepartmentHods } from "./DepartmentHods";
 import { MaintenancePage } from "./MaintenancePanel";
 import { TrainingSummaries } from "./TrainingSummaries";
@@ -884,6 +885,7 @@ function FleetTracker({
         </div>
         {mode === "status" && fleetError && <div className="form-error" role="alert">{fleetError}<button type="button" onClick={() => { void refreshFleet(); }}>Retry</button></div>}
         {mode === "usage" && <CurrentUsageCards trips={trips} vehicles={fleetVehicles} disabled={loading || !!fleetError} onRemoved={async () => { await refreshFleet(); showNotice("Usage removed. The fleet status has been updated."); }} onHistory={onOpenHistory} onReturn={trip => { setSelectedVehicleId(trip.vehicleId); setDialog("complete"); }} />}
+        {mode === "usage" && <VehicleBookings onChanged={refreshFleet} />}
 {mode === "usage" && <>        <section className="card trip-launcher" aria-label="Choose a car and start a trip">
           <div><h2>Choose your car & start a trip</h2><p>Record the driver, destination and starting mileage before leaving.</p></div>
           <div className="trip-launcher-controls">

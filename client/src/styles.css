@@ -977,3 +977,29 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 .fleet-trip-link-only { padding: 10px 12px; border-radius: var(--r-sm); background: var(--danger-soft); color: var(--danger); }
 .fleet-trip-link-url { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line, #d0d5dd); border-radius: var(--r-sm); font: inherit; font-size: var(--fs-sm, 13px); background: var(--surface, #fff); color: inherit; }
 .fleet-trip-link .toolbar-actions { flex-wrap: wrap; }
+
+/* Booking window picker and bookings */
+.booking-window { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.booking-window legend { margin-bottom: 8px; font-weight: 800; }
+.booking-window-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.booking-window-hint { margin: 0; color: var(--muted); font-size: var(--fs-sm, 13px); }
+.fleet-booking-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.fleet-booking-times dt { color: var(--muted); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.fleet-booking-times dd { margin: 4px 0 0; font-weight: 800; }
+.fleet-busy-cars summary { cursor: pointer; color: var(--muted); }
+.fleet-busy-cars ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.vehicle-bookings { display: grid; gap: 12px; margin-bottom: 20px; }
+.vehicle-bookings .current-usage-heading { align-items: center; gap: 12px; }
+.vehicle-booking-list { display: grid; gap: 10px; }
+.vehicle-booking-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 14px 16px; }
+.vehicle-booking-row strong, .vehicle-booking-row small { display: block; overflow-wrap: anywhere; }
+.vehicle-booking-row small { margin-top: 3px; color: var(--muted); }
+.vehicle-booking-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-sm); background: var(--blue-light); color: var(--blue); }
+.booking-form h3 { margin: 0; }
+.status-badge.booked { color: var(--blue); background: var(--blue-light); }
+.status-badge.no-show { color: var(--danger); background: var(--danger-soft); }
+@media (max-width: 720px) {
+  .booking-window-row { grid-template-columns: 1fr; }
+  .vehicle-booking-row { grid-template-columns: 40px minmax(0, 1fr); }
+  .vehicle-booking-row > div:nth-child(3), .vehicle-booking-row > .toolbar-actions { grid-column: 2; }
+}

@@ -34,7 +34,7 @@ export type VehicleStatus = (typeof vehicleStatuses)[number];
 export const vehicleConditions = ["GOOD", "ATTENTION_REQUIRED", "UNSAFE"] as const;
 export type VehicleCondition = (typeof vehicleConditions)[number];
 
-export const vehicleTripStatuses = ["AWAITING_DEPARTURE", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
+export const vehicleTripStatuses = ["BOOKED", "NO_SHOW", "AWAITING_DEPARTURE", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
 export type VehicleTripStatus = (typeof vehicleTripStatuses)[number];
 
 export type VehicleTrip = {
@@ -66,8 +66,13 @@ export type VehicleTrip = {
   notesAfter?: string | null;
   status: VehicleTripStatus;
   resumeToken?: string | null;
+  /** Booked start; expectedReturnAt is the booked end. */
+  bookedFrom?: string | null;
   vehicle?: Vehicle;
 };
+
+/** A car's availability for a requested booking window. */
+export type VehicleAvailability = Pick<Vehicle, "id" | "plate" | "model" | "category" | "photo" | "mileage" | "status"> & { available: boolean; reason?: string };
 
 /** Where the personal trip link was emailed when a car was reserved. */
 export type TripLinkDelivery = "employee" | "hod" | "none";

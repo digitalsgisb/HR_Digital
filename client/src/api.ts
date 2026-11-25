@@ -1,6 +1,6 @@
 import type { RosterPreview } from "./ProductionRosterImport";
 import type {
-  DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, Vehicle, VehicleCondition, VehicleStatus, VehicleTrip
+  DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, Vehicle, VehicleAvailability, VehicleCondition, VehicleReservation, VehicleStatus, VehicleTrip
 } from "@hr-training/shared";
 import type { Course, Employee, SessionListItem } from "./types";
 
@@ -170,6 +170,23 @@ export const api = {
 
   removeVehicle(id: string) {
     return request<{ removed: true }>(`/api/vehicles/${id}`, { method: "DELETE" });
+  },
+
+  getVehicleAvailability(window: { startAt: string | null; endAt: string }, excludeTripId?: string, signal?: AbortSignal) {
+    const params = new URLSearchParams({ endAt: window.endAt, ...(window.startAt ? { startAt: window.startAt } : {}), ...(excludeTripId ? { excludeTripId } : {}) });
+    return request<VehicleAvailability[]>(`/api/vehicle-availability?${params}`, { signal });
+  },
+  getVehicleBookings() {
+    return request<VehicleTrip[]>("/api/vehicle-bookings");
+  },
+  createVehicleBooking(input: { employeeId: string; vehicleId: string; startAt: string | null; endAt: string; destination: string; purpose: string; passengers?: number }) {
+    return request<VehicleReservation>("/api/vehicle-bookings", { method: "POST", body: JSON.stringify(input) });
+  },
+  updateVehicleBooking(id: string, input: { vehicleId: string; startAt: string; endAt: string; destination?: string; purpose?: string }) {
+    return request<VehicleTrip>(`/api/vehicle-bookings/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  cancelVehicleBooking(id: string) {
+    return request<{ cancelled: true }>(`/api/vehicle-bookings/${encodeURIComponent(id)}/cancel`, { method: "POST" });
   },
 
   getVehicleTrips() {

@@ -154,7 +154,7 @@ test("one car reservation excludes competing employees and requires evidence bef
     const employee = { id: "employee", employeeId: "EMP1", name: "Test Driver", status: "ACTIVE" };
     replace(prisma.employee, "findFirst", async ({ where }: any) => where.employeeId.equals === "EMP1" ? employee : { ...employee, id: "other", employeeId: "EMP2", name: "Other Driver" });
     const tx: any = { $queryRaw: async () => [], vehicle: { updateMany: async () => { if (car.status !== "AVAILABLE")
-                return { count: 0 }; car.status = "IN_USE"; return { count: 1 }; }, findUniqueOrThrow: async () => car, update: async ({ data }: any) => Object.assign(car, data) }, vehicleTrip: { findFirst: async ({ where }: any) => trip && trip.driverEmployeeId === where.driverEmployeeId ? trip : null, create: async ({ data }: any) => (trip = { id: "trip", ...data, vehicle: car }), findUniqueOrThrow: async () => trip, updateMany: async ({ where, data }: any) => { if (where.status !== trip.status)
+                return { count: 0 }; car.status = "IN_USE"; return { count: 1 }; }, findUniqueOrThrow: async () => car, update: async ({ data }: any) => Object.assign(car, data) }, vehicleTrip: { findMany: async () => [], findFirst: async ({ where }: any) => trip && trip.driverEmployeeId === where.driverEmployeeId ? trip : null, create: async ({ data }: any) => (trip = { id: "trip", ...data, vehicle: car }), findUniqueOrThrow: async () => trip, updateMany: async ({ where, data }: any) => { if (where.status !== trip.status)
                 return { count: 0 }; Object.assign(trip, data); return { count: 1 }; } } };
     replace(prisma, "$transaction", async (fn: any) => fn(tx));
     const server = createApp().listen(0, "127.0.0.1");
@@ -165,7 +165,7 @@ test("one car reservation excludes competing employees and requires evidence bef
     const root = `http://127.0.0.1:${address.port}/api/vehicle-trips`;
     const post = (path: string, data: unknown) => fetch(root + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
     const identity = { driverEmployeeId: "EMP1", driverName: "Test Driver" };
-    const reservation = { ...identity, vehicleId: "car", destination: "Office", purpose: "Meeting", expectedReturnAt: "2099-01-01T04:00:00Z" };
+    const reservation = { ...identity, vehicleId: "car", destination: "Office", purpose: "Meeting", expectedReturnAt: new Date(Math.ceil(Date.now() / 1800000) * 1800000 + 7200000).toISOString() };
     assert.equal((await post("/reserve", { ...reservation, driverName: "Wrong Name" })).status, 400);
     assert.equal((await post("/reserve", reservation)).status, 201);
     assert.equal(trip.status, "AWAITING_DEPARTURE");

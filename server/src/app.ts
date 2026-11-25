@@ -2,6 +2,7 @@ import { createTrainingPortalRouter, createTrainingReviewRouter } from "./traini
 import { createTrainingEmailSettingsRouter } from "./training-email-settings.js";
 import { createTrainingEmailTrackerRouter } from "./training-email-tracker.js";
 import { createFleetWorkflowRouter } from "./fleet-workflow.js";
+import { createVehicleBookingRouter } from "./vehicle-booking.js";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
@@ -26,6 +27,7 @@ export const createApp = () => {
   app.use("/training", createTrainingPortalRouter());
   app.use("/attendance", createAttendancePageRouter());
   app.use("/api", createFleetWorkflowRouter());
+  app.use("/api", createVehicleBookingRouter());
   app.use("/api", createTrainingReviewRouter());
   app.use("/api", createTrainingEmailSettingsRouter());
   app.use("/api", createTrainingEmailTrackerRouter());

@@ -2,7 +2,9 @@ import { useId, useRef, useState } from "react";
 import { CarFront, ChevronDown } from "lucide-react";
 import type { Vehicle } from "@hr-training/shared";
 
-function CarPhoto({ vehicle }: { vehicle?: Vehicle }) {
+type PickerCar = Pick<Vehicle, "id" | "plate" | "model" | "photo" | "mileage">;
+
+function CarPhoto({ vehicle }: { vehicle?: PickerCar }) {
   const [failed, setFailed] = useState<string | null>(null);
   return <span className="fleet-car-thumbnail">
     {vehicle?.photo && failed !== vehicle.photo
@@ -12,7 +14,7 @@ function CarPhoto({ vehicle }: { vehicle?: Vehicle }) {
 }
 
 export function FleetCarPicker({ vehicles, value, onChange }: {
-  vehicles: Vehicle[];
+  vehicles: PickerCar[];
   value: string;
   onChange: (id: string) => void;
 }) {

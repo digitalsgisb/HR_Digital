@@ -943,6 +943,7 @@ export const createRouter = () => {
       });
       if (!vehicle) throw new HttpError(404, "Vehicle not found.");
       if (vehicle.trips.length) throw new HttpError(409, "Return the active trip before removing this vehicle.");
+      if (await prisma.vehicleTrip.count({ where: { vehicleId: id, archivedAt: null, status: "BOOKED" } })) throw new HttpError(409, "Cancel or move this car's upcoming bookings before removing it.");
       await prisma.vehicle.update({
         where: { id },
         data: { archivedAt: new Date(), status: "OUT_OF_SERVICE" }
