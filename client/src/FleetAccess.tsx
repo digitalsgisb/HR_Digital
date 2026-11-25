@@ -1,10 +1,34 @@
 import { FleetCarPicker } from "./FleetCarPicker";
 import { useEffect, useLayoutEffect, useState, type FormEvent } from "react";
-import type { Vehicle, VehicleTrip } from "@hr-training/shared";
+import type { TripLinkDelivery, Vehicle, VehicleReservation, VehicleTrip } from "@hr-training/shared";
 import { api } from "./api";
 import { StartTripForm, CompleteTripForm } from "./App";
+import { clearTripDrafts, rememberEmployeeId, rememberTripToken, rememberedEmployeeId, rememberedTripToken, showTripInAddressBar, tripLink } from "./fleet-storage";
 export async function workflowRequest<T>(path: string, body?: unknown, method = "POST"): Promise<T> { const response = await fetch(`/api${path}`, body === undefined ? undefined : { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const result = await response.json(); if (!response.ok)
     throw Error(result.message || "Could not save. Please retry."); return result; }
+
+const initialTripToken = () => new URLSearchParams(window.location.search).get("trip") || rememberedTripToken();
+
+function TripLinkCard({ token, delivery }: { token: string; delivery: TripLinkDelivery | null }) {
+    const link = tripLink(token);
+    const [copied, setCopied] = useState(false);
+    const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); window.setTimeout(() => setCopied(false), 2500); } catch { window.prompt("Copy your trip link:", link); } };
+    const share = async () => { try { await navigator.share({ title: "My company car trip", url: link }); } catch { /* cancelled */ } };
+    return <section className="card fleet-trip-link" aria-labelledby="trip-link-title">
+        <p className="fleet-trip-link-alert">IF YOU LOSE THIS LINK, you will need to scan the HR QR and enter your employee ID again.</p>
+        <h2 id="trip-link-title">Save your trip link</h2>
+        <p>Open this link to come back to your trip at any time: after collecting the key, and when returning the car.</p>
+        {delivery === "employee" && <p><strong>We have emailed this link to you.</strong></p>}
+        {delivery === "hod" && <p><strong>You have no email on file, so we emailed this link to your HOD to forward to you.</strong></p>}
+        {delivery === "none" && <p className="fleet-trip-link-only"><strong>This screen is the only copy.</strong> No email is on file for you or your HOD. Copy or share the link now.</p>}
+        <input className="fleet-trip-link-url" readOnly value={link} onFocus={event => event.currentTarget.select()} aria-label="Your trip link"/>
+        <div className="toolbar-actions">
+            <button type="button" className="button button-primary" onClick={() => void copy()}>{copied ? "Copied" : "Copy link"}</button>
+            {"share" in navigator && <button type="button" className="button button-secondary" onClick={() => void share()}>Share to myself</button>}
+        </div>
+    </section>;
+}
+
 export function FleetAccess() {
     useLayoutEffect(() => {
         document.documentElement.classList.add("fleet-access-mode");
@@ -16,13 +40,15 @@ export function FleetAccess() {
         };
     }, []);
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [employeeId, setEmployeeId] = useState("");
+    const [employeeId, setEmployeeId] = useState(rememberedEmployeeId);
     const [employee, setEmployee] = useState<{employeeId: string; name: string} | null>(null);
-    const [identityLoading, setIdentityLoading] = useState(false);
+    const [identityLoading, setIdentityLoading] = useState(() => Boolean(rememberedEmployeeId()));
     const [identityError, setIdentityError] = useState("");
     const [identityAttempt, setIdentityAttempt] = useState(0);
     const [identified, setIdentified] = useState(false);
+    const [resuming, setResuming] = useState(() => Boolean(initialTripToken()));
     const [trip, setTrip] = useState<VehicleTrip | null>(null);
+    const [linkDelivery, setLinkDelivery] = useState<TripLinkDelivery | null>(null);
     const [carId, setCarId] = useState("");
     const [mode, setMode] = useState<"take" | "return">("take");
     const [destination, setDestination] = useState("");
@@ -36,6 +62,42 @@ export function FleetAccess() {
     }, [identified, trip?.status]);
     const name = employee?.name || "";
     const identity = { driverEmployeeId: employee?.employeeId || employeeId, driverName: name };
+    const openTrip = (next: VehicleTrip | null) => {
+        setTrip(next);
+        if (next?.resumeToken) { rememberTripToken(next.resumeToken); showTripInAddressBar(next.resumeToken); }
+    };
+    const closeTrip = (tripId: string) => {
+        clearTripDrafts(tripId);
+        rememberTripToken(null);
+        showTripInAddressBar(null);
+        setTrip(null);
+        setLinkDelivery(null);
+    };
+    // A personal trip link (or the trip saved on this phone) goes straight back to the trip.
+    useEffect(() => {
+        const token = initialTripToken();
+        if (!token) return;
+        let active = true;
+        fetch(`/api/vehicle-trips/resume/${encodeURIComponent(token)}`, { cache: "no-store" }).then(async response => {
+            const result = await response.json().catch(() => ({}));
+            if (!active) return;
+            if (response.ok) {
+                const resumed = result as { trip: VehicleTrip; driver: { employeeId: string; name: string } };
+                setEmployee(resumed.driver);
+                setEmployeeId(resumed.driver.employeeId);
+                rememberEmployeeId(resumed.driver.employeeId);
+                setIdentityLoading(false);
+                setIdentified(true);
+                openTrip(resumed.trip);
+            }
+            else {
+                if (response.status === 404 || response.status === 410) { rememberTripToken(null); showTripInAddressBar(null); }
+                setMessage(result.message || "Could not open your trip. Enter your employee ID below.");
+            }
+        }).catch(() => { if (active) setMessage("Could not open your trip. Check your connection, or enter your employee ID below."); })
+            .finally(() => { if (active) setResuming(false); });
+        return () => { active = false; };
+    }, []);
     useEffect(() => {
         if (identified || !employeeId.trim()) return;
         const controller = new AbortController();
@@ -62,15 +124,16 @@ export function FleetAccess() {
     finally {
         setBusy(false);
     } };
-    const lookup = async (event: FormEvent) => { event.preventDefault(); if (!employee || identityLoading) return; await act(async () => { const trips = await workflowRequest<VehicleTrip[]>("/vehicle-trips/lookup", identity); setTrip(trips[0] || null); setIdentified(true); await load(); if (mode === "return" && !trips.length)
+    const lookup = async (event: FormEvent) => { event.preventDefault(); if (!employee || identityLoading) return; await act(async () => { const trips = await workflowRequest<VehicleTrip[]>("/vehicle-trips/lookup", identity); rememberEmployeeId(employee.employeeId); openTrip(trips[0] || null); setMessage(""); setIdentified(true); await load(); if (mode === "return" && !trips.length)
         setMessage("No open car trip was found for you."); }); };
     const car = trip?.vehicle || vehicles.find(v => v.id === carId);
     const availableCars = vehicles.filter(v => v.status === "AVAILABLE" && v.mileage < v.serviceAt && (!v.serviceDueDate || new Date(v.serviceDueDate) > new Date()));
-    return <main className="vehicle-usage-page"><div className="fleet-header-shell"><header className="vehicle-usage-brand"><img src="/sugihara-mark.png" alt="Sugihara Grand Industries"/><div className="fleet-product-brand"><strong>HR Digital</strong><span>Company car access</span></div><span className="fleet-header-company">Sugihara Grand Industries</span></header></div><div className="vehicle-usage-container"><section className="card vehicle-usage-heading"><h1>Company cars</h1><p>Collect a key, confirm departure, then return the car using this same QR.</p></section>{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="card" role="status">{message}</p>}
- {!identified ? <form className="card fleet-form" onSubmit={lookup}><div className="toolbar-actions"><button type="button" className="button" aria-pressed={mode === "take"} onClick={() => setMode("take")}>Take a car</button><button type="button" className="button" aria-pressed={mode === "return"} onClick={() => setMode("return")}>Return / resume a car</button></div><label className="field">Employee ID<input required maxLength={100} autoComplete="off" spellCheck={false} value={employeeId} onChange={e => { setEmployeeId(e.target.value); setEmployee(null); setIdentityError(""); setIdentityLoading(Boolean(e.target.value.trim())); }}/></label><label className="field">Employee name<input readOnly value={name} placeholder="Your name appears automatically" /></label><p role="status" aria-live="polite">{identityLoading ? "Finding your employee details…" : identityError || (employee ? "Employee found. Continue if this is your name." : "Enter your employee ID to find your name.")}</p>{identityError && <button type="button" className="button button-secondary" onClick={() => { setIdentityError(""); setIdentityLoading(true); setIdentityAttempt(attempt => attempt + 1); }}>Retry lookup</button>}<button className="button button-primary" disabled={busy || identityLoading || !employee}>Continue</button></form> : <>
- <section className="card fleet-form fleet-identity-card"><div><small>EMPLOYEE</small><p><strong>{name}</strong></p><span>{employee?.employeeId || employeeId}</span></div><button className="button button-secondary" onClick={() => { setIdentified(false); setTrip(null); setMessage(""); setEmployeeId(""); setEmployee(null); setIdentityError(""); setIdentityLoading(false); }}>Change employee</button></section>
+    return <main className="vehicle-usage-page"><div className="fleet-header-shell"><header className="vehicle-usage-brand"><img src="/sugihara-mark.png" alt="Sugihara Grand Industries"/><div className="fleet-product-brand"><strong>HR Digital</strong><span>Company car access</span></div><span className="fleet-header-company">Sugihara Grand Industries</span></header></div><div className="vehicle-usage-container"><section className="card vehicle-usage-heading"><h1>Company cars</h1><p>Collect a key, confirm departure, then return the car using your trip link or this same QR.</p></section>{error && <p className="form-error" role="alert">{error}</p>}{message && <p className="card" role="status">{message}</p>}
+ {resuming ? <section className="card fleet-form" role="status"><p>Opening your trip…</p></section> : !identified ? <form className="card fleet-form" onSubmit={lookup}><div className="toolbar-actions"><button type="button" className="button" aria-pressed={mode === "take"} onClick={() => setMode("take")}>Take a car</button><button type="button" className="button" aria-pressed={mode === "return"} onClick={() => setMode("return")}>Return / resume a car</button></div><label className="field">Employee ID<input required maxLength={100} autoComplete="off" spellCheck={false} value={employeeId} onChange={e => { setEmployeeId(e.target.value); setEmployee(null); setIdentityError(""); setIdentityLoading(Boolean(e.target.value.trim())); }}/></label><label className="field">Employee name<input readOnly value={name} placeholder="Your name appears automatically" /></label><p role="status" aria-live="polite">{identityLoading ? "Finding your employee details…" : identityError || (employee ? "Employee found. Continue if this is your name." : "Enter your employee ID to find your name.")}</p>{identityError && <button type="button" className="button button-secondary" onClick={() => { setIdentityError(""); setIdentityLoading(true); setIdentityAttempt(attempt => attempt + 1); }}>Retry lookup</button>}<button className="button button-primary" disabled={busy || identityLoading || !employee}>Continue</button></form> : <>
+ <section className="card fleet-form fleet-identity-card"><div><small>EMPLOYEE</small><p><strong>{name}</strong></p><span>{employee?.employeeId || employeeId}</span></div><button className="button button-secondary" onClick={() => { setIdentified(false); setTrip(null); setLinkDelivery(null); setMessage(""); setEmployeeId(""); setEmployee(null); setIdentityError(""); setIdentityLoading(false); rememberEmployeeId(null); rememberTripToken(null); showTripInAddressBar(null); }}>Change employee</button></section>
+ {trip?.resumeToken && <TripLinkCard token={trip.resumeToken} delivery={linkDelivery}/>}
  {trip && car ? <section className="card"><div className="fleet-form"><h2>{car.plate} · {car.model}</h2><p><strong>{trip.status === "AWAITING_DEPARTURE" ? "Awaiting departure" : "In use"}</strong> · {trip.destination}</p>{trip.expectedReturnAt && <p>Expected return: {new Date(trip.expectedReturnAt).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}</p>}</div>{trip.status === "AWAITING_DEPARTURE" ? <><div className="fleet-form"><p>Show this confirmation to the key custodian. Collect the key, turn on the dashboard, then photograph the total ODO reading before driving.</p><p>Reservation reference: <strong>{trip.id.slice(-8).toUpperCase()}</strong></p><button className="button button-secondary" disabled={busy} onClick={() => void act(async () => { const result = await workflowRequest<{
             message: string;
-        }>(`/vehicle-trips/${trip.id}/cancel-reservation`, identity); setTrip(null); setMessage(result.message); await load(); })}>Cancel reservation</button></div><StartTripForm key={trip.id} reservation={trip} vehicles={[car]} selectedVehicleId={car.id} onVehicleChange={() => { }} onSubmit={async (input) => { const saved = await workflowRequest<VehicleTrip>(`/vehicle-trips/${trip.id}/depart`, { ...input, ...identity }); setTrip(saved); setMessage("Departure confirmed. Drive safely. Scan this QR again when returning."); await load(); }}/></> : <CompleteTripForm key={trip.id} vehicle={car} trip={trip} onSubmit={async (input) => { await api.completeVehicleTrip(trip.id, input); setTrip(null); setMessage("Car returned. Please return the key to the custodian."); setMode("return"); await load(); }}/>}</section> : mode === "take" ? <form className="card fleet-form" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await workflowRequest<VehicleTrip>("/vehicle-trips/reserve", { ...identity, vehicleId: carId, destination, purpose, expectedReturnAt: new Date(returnAt + ":00+08:00").toISOString() }); setTrip(saved); setMessage("Car reserved. Show the confirmation below to collect your key."); await load(); }); }}><h2>Choose your car</h2><FleetCarPicker vehicles={availableCars} value={carId} onChange={setCarId}/>{car && <p className="fleet-mileage-hint">Last recorded odometer: {car.mileage.toLocaleString()} km</p>}<label className="field">Destination<input required minLength={2} value={destination} onChange={e => setDestination(e.target.value)}/></label><label className="field">Purpose<input required minLength={2} value={purpose} onChange={e => setPurpose(e.target.value)}/></label><label className="field">Expected return (Malaysia time)<input required type="datetime-local" value={returnAt} onChange={e => setReturnAt(e.target.value)}/></label><button className="button button-primary" disabled={busy || !availableCars.some(vehicle => vehicle.id === carId)}>Reserve car and collect key</button></form> : <section className="card fleet-form"><p>No open trip. If you need a car, start a new reservation.</p><button className="button" onClick={() => { setMode("take"); setMessage(""); }}>Take a car</button></section>}
+        }>(`/vehicle-trips/${trip.id}/cancel-reservation`, identity); closeTrip(trip.id); setMessage(result.message); await load(); })}>Cancel reservation</button></div><StartTripForm key={trip.id} draftKey={`depart:${trip.id}`} reservation={trip} vehicles={[car]} selectedVehicleId={car.id} onVehicleChange={() => { }} onSubmit={async (input) => { const saved = await workflowRequest<VehicleTrip>(`/vehicle-trips/${trip.id}/depart`, { ...input, ...identity }); openTrip(saved); setMessage("Departure confirmed. Drive safely. Open your trip link when returning."); await load(); }}/></> : <CompleteTripForm key={trip.id} draftKey={`return:${trip.id}`} vehicle={car} trip={trip} onSubmit={async (input) => { await api.completeVehicleTrip(trip.id, input); closeTrip(trip.id); setMessage("Car returned. Please return the key to the custodian."); setMode("return"); await load(); }}/>}</section> : mode === "take" ? <form className="card fleet-form" onSubmit={event => { event.preventDefault(); void act(async () => { const saved = await workflowRequest<VehicleReservation>("/vehicle-trips/reserve", { ...identity, vehicleId: carId, destination, purpose, expectedReturnAt: new Date(returnAt + ":00+08:00").toISOString() }); const { linkDelivery: delivery, ...reserved } = saved; setLinkDelivery(delivery); openTrip(reserved); setMessage("Car reserved. Save your trip link, then show the confirmation below to collect your key."); await load(); }); }}><h2>Choose your car</h2><FleetCarPicker vehicles={availableCars} value={carId} onChange={setCarId}/>{car && <p className="fleet-mileage-hint">Last recorded odometer: {car.mileage.toLocaleString()} km</p>}<label className="field">Destination<input required minLength={2} value={destination} onChange={e => setDestination(e.target.value)}/></label><label className="field">Purpose<input required minLength={2} value={purpose} onChange={e => setPurpose(e.target.value)}/></label><label className="field">Expected return (Malaysia time)<input required type="datetime-local" value={returnAt} onChange={e => setReturnAt(e.target.value)}/></label><button className="button button-primary" disabled={busy || !availableCars.some(vehicle => vehicle.id === carId)}>Reserve car and collect key</button></form> : <section className="card fleet-form"><p>No open trip. If you need a car, start a new reservation.</p><button className="button" onClick={() => { setMode("take"); setMessage(""); }}>Take a car</button></section>}
  </>}</div></main>;
 }

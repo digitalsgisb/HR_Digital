@@ -370,6 +370,18 @@ Apply the additive VehicleTrip archivedAt/removalReason/removedFromStatus fields
 Company cars now separates **Car usage** (current trips and checkout/return), **Fleet QR** (one shared printable code), **Vehicle status** (availability, mileage and service targets), **Manage cars**, and **Trip history**. Vehicle-status cards and current-usage cards use black backgrounds with light text. The printable QR sheet stays white for scanning, and the company logo keeps its original colours. This layout update requires an app rebuild only; it adds no database fields.
 
 
+### Company car trip links and return reminders (25 November 2026)
+
+Closing the browser tab no longer loses an employee's place in the shared **Fleet QR** flow.
+
+- **Personal trip link.** Each reservation gets a private link (`/?fleet=1&trip=<token>`). The confirmation screen shows it with **Copy link** / **Share to myself** and an "IF YOU LOSE THIS LINK" warning. The phone also remembers the trip, so rescanning the shared QR reopens it directly. Trips opened before this update receive a link the next time the employee finds them with their employee ID.
+- **Emailed link.** The link is emailed to the employee. If the employee record has no valid email, it is sent to their HOD (employee HOD email, then the department HOD) to forward. With neither, the confirmation screen says it is the only copy.
+- **Remembered employee ID.** The phone remembers the last employee ID used. **Change employee** forgets it and the saved trip.
+- **Saved drafts.** Typed fields and ticked checks on the departure and return forms are kept on the phone until submitted. Odometer photos are not saved and must be retaken.
+- **Return reminders.** If the trip is still open at its expected return time, the driver (or HOD, as above) receives a reminder with the trip link, then one reminder each day at 09:00 Malaysia time, including weekends, until the return is keyed in or the trip is cancelled/removed.
+
+Emails use the existing SMTP settings and are disabled with `EMAIL_AUTOMATION_ENABLED=false`. Links use `CLIENT_ORIGIN`; set optional `FLEET_BASE_URL` (origin only) if employees reach the app on a different address. Identity is still the employee ID only, and the trip link itself is not tied to a login, so treat it like a key reference. The schema adds nullable `VehicleTrip` columns (`resumeToken` with a unique index, link-email and reminder timestamps, `returnRemindersSent`); Docker startup applies them through the existing schema push. Existing trips are not changed until they are found again.
+
 ### Vehicle details, maintenance and training evaluation (FR-HR-002 Rev 2)
 
 - Company cars → Vehicle status: click a car card or its View / edit details button to edit its photo, registration, model, pool, mileage, service target/date and operational status. Trip controls remain separate actions.

@@ -969,3 +969,11 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 .tracker-empty{padding:0 21px 18px}
 @media(max-width:1000px){.tracker-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.tracker-history li{grid-template-columns:1fr}}
 @media(max-width:600px){.tracker-grid{grid-template-columns:1fr}.tracker-stats{grid-template-columns:repeat(2,1fr)}}
+
+/* Personal trip link on the company-car page */
+.vehicle-usage-page .fleet-trip-link { display: grid; gap: 12px; padding: 20px; border: 2px solid var(--danger); }
+.fleet-trip-link h2 { font-size: var(--fs-lg); }
+.fleet-trip-link-alert { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--danger); color: #fff; font-weight: 800; letter-spacing: .01em; }
+.fleet-trip-link-only { padding: 10px 12px; border-radius: var(--r-sm); background: var(--danger-soft); color: var(--danger); }
+.fleet-trip-link-url { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line, #d0d5dd); border-radius: var(--r-sm); font: inherit; font-size: var(--fs-sm, 13px); background: var(--surface, #fff); color: inherit; }
+.fleet-trip-link .toolbar-actions { flex-wrap: wrap; }

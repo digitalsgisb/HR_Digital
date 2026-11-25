@@ -57,6 +57,7 @@ export async function ensureEvaluationEmails(db = prisma, now = new Date()) {
 const transport = nodemailer.createTransport({ host: env.smtpHost, port: env.smtpPort, secure: env.smtpSecure, requireTLS: env.smtpRequireTls,
   auth: env.smtpUser ? { user: env.smtpUser, pass: env.smtpPassword } : undefined,
   connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000, disableFileAccess: true, disableUrlAccess: true });
+export const sendSmtpMail = (message: SendMailOptions): Promise<{ rejected?: unknown[] }> => transport.sendMail(message);
 
 // An atomic lease makes overlapping ticks/processes compete for the same job.
 // The queue and stable Message-ID survive restarts. SMTP itself cannot provide

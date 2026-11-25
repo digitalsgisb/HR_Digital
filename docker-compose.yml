@@ -32,6 +32,7 @@ services:
       NODE_ENV: production
       SERVER_PORT: 4000
       ATTENDANCE_BASE_URL: ${ATTENDANCE_BASE_URL:-}
+      FLEET_BASE_URL: ${FLEET_BASE_URL:-}
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-https://hr.sugidigital.org}
       TRUST_PROXY: ${TRUST_PROXY:-true}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}

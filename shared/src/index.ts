@@ -65,8 +65,13 @@ export type VehicleTrip = {
   notesBefore?: string | null;
   notesAfter?: string | null;
   status: VehicleTripStatus;
+  resumeToken?: string | null;
   vehicle?: Vehicle;
 };
+
+/** Where the personal trip link was emailed when a car was reserved. */
+export type TripLinkDelivery = "employee" | "hod" | "none";
+export type VehicleReservation = VehicleTrip & { linkDelivery: TripLinkDelivery };
 
 export type Vehicle = {
   id: string;

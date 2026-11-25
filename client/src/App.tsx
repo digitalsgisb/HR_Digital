@@ -25,6 +25,7 @@ import type {
 } from "@hr-training/shared";
 import { api, type EmployeeInput, type VehicleInput } from "./api";
 import { OdometerPhotoField } from "./OdometerPhotoField";
+import { clearDraft, readDraft, writeDraft } from "./fleet-storage";
 import { VehiclePhotoField } from "./VehiclePhotoField";
 import { VehicleDriverPicker, type TripDriver } from "./VehicleDriverPicker";
 import { EmployeeImportPreview as ImportPreview } from "./EmployeeImportPreview";
@@ -1554,6 +1555,9 @@ function VehicleFormPhoto({ vehicle, showIdentity = true }: { vehicle: Vehicle; 
   </figure>;
 }
 
+type StartTripDraft = { destination: string; purpose: string; passengers: number; odometer: number; fuel: number; condition: VehicleCondition; notes: string; checks: { exterior: boolean; tyres: boolean; lights: boolean; documents: boolean } };
+type CompleteTripDraft = { odometer: number; fuel: number; condition: VehicleCondition; notes: string; checks: { interiorClean: boolean; fuelCardReturned: boolean; belongingsRemoved: boolean; damageReported: boolean } };
+
 export function StartTripForm({
   vehicles,
   selectedVehicleId,
@@ -1561,8 +1565,11 @@ export function StartTripForm({
   onSubmit,
   showCarPhoto = true,
   reservation,
+  draftKey,
 }: {
   reservation?: VehicleTrip;
+  /** Saves typed fields and ticks on this phone until submitted (photos are not saved). */
+  draftKey?: string;
   vehicles: Vehicle[];
   selectedVehicleId: string;
   onVehicleChange: (id: string) => void;
@@ -1572,15 +1579,16 @@ export function StartTripForm({
   ) => Promise<void>;
 }) {
   const vehicle = vehicles.find((item) => item.id === selectedVehicleId)!;
+  const [draft] = useState(() => draftKey ? readDraft<StartTripDraft>(draftKey) : null);
   const [driver, setDriver] = useState<TripDriver | null>(reservation ? {reference:reservation.driverEmployeeId,name:reservation.driverName} as TripDriver : null);
-  const [destination, setDestination] = useState(reservation?.destination ?? "");
-  const [purpose, setPurpose] = useState(reservation?.purpose ?? "");
-  const [passengers, setPassengers] = useState(reservation?.passengers ?? 1);
-  const [odometer, setOdometer] = useState(vehicle.mileage);
+  const [destination, setDestination] = useState(draft?.destination ?? reservation?.destination ?? "");
+  const [purpose, setPurpose] = useState(draft?.purpose ?? reservation?.purpose ?? "");
+  const [passengers, setPassengers] = useState(draft?.passengers ?? reservation?.passengers ?? 1);
+  const [odometer, setOdometer] = useState(draft?.odometer !== undefined && draft.odometer >= vehicle.mileage ? draft.odometer : vehicle.mileage);
   const [odometerPhoto, setOdometerPhoto] = useState("");
-  const [fuel, setFuel] = useState(75);
-  const [condition, setCondition] = useState<VehicleCondition>("GOOD");
-  const [notes, setNotes] = useState("");
+  const [fuel, setFuel] = useState(draft?.fuel ?? 75);
+  const [condition, setCondition] = useState<VehicleCondition>(draft?.condition ?? "GOOD");
+  const [notes, setNotes] = useState(draft?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [checks, setChecks] = useState({
@@ -1588,8 +1596,17 @@ export function StartTripForm({
     tyres: false,
     lights: false,
     documents: false,
+    ...draft?.checks,
   });
+  const loadedVehicle = useRef(`${vehicle.id}:${vehicle.mileage}`);
   useEffect(() => {
+    if (draftKey) writeDraft(draftKey, { destination, purpose, passengers, odometer, fuel, condition, notes, checks } satisfies StartTripDraft);
+  }, [draftKey, destination, purpose, passengers, odometer, fuel, condition, notes, checks]);
+  useEffect(() => {
+    // Only reset when the car changes, so a restored draft survives the first render.
+    const key = `${vehicle.id}:${vehicle.mileage}`;
+    if (loadedVehicle.current === key) return;
+    loadedVehicle.current = key;
     setOdometer(vehicle.mileage);
     setOdometerPhoto("");
     setChecks({ exterior: false, tyres: false, lights: false, documents: false });
@@ -1632,6 +1649,7 @@ export function StartTripForm({
         checksBefore: checks,
         notesBefore: notes,
       });
+      if (draftKey) clearDraft(draftKey);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Unable to start this trip.",
@@ -1840,21 +1858,26 @@ export function CompleteTripForm({
   trip,
   onSubmit,
   showCarPhoto = true,
+  draftKey,
 }: {
   vehicle: Vehicle;
   trip: VehicleTrip;
   showCarPhoto?: boolean;
+  /** Saves typed fields and ticks on this phone until submitted (photos are not saved). */
+  draftKey?: string;
   onSubmit: (
     input: Parameters<typeof api.completeVehicleTrip>[1],
   ) => Promise<void>;
 }) {
+  const [draft] = useState(() => draftKey ? readDraft<CompleteTripDraft>(draftKey) : null);
+  const minimumOdometer = Math.max(vehicle.mileage, trip.odometerStart);
   const [odometer, setOdometer] = useState(
-    Math.max(vehicle.mileage, trip.odometerStart),
+    draft?.odometer !== undefined && draft.odometer >= trip.odometerStart ? draft.odometer : minimumOdometer,
   );
   const [odometerPhoto, setOdometerPhoto] = useState("");
-  const [fuel, setFuel] = useState(50);
-  const [condition, setCondition] = useState<VehicleCondition>("GOOD");
-  const [notes, setNotes] = useState("");
+  const [fuel, setFuel] = useState(draft?.fuel ?? 50);
+  const [condition, setCondition] = useState<VehicleCondition>(draft?.condition ?? "GOOD");
+  const [notes, setNotes] = useState(draft?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [checks, setChecks] = useState({
@@ -1862,7 +1885,11 @@ export function CompleteTripForm({
     fuelCardReturned: false,
     belongingsRemoved: false,
     damageReported: false,
+    ...draft?.checks,
   });
+  useEffect(() => {
+    if (draftKey) writeDraft(draftKey, { odometer, fuel, condition, notes, checks } satisfies CompleteTripDraft);
+  }, [draftKey, odometer, fuel, condition, notes, checks]);
   const distance = Math.max(0, odometer - trip.odometerStart);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -1891,6 +1918,7 @@ export function CompleteTripForm({
         checksAfter: checks,
         notesAfter: notes,
       });
+      if (draftKey) clearDraft(draftKey);
     } catch (cause) {
       setError(
         cause instanceof Error

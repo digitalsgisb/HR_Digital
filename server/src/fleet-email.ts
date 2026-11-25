@@ -1,0 +1,146 @@
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
+import type { SendMailOptions } from "nodemailer";
+import { env } from "./env.js";
+import { prisma } from "./prisma.js";
+import { emailLogo, emailLogoCid } from "./email-template.js";
+import { departmentWithHod } from "./department-hod.js";
+import { resolvedHod, resolvedHodName } from "./training-evaluation.js";
+import { sendSmtpMail, trainingEmailEnabled, trainingEmailReady } from "./training-email.js";
+
+const MYT = 8 * 3600000;
+const LEASE_MS = 30 * 60000;
+const openStatuses = ["AWAITING_DEPARTURE", "IN_PROGRESS"] as const;
+
+export const newTripToken = () => randomBytes(24).toString("base64url");
+export const tripTokenPattern = /^[A-Za-z0-9_-]{32}$/;
+
+// The fleet page lives in the SPA, so links use the client origin, not the API origin.
+export const fleetTripUrl = (token: string) => {
+  const url = new URL("/", process.env.FLEET_BASE_URL?.trim() || env.clientOrigin);
+  url.searchParams.set("fleet", "1");
+  url.searchParams.set("trip", token);
+  return url.toString();
+};
+
+type Contact = Parameters<typeof resolvedHod>[0] & { email: string | null; name: string | null; employeeId: string };
+const validEmail = (value: string | null | undefined) => !!value && z.string().trim().email().safeParse(value).success;
+
+// The employee gets their own link; without an email it goes to their HOD to forward.
+export function tripLinkRecipient(employee: Contact | null): { to: string; role: "employee" | "hod"; name: string } | null {
+  if (!employee) return null;
+  if (validEmail(employee.email)) return { to: employee.email!.trim().toLowerCase(), role: "employee", name: employee.name || employee.employeeId };
+  const hod = resolvedHod(employee);
+  if (validEmail(hod)) return { to: hod.trim().toLowerCase(), role: "hod", name: resolvedHodName(employee) || "Head of Department" };
+  return null;
+}
+
+export type TripLinkDelivery = "employee" | "hod" | "none";
+export const tripLinkDelivery = (employee: Contact | null): TripLinkDelivery =>
+  trainingEmailReady() ? tripLinkRecipient(employee)?.role ?? "none" : "none";
+
+// 09:00 Malaysia time on the next calendar day (every day: cars are also used on weekends).
+export function nextDailyReminderAt(after: Date) {
+  const local = new Date(after.getTime() + MYT);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + 1, 9) - MYT);
+}
+
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+const myt = (date: Date | null) => date ? new Intl.DateTimeFormat("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }).format(date) : "Not set";
+
+type TripForEmail = { driverName: string; driverEmployeeId: string; destination: string; expectedReturnAt: Date | null; status: string; vehicle: { plate: string; model: string } };
+
+export function renderFleetTripEmail(kind: "link" | "reminder", trip: TripForEmail, recipient: { role: "employee" | "hod"; name: string }, url: string, reminderNumber = 1) {
+  const forHod = recipient.role === "hod";
+  const car = `${trip.vehicle.plate} · ${trip.vehicle.model}`;
+  const subject = kind === "link"
+    ? forHod ? `Trip link for ${trip.driverName} – please forward (${trip.vehicle.plate})` : `Your company car trip link – ${trip.vehicle.plate}`
+    : forHod ? `Reminder: ${trip.driverName} has not keyed in the car return (${trip.vehicle.plate})` : `Reminder: please key in your car return – ${trip.vehicle.plate}`;
+  const title = kind === "link" ? "Your company car trip link" : "Please key in your car return";
+  const intro = kind === "link"
+    ? forHod
+      ? `${trip.driverName} (${trip.driverEmployeeId}) has reserved a company car but has no email address on file. Please forward this link to them. They use it to reopen their trip, confirm departure and key in the return details.`
+      : "Use this link to reopen your trip at any time: to confirm departure after collecting the key and to key in the return details. You do not need to scan the HR QR again."
+    : trip.status === "AWAITING_DEPARTURE"
+      ? `${forHod ? `${trip.driverName}'s` : "Your"} car reservation passed its expected return time without a departure. Open the trip to confirm departure, or cancel the reservation and return the key.`
+      : `${forHod ? `${trip.driverName}'s` : "Your"} trip passed its expected return time and the return details have not been keyed in. Open the trip and complete the return with the ending odometer photo and checks.${reminderNumber > 1 ? ` This is reminder ${reminderNumber}.` : ""}`;
+  const warning = "IF YOU LOSE THIS LINK: scan the HR car QR and enter your employee ID to find your trip again.";
+  const action = kind === "link" ? "Open my trip" : "Key in the return";
+  const rows: Array<[string, string]> = [["Driver", `${trip.driverName} (${trip.driverEmployeeId})`], ["Car", car], ["Destination", trip.destination], ["Expected return", `${myt(trip.expectedReturnAt)} · Malaysia time`]];
+  const text = `SUGIHARA GRAND INDUSTRIES SDN. BHD.\nHR Digital · Company cars\n\n${title}\n\nHello ${recipient.name},\n\n${intro}\n\n${rows.map(([label, value]) => `${label}: ${value}`).join("\n")}\n\n${action}: ${url}\n\n${warning}\n\nIf you need help, please contact Human Resources.\n\nThis message was sent by HR Digital.`;
+  const href = escapeHtml(url);
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:24px 12px;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;color:#000">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dddddd">
+<tr><td style="padding:20px 24px;border-bottom:1px solid #eeeeee"><img src="cid:${emailLogoCid}" alt="Sugihara Grand Industries" height="36" style="display:block;height:36px"></td></tr>
+<tr><td style="padding:24px">
+<p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;color:#555555">HR DIGITAL · COMPANY CARS</p>
+<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">${escapeHtml(title)}</h1>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.5">Hello ${escapeHtml(recipient.name)},</p>
+<p style="margin:0 0 16px;font-size:15px;line-height:1.5">${escapeHtml(intro)}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 20px;font-size:14px">${rows.map(([label, value]) => `<tr><td style="padding:6px 0;color:#555555;width:130px;vertical-align:top">${escapeHtml(label)}</td><td style="padding:6px 0;font-weight:bold">${escapeHtml(value)}</td></tr>`).join("")}</table>
+<p style="margin:0 0 20px"><a href="${href}" style="display:inline-block;background:#000000;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px">${escapeHtml(action)}</a></p>
+<p style="margin:0 0 20px;padding:12px;border:2px solid #c62828;background:#fdecea;color:#8e1b1b;font-size:14px;font-weight:bold;line-height:1.4">${escapeHtml(warning)}</p>
+<p style="margin:0;font-size:12px;color:#555555;word-break:break-all">${href}</p>
+</td></tr></table></body></html>`;
+  return { subject, text, html };
+}
+
+type Db = typeof prisma;
+type Send = (message: SendMailOptions) => Promise<{ rejected?: unknown[] }>;
+
+async function deliver(db: Db, sendMail: Send, tripId: string, kind: "link" | "reminder") {
+  const trip = await db.vehicleTrip.findUnique({ where: { id: tripId }, include: { vehicle: true } });
+  if (!trip?.resumeToken || trip.archivedAt || !openStatuses.includes(trip.status as typeof openStatuses[number])) return { sent: false as const, reason: "closed" };
+  const employee = await db.employee.findFirst({ where: { employeeId: trip.driverEmployeeId }, include: { department: departmentWithHod } });
+  const recipient = employee?.status === "ACTIVE" ? tripLinkRecipient(employee) : null;
+  if (!recipient) return { sent: false as const, reason: "no-recipient" };
+  const content = renderFleetTripEmail(kind, trip, recipient, fleetTripUrl(trip.resumeToken), trip.returnRemindersSent + 1);
+  const result = await sendMail({ from: env.smtpFrom, to: recipient.to, subject: content.subject, text: content.text, html: content.html,
+    messageId: `<fleet-${kind}-${trip.id}-${kind === "reminder" ? trip.returnRemindersSent : 0}@hr-digital.local>`,
+    attachments: [{ filename: "sugihara-logo.png", content: emailLogo, contentType: "image/png", cid: emailLogoCid, contentDisposition: "inline" }] });
+  if (result.rejected?.length) throw new Error("Recipient rejected");
+  return { sent: true as const, to: recipient.to };
+}
+
+// Each due email is claimed by moving its due time forward (a lease), so overlapping
+// ticks cannot send it twice; a failed send simply becomes due again after the lease.
+export async function processFleetEmails(now = new Date(), db: Db = prisma, sendMail: Send = sendSmtpMail) {
+  if (!trainingEmailReady()) return;
+  const open = { archivedAt: null, status: { in: [...openStatuses] } };
+  const links = await db.vehicleTrip.findMany({ where: { ...open, linkEmailDueAt: { lte: now } }, select: { id: true, linkEmailDueAt: true, createdAt: true }, take: 50 });
+  for (const trip of links) {
+    const claimed = await db.vehicleTrip.updateMany({ where: { id: trip.id, linkEmailDueAt: trip.linkEmailDueAt }, data: { linkEmailDueAt: new Date(now.getTime() + LEASE_MS) } });
+    if (!claimed.count) continue;
+    try {
+      const result = await deliver(db, sendMail, trip.id, "link");
+      await db.vehicleTrip.update({ where: { id: trip.id }, data: result.sent ? { linkEmailDueAt: null, linkEmailedAt: new Date(), linkEmailRecipient: result.to } : { linkEmailDueAt: null } });
+    } catch {
+      // Stop retrying the link after a day; the daily return reminder carries the same link.
+      if (now.getTime() - trip.createdAt.getTime() > 86400000) await db.vehicleTrip.update({ where: { id: trip.id }, data: { linkEmailDueAt: null } });
+      console.error("Company car trip link email failed; it will be retried.");
+    }
+  }
+  const reminders = await db.vehicleTrip.findMany({ where: { ...open, returnReminderDueAt: { lte: now } }, select: { id: true, returnReminderDueAt: true }, take: 50 });
+  for (const trip of reminders) {
+    const claimed = await db.vehicleTrip.updateMany({ where: { id: trip.id, returnReminderDueAt: trip.returnReminderDueAt }, data: { returnReminderDueAt: new Date(now.getTime() + LEASE_MS) } });
+    if (!claimed.count) continue;
+    try {
+      const result = await deliver(db, sendMail, trip.id, "reminder");
+      await db.vehicleTrip.update({ where: { id: trip.id }, data: result.sent
+        ? { returnReminderDueAt: nextDailyReminderAt(now), returnRemindersSent: { increment: 1 } }
+        // No address yet: check again tomorrow in case HR adds one.
+        : { returnReminderDueAt: result.reason === "closed" ? null : nextDailyReminderAt(now) } });
+    } catch {
+      console.error("Company car return reminder failed; it will be retried.");
+    }
+  }
+}
+
+export function startFleetEmailWorker() {
+  if (!env.databaseUrl || !trainingEmailEnabled()) return () => {};
+  let busy = false;
+  const tick = async () => { if (busy) return; busy = true; try { await processFleetEmails(); } catch { console.error("Company car emails could not be processed. Check database connectivity and schema."); } finally { busy = false; } };
+  const timer = setInterval(() => { void tick(); }, 60000); timer.unref(); void tick();
+  return () => clearInterval(timer);
+}

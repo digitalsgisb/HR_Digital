@@ -299,10 +299,20 @@ model VehicleTrip {
   notesBefore      String?
   notesAfter       String?
   status           VehicleTripStatus    @default(IN_PROGRESS)
+  // Personal trip link (/?fleet=1&trip=<token>) so a driver can reopen their trip.
+  resumeToken      String?              @unique
+  linkEmailDueAt   DateTime?
+  linkEmailedAt    DateTime?
+  linkEmailRecipient String?
+  // Daily "please key in your return" reminder while the trip stays open.
+  returnReminderDueAt DateTime?
+  returnRemindersSent Int               @default(0)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
   @@index([vehicleId, status])
+  @@index([linkEmailDueAt])
+  @@index([returnReminderDueAt])
   @@index([archivedAt])
   @@index([driverEmployeeId])
   @@index([startedAt])
