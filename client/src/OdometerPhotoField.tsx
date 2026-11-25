@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import { apiBase } from "./api-base";
 import { Camera, CheckCircle2, CircleAlert, ScanLine } from "lucide-react";
 
 type Props = {
@@ -75,7 +76,7 @@ export function OdometerPhotoField({ minimumMileage, photo, onPhoto, onMileage }
       onPhoto(prepared.dataUrl);
       setResult("Checking the on-prem vision model…");
       try {
-        const visionResponse = await fetch("/api/ocr/odometer", {
+        const visionResponse = await fetch(`${apiBase}/ocr/odometer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ photo: prepared.dataUrl, minimumMileage })
@@ -92,9 +93,9 @@ export function OdometerPhotoField({ minimumMileage, photo, onPhoto, onMileage }
       setResult("");
       const { createWorker, OEM, PSM } = await import("tesseract.js");
       const worker = await createWorker("eng", OEM.LSTM_ONLY, {
-        workerPath: `${window.location.origin}/ocr/worker.min.js`,
-        corePath: `${window.location.origin}/ocr/core`,
-        langPath: `${window.location.origin}/ocr/lang`,
+        workerPath: `${window.location.origin}${import.meta.env.BASE_URL}ocr/worker.min.js`,
+        corePath: `${window.location.origin}${import.meta.env.BASE_URL}ocr/core`,
+        langPath: `${window.location.origin}${import.meta.env.BASE_URL}ocr/lang`,
         logger: (message) => { if (typeof message.progress === "number") setProgress(message.progress); }
       });
       await worker.setParameters({

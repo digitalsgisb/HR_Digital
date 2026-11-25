@@ -1060,3 +1060,31 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
   .board-row { grid-template-columns: 1fr; gap: 12px; }
   .board-track { margin: 0 18px; }
 }
+
+/* Public page: car opened from its own QR */
+.fleet-scanned-car-head { display: flex; align-items: center; gap: 14px; }
+.fleet-scanned-car-head img { width: 88px; height: 62px; border-radius: var(--r-sm); object-fit: cover; }
+.fleet-scanned-car-head small { display: block; color: var(--muted); font-weight: 700; letter-spacing: .08em; }
+.fleet-scanned-car-head h2 { margin: 2px 0; }
+.fleet-scanned-status { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); }
+.fleet-scanned-status.is-free { background: var(--green-light); color: var(--green); }
+.fleet-scanned-status.is-busy { background: var(--blue-light); color: var(--blue); }
+.fleet-scanned-status.is-service { background: var(--danger-soft); color: var(--danger); }
+
+/* In-car QR sticker sheet */
+.car-stickers { display: grid; gap: 14px; padding: 20px; }
+.car-stickers-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.car-stickers-head h2 { margin: 0 0 4px; }
+.car-stickers-head p { margin: 0; color: var(--muted); max-width: 60ch; }
+.car-sticker-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.car-sticker { margin: 0; padding: 12px; border: 1px dashed #c9c3c0; border-radius: var(--r-sm); text-align: center; background: #fff; color: #101112; break-inside: avoid; }
+.car-sticker img { width: 100%; max-width: 160px; aspect-ratio: 1; }
+.car-sticker figcaption strong, .car-sticker figcaption span, .car-sticker figcaption small { display: block; }
+.car-sticker figcaption strong { font-size: 18px; letter-spacing: .04em; }
+.car-sticker figcaption small { margin-top: 4px; color: #5e5655; }
+@media print {
+  body.printing-car-stickers .qr-sheet, body.printing-car-stickers .qr-sheet * { visibility: hidden !important; }
+  body.printing-car-stickers .car-sticker-sheet, body.printing-car-stickers .car-sticker-sheet * { visibility: visible !important; }
+  body.printing-car-stickers .car-sticker-sheet { position: absolute; top: 10mm; left: 10mm; right: 10mm; grid-template-columns: repeat(3, 1fr); gap: 6mm; }
+  body.printing-car-stickers .car-sticker { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

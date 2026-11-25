@@ -139,8 +139,10 @@ const windowSchema = z.object({ startAt: z.string().datetime().nullable().option
 const detailsSchema = z.object({ vehicleId: z.string().min(1), destination: z.string().trim().min(2).max(500), purpose: z.string().trim().min(2).max(1000), passengers: z.number().int().min(1).max(20).default(1) });
 const editSchema = z.object({ vehicleId: z.string().min(1).optional(), startAt: z.string().datetime(), endAt: z.string().datetime(), destination: z.string().trim().min(2).max(500).optional(), purpose: z.string().trim().min(2).max(1000).optional() });
 
-export function createVehicleBookingRouter() {
+/** `guest` builds the public /fleet/api router: availability only. */
+export function createVehicleBookingRouter({ guest = false } = {}) {
   const router = Router();
+  const hr = guest ? Router() : router;
   // Which cars are free for a window. Used by the employee booking form and HR.
   router.get("/vehicle-availability", async (req, res, next) => {
     try {
@@ -162,12 +164,12 @@ export function createVehicleBookingRouter() {
   });
 
   // HR routes: protected by the same workspace access policy as fleet administration.
-  router.get("/vehicle-bookings", async (_req, res, next) => {
+  hr.get("/vehicle-bookings", async (_req, res, next) => {
     try {
       res.json(await prisma.vehicleTrip.findMany({ where: { archivedAt: null, status: "BOOKED" }, include: { vehicle: true }, orderBy: { bookedFrom: "asc" }, take: 200 }));
     } catch (error) { next(error); }
   });
-  router.post("/vehicle-bookings", async (req, res, next) => {
+  hr.post("/vehicle-bookings", async (req, res, next) => {
     try {
       const input = detailsSchema.merge(windowSchema).extend({ employeeId: z.string().trim().min(1).max(100) }).parse(req.body);
       const employee = await prisma.employee.findFirst({ where: { employeeId: { equals: input.employeeId, mode: "insensitive" }, status: "ACTIVE" }, include: { department: departmentWithHod } });
@@ -178,7 +180,7 @@ export function createVehicleBookingRouter() {
       res.status(201).json({ ...trip, linkDelivery: tripLinkDelivery(employee) });
     } catch (error) { next(error); }
   });
-  router.patch("/vehicle-bookings/:id", async (req, res, next) => {
+  hr.patch("/vehicle-bookings/:id", async (req, res, next) => {
     try {
       const input = editSchema.parse(req.body);
       const id = String(req.params.id);
@@ -207,7 +209,7 @@ export function createVehicleBookingRouter() {
       res.json(trip);
     } catch (error) { next(error); }
   });
-  router.post("/vehicle-bookings/:id/cancel", async (req, res, next) => {
+  hr.post("/vehicle-bookings/:id/cancel", async (req, res, next) => {
     try {
       const now = new Date();
       const saved = await prisma.vehicleTrip.updateMany({ where: { id: String(req.params.id), archivedAt: null, status: "BOOKED" }, data: { status: "CANCELLED", endedAt: now, noticeKind: "HR_CANCELLED", noticeDueAt: now, linkEmailDueAt: null, returnReminderDueAt: null } });

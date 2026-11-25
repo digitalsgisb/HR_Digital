@@ -3,6 +3,7 @@ import type {
   DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, FleetBoard, TripLocation, Vehicle, VehicleAvailability, VehicleCondition, VehicleReservation, VehicleStatus, VehicleTrip
 } from "@hr-training/shared";
 import type { Course, Employee, SessionListItem } from "./types";
+import { apiPath } from "./api-base";
 
 export type EmployeeInput = {
   employeeId: string;
@@ -27,7 +28,7 @@ export type VehicleDriver = Pick<Employee, "id" | "employeeId" | "name" | "role"
 };
 
 const request = async <T>(path: string, options?: RequestInit): Promise<T> => {
-  const response = await fetch(path, {
+  const response = await fetch(apiPath(path), {
     headers: options?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
     ...options
   });

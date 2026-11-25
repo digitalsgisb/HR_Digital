@@ -27,6 +27,9 @@ export const createApp = () => {
   app.use(express.json({ limit: "8mb" }));
   app.use("/training", createTrainingPortalRouter());
   app.use("/attendance", createAttendancePageRouter());
+  // Public company-car API for the /fleet/ page (Cloudflare bypass on /fleet/ only). Employee routes only.
+  app.use("/fleet/api", createFleetWorkflowRouter({ guest: true }), createVehicleBookingRouter({ guest: true }));
+  app.use("/fleet/api", (_req, res) => { res.status(404).json({ message: "Not found." }); });
   app.use("/api", createFleetWorkflowRouter());
   app.use("/api", createVehicleBookingRouter());
   app.use("/api", createFleetBoardRouter());
@@ -39,6 +42,15 @@ export const createApp = () => {
     const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
     const clientDirectory = path.resolve(sourceDirectory, "../../client/dist");
 
+    // Public company-car page: its own build (dist/fleet) so /fleet/ never serves the HR workspace.
+    const fleetDirectory = path.join(clientDirectory, "fleet");
+    // Non-strict routing would also match "/fleet/" on app.get("/fleet"), so compare the exact path.
+    app.use((req, res, next) => { if (req.path === "/fleet") res.redirect(301, `/fleet/${req.url.slice("/fleet".length)}`); else next(); });
+    app.use("/fleet", express.static(fleetDirectory, { index: false }));
+    app.use("/fleet", (req, res, next) => {
+      if (req.method !== "GET") { next(); return; }
+      res.set("Cache-Control", "no-store").sendFile("index.html", { root: fleetDirectory }, (error) => { if (error) next(error); });
+    });
     app.use(express.static(clientDirectory));
     app.use((req, res, next) => {
       if (req.method !== "GET") {

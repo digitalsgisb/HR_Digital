@@ -27,8 +27,7 @@ export function clearTripDrafts(tripId: string) {
 }
 
 export const tripLink = (token: string) => {
-  const url = new URL("/", window.location.origin);
-  url.searchParams.set("fleet", "1");
+  const url = new URL("/fleet/", window.location.origin);
   url.searchParams.set("trip", token);
   return url.toString();
 };
@@ -37,7 +36,8 @@ export const tripLink = (token: string) => {
 export function showTripInAddressBar(token: string | null) {
   const url = new URL(window.location.href);
   url.searchParams.delete("vehicle");
-  url.searchParams.set("fleet", "1");
+  url.searchParams.delete("fleet");
+  if (token) url.searchParams.delete("car");
   if (token) url.searchParams.set("trip", token); else url.searchParams.delete("trip");
   window.history.replaceState({}, "", url.toString());
 }

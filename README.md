@@ -374,7 +374,7 @@ Company cars now separates **Car usage** (current trips and checkout/return), **
 
 Closing the browser tab no longer loses an employee's place in the shared **Fleet QR** flow.
 
-- **Personal trip link.** Each reservation gets a private link (`/?fleet=1&trip=<token>`). The confirmation screen shows it with **Copy link** / **Share to myself** and an "IF YOU LOSE THIS LINK" warning. The phone also remembers the trip, so rescanning the shared QR reopens it directly. Trips opened before this update receive a link the next time the employee finds them with their employee ID.
+- **Personal trip link.** Each reservation gets a private link (`/fleet/?trip=<token>`). The confirmation screen shows it with **Copy link** / **Share to myself** and an "IF YOU LOSE THIS LINK" warning. The phone also remembers the trip, so rescanning the shared QR reopens it directly. Trips opened before this update receive a link the next time the employee finds them with their employee ID.
 - **Emailed link.** The link is emailed to the employee. If the employee record has no valid email, it is sent to their HOD (employee HOD email, then the department HOD) to forward. With neither, the confirmation screen says it is the only copy.
 - **Remembered employee ID.** The phone remembers the last employee ID used. **Change employee** forgets it and the saved trip.
 - **Saved drafts.** Typed fields and ticked checks on the departure and return forms are kept on the phone until submitted. Odometer photos are not saved and must be retaken.
@@ -404,6 +404,22 @@ The schema adds `BOOKED` and `NO_SHOW` trip statuses and nullable `VehicleTrip.b
 - **PDPA.** The consent wording is a **placeholder** in `client/src/trip-location.ts` (`LOCATION_CONSENT_TEXT`). Replace it with HR's approved PDPA notice before rollout, and decide how long trip locations are kept; they are currently retained with the trip record and are not deleted automatically.
 
 The schema adds `VehicleTrip.locationConsent` and `arrivedAt` and a `VehicleTripPing` table (trip, kind, latitude, longitude, accuracy, time); Docker startup applies them through the existing schema push. Browsers only share location on HTTPS (or localhost).
+
+### Public company-car page and in-car QR stickers (25 November 2026)
+
+The employee car flow (booking, check-in, departure, "I've arrived", return and trip links) now lives on its own public page at **`/fleet/`**, so employees can use their own phones without the HR sign-in. The HR workspace, the live board and all HR routes stay behind the existing Access policy.
+
+- **Separate build.** `npm run build` now also builds `client/dist/fleet` (config `client/vite.fleet.config.ts`, entry `client/fleet/index.html`). The page, its assets, OCR files and logos are all served under `/fleet/`, and the bundle contains only the car flow, not the HR workspace.
+- **Public API.** The page calls `/fleet/api/*`, which exposes only the employee car routes: identify by employee ID, trip lookup and trip-link reopen, availability, booking, check-in, departure, arrival, return (checked against the trip's driver), cancel, the in-car car card, a minimal car list and odometer OCR. Everything else under `/fleet/api/` returns 404, including bookings administration, the live board, trip removal, maintenance and the employee directory.
+- **In-car QR stickers.** **Company cars → Fleet QR** now has **In-car QR stickers**: one per car (`/fleet/?car=<id>`), printable as a sheet. Scanning it at the car:
+  - opens the driver's trip straight away if this phone has a trip for that car;
+  - if the car is in use, shows "In use by Name until time"; the driver enters their employee ID to get their trip, anyone else is told the car is taken;
+  - if the car is free, shows "Available now" with **Book this car** (keys still come from the HR table); service-due and out-of-service cars say so.
+- **Moved links.** The shared Fleet QR now encodes `/fleet/`. Old `/?fleet=1` and `/?vehicle=<id>` links redirect to `/fleet/` **only for people already signed in as HR**; employees reach `/fleet/` directly. **Reprint the shared QR at the HR table** and print the in-car stickers. Trip links emailed before this update point to `/?fleet=1&trip=…` and will ask for the HR sign-in; drivers with an open trip can rescan the new QR and enter their employee ID instead. The HR app's service worker no longer handles anything under `/fleet/`.
+
+**Cloudflare Access rule (apply this yourself; the code does not change the tunnel policy).** In Zero Trust → Access → Applications, add a self-hosted application for **hr.sugidigital.org/fleet** (path `fleet`, which also covers `/fleet/` and every subpath such as `/fleet/api/…` and `/fleet/assets/…`) with a single **Bypass** policy, **Include: Everyone**, exactly like the existing `/attendance/` application. Leave the main HR application and `/api/` unchanged. Then test from an incognito phone browser: `/fleet/` must open without sign-in, while `/` and `/api/vehicle-board` must still require it.
+
+Identity on the public page is still the employee ID only, so anyone who knows an employee ID can act for that employee. Every booking emails the employee or HOD, so misuse gets noticed, but add a trip PIN or sign-in before the page is widely advertised.
 
 ### Vehicle details, maintenance and training evaluation (FR-HR-002 Rev 2)
 

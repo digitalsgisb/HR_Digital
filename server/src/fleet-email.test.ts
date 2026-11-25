@@ -25,7 +25,7 @@ test("trip tokens and links are URL-safe and point at the fleet page", () => {
   const token = newTripToken();
   assert.match(token, tripTokenPattern);
   const url = new URL(fleetTripUrl(token));
-  assert.equal(url.searchParams.get("fleet"), "1");
+  assert.equal(url.pathname, "/fleet/");
   assert.equal(url.searchParams.get("trip"), token);
 });
 

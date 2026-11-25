@@ -18,10 +18,10 @@ type FleetEmailKind = "link" | "reminder" | FleetNoticeKind;
 export const newTripToken = () => randomBytes(24).toString("base64url");
 export const tripTokenPattern = /^[A-Za-z0-9_-]{32}$/;
 
-// The fleet page lives in the SPA, so links use the client origin, not the API origin.
+// The public company-car page is served at /fleet/ on the client origin.
+export const fleetPageUrl = () => new URL("/fleet/", process.env.FLEET_BASE_URL?.trim() || env.clientOrigin).toString();
 export const fleetTripUrl = (token: string) => {
-  const url = new URL("/", process.env.FLEET_BASE_URL?.trim() || env.clientOrigin);
-  url.searchParams.set("fleet", "1");
+  const url = new URL(fleetPageUrl());
   url.searchParams.set("trip", token);
   return url.toString();
 };
@@ -94,7 +94,7 @@ export function renderFleetTripEmail(kind: FleetEmailKind, trip: TripForEmail, r
   const copy = emailCopy(kind, trip, forHod, reminderNumber);
   const { subject, title, intro, action } = copy;
   // Closed bookings link to the fleet page, not the old trip.
-  if (!copy.showLink) url = new URL(url).origin + "/?fleet=1";
+  if (!copy.showLink) url = fleetPageUrl();
   const warning = "IF YOU LOSE THIS LINK: scan the HR car QR and enter your employee ID to find your trip again.";
   const rows: Array<[string, string]> = [["Driver", `${trip.driverName} (${trip.driverEmployeeId})`], ["Car", car], ["Destination", trip.destination],
     ...(trip.bookedFrom && kind !== "reminder" ? [["Booked from", `${myt(trip.bookedFrom)} · Malaysia time`] as [string, string]] : []),

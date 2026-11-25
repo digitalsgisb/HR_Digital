@@ -26,7 +26,7 @@ import { summarizeCourseHours, summarizeDepartmentHours, type CompletionRecordFo
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-class HttpError extends Error {
+export class HttpError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
   }
@@ -181,6 +181,80 @@ const odometerRecognitionSchema = z.object({
   photo: odometerPhotoSchema,
   minimumMileage: z.coerce.number().int().min(0).default(0)
 });
+
+/** Asks the on-prem vision model for the ODO reading. Used by the HR app and the public /fleet/ page. */
+export async function recognizeOdometer(raw: unknown) {
+  const input = odometerRecognitionSchema.parse(raw);
+  if (!env.ollamaBaseUrl || !env.ollamaVisionModel) {
+    throw new HttpError(503, "On-prem vision OCR is not configured.");
+  }
+  const image = input.photo.replace(/^data:image\/[^;]+;base64,/i, "");
+  let response: globalThis.Response;
+  try {
+    response = await fetch(`${env.ollamaBaseUrl.replace(/\/$/, "")}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(90_000),
+      body: JSON.stringify({
+        model: env.ollamaVisionModel,
+        stream: false,
+        format: "json",
+        options: { temperature: 0 },
+        messages: [{
+          role: "user",
+          content: `Read the vehicle's total ODO mileage from this dashboard photo. Ignore Trip A, Trip B, speedometer and tachometer numbers. The total mileage should not be below ${input.minimumMileage}. Return only JSON with mileage as an integer or null, confidence from 0 to 1, and a short reason.`,
+          images: [image]
+        }]
+      })
+    });
+  } catch {
+    throw new HttpError(503, "On-prem vision service is unavailable; bundled OCR will be used.");
+  }
+  if (!response.ok) throw new HttpError(502, `On-prem vision service returned ${response.status}.`);
+  const payload = await response.json() as { message?: { content?: string } };
+  let decoded: unknown;
+  try { decoded = JSON.parse(payload.message?.content ?? "{}"); }
+  catch { throw new HttpError(502, "On-prem vision service returned an unreadable result."); }
+  const result = z.object({ mileage: z.number().int().min(0).nullable(), confidence: z.number().min(0).max(1).default(0), reason: z.string().default("") }).parse(decoded);
+  if (result.mileage != null && result.mileage < input.minimumMileage) {
+    return { ...result, mileage: null, reason: "Detected value was below the current recorded mileage." };
+  }
+  return result;
+}
+
+/** Closes a trip with the return evidence. `driverEmployeeId` restricts it to the trip's driver (public page). */
+export async function completeVehicleTrip(id: string, raw: unknown, driverEmployeeId?: string) {
+  const input = completeVehicleTripSchema.parse(raw);
+  const { location } = locationFields.parse(raw);
+  const completed = await prisma.$transaction(async (tx) => {
+    const reference = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, select: { vehicleId: true } });
+    await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${reference.vehicleId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${id} FOR UPDATE`;
+    const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, include: { vehicle: true } });
+    if (driverEmployeeId && trip.driverEmployeeId !== driverEmployeeId) throw new HttpError(403, "This trip belongs to another employee.");
+    if (trip.archivedAt || trip.status !== "IN_PROGRESS") throw new HttpError(409, "This trip has already been closed or removed.");
+    if (input.odometerEnd < trip.odometerStart) throw new HttpError(400, `Ending odometer cannot be below ${trip.odometerStart} km.`);
+
+    const nextStatus = input.conditionAfter === "UNSAFE"
+      ? "OUT_OF_SERVICE"
+      : input.conditionAfter === "ATTENTION_REQUIRED" || input.checksAfter.damageReported || input.odometerEnd >= trip.vehicle.serviceAt || (trip.vehicle.serviceDueDate && trip.vehicle.serviceDueDate <= new Date())
+        ? "SERVICE_DUE"
+        : "AVAILABLE";
+
+    if (trip.locationConsent) await recordPing(tx, id, "RETURN", location);
+    const updated = await tx.vehicleTrip.update({
+      where: { id },
+      data: { ...input, status: "COMPLETED", endedAt: new Date() },
+      include: { vehicle: true }
+    });
+    await tx.vehicle.update({
+      where: { id: trip.vehicleId },
+      data: { mileage: input.odometerEnd, status: nextStatus }
+    });
+    return updated;
+  });
+  return completed;
+}
 
 const defaultVehicles = [
   { id: "VH-01", plate: "VBU 2841", model: "Toyota Hilux 2.4", category: "Operations", mileage: 48260, serviceAt: 50000, status: "IN_USE" as const, assigned: "Shared pool" },
@@ -859,43 +933,7 @@ export const createRouter = () => {
   router.post(
     "/ocr/odometer",
     asyncHandler(async (req, res) => {
-      const input = odometerRecognitionSchema.parse(req.body);
-      if (!env.ollamaBaseUrl || !env.ollamaVisionModel) {
-        throw new HttpError(503, "On-prem vision OCR is not configured.");
-      }
-      const image = input.photo.replace(/^data:image\/[^;]+;base64,/i, "");
-      let response: globalThis.Response;
-      try {
-        response = await fetch(`${env.ollamaBaseUrl.replace(/\/$/, "")}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: AbortSignal.timeout(90_000),
-          body: JSON.stringify({
-            model: env.ollamaVisionModel,
-            stream: false,
-            format: "json",
-            options: { temperature: 0 },
-            messages: [{
-              role: "user",
-              content: `Read the vehicle's total ODO mileage from this dashboard photo. Ignore Trip A, Trip B, speedometer and tachometer numbers. The total mileage should not be below ${input.minimumMileage}. Return only JSON with mileage as an integer or null, confidence from 0 to 1, and a short reason.`,
-              images: [image]
-            }]
-          })
-        });
-      } catch {
-        throw new HttpError(503, "On-prem vision service is unavailable; bundled OCR will be used.");
-      }
-      if (!response.ok) throw new HttpError(502, `On-prem vision service returned ${response.status}.`);
-      const payload = await response.json() as { message?: { content?: string } };
-      let decoded: unknown;
-      try { decoded = JSON.parse(payload.message?.content ?? "{}"); }
-      catch { throw new HttpError(502, "On-prem vision service returned an unreadable result."); }
-      const result = z.object({ mileage: z.number().int().min(0).nullable(), confidence: z.number().min(0).max(1).default(0), reason: z.string().default("") }).parse(decoded);
-      if (result.mileage != null && result.mileage < input.minimumMileage) {
-        res.json({ ...result, mileage: null, reason: "Detected value was below the current recorded mileage." });
-        return;
-      }
-      res.json(result);
+      res.json(await recognizeOdometer(req.body));
     })
   );
 
@@ -1002,36 +1040,7 @@ export const createRouter = () => {
   router.put(
     "/vehicle-trips/:id/complete",
     asyncHandler(async (req, res) => {
-      const input = completeVehicleTripSchema.parse(req.body);
-      const { location } = locationFields.parse(req.body);
-      const id = routeParam(req.params.id);
-      const completed = await prisma.$transaction(async (tx) => {
-        const reference = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, select: { vehicleId: true } });
-        await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${reference.vehicleId} FOR UPDATE`;
-        await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${id} FOR UPDATE`;
-        const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, include: { vehicle: true } });
-        if (trip.archivedAt || trip.status !== "IN_PROGRESS") throw new HttpError(409, "This trip has already been closed or removed.");
-        if (input.odometerEnd < trip.odometerStart) throw new HttpError(400, `Ending odometer cannot be below ${trip.odometerStart} km.`);
-
-        const nextStatus = input.conditionAfter === "UNSAFE"
-          ? "OUT_OF_SERVICE"
-          : input.conditionAfter === "ATTENTION_REQUIRED" || input.checksAfter.damageReported || input.odometerEnd >= trip.vehicle.serviceAt || (trip.vehicle.serviceDueDate && trip.vehicle.serviceDueDate <= new Date())
-            ? "SERVICE_DUE"
-            : "AVAILABLE";
-
-        if (trip.locationConsent) await recordPing(tx, id, "RETURN", location);
-        const updated = await tx.vehicleTrip.update({
-          where: { id },
-          data: { ...input, status: "COMPLETED", endedAt: new Date() },
-          include: { vehicle: true }
-        });
-        await tx.vehicle.update({
-          where: { id: trip.vehicleId },
-          data: { mileage: input.odometerEnd, status: nextStatus }
-        });
-        return updated;
-      });
-      res.json(completed);
+      res.json(await completeVehicleTrip(routeParam(req.params.id), req.body));
     })
   );
 

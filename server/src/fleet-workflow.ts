@@ -8,18 +8,22 @@ import { departmentWithHod } from "./department-hod.js";
 import { newTripToken, tripLinkDelivery, tripTokenPattern } from "./fleet-email.js";
 import { bookingWindow, checkInBooking, createBooking, scheduledStatuses } from "./vehicle-booking.js";
 import { locationFields, recordPing } from "./fleet-board.js";
+import { completeVehicleTrip, recognizeOdometer } from "./routes.js";
 export const departureSchema = identitySchema();
 function identitySchema() { return z.object({ destination:z.string().trim().min(2).max(500).optional(), purpose:z.string().trim().min(2).max(1000).optional(), passengers:z.number().int().min(1).max(20).optional(), driverEmployeeId: z.string().trim().min(1), driverName: z.string().trim().min(2), odometerStart: z.number().int().min(0), odometerPhotoBefore: z.string().max(6000000).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/), fuelBefore: z.number().int().min(0).max(100), conditionBefore: z.enum(vehicleConditions), checksBefore: z.object({ exterior: z.literal(true), tyres: z.literal(true), lights: z.literal(true), documents: z.literal(true) }), notesBefore: z.string().trim().max(10000).optional() }); }
 const identity = z.object({ driverEmployeeId: z.string().trim().min(1), driverName: z.string().trim().min(2) });
 // startAt omitted/null = "book now" (collect the key straight away); otherwise an advance booking.
 export const reservationSchema = identity.extend({ vehicleId: z.string().min(1), destination: z.string().trim().min(2).max(500), purpose: z.string().trim().min(2).max(1000), passengers: z.number().int().min(1).max(20).default(1), startAt: z.string().datetime().nullable().optional(), expectedReturnAt: z.string().datetime() });
 export const maintenanceSchema = z.object({ type: z.enum(["Scheduled service", "Repair", "Tyres", "Inspection", "Other"]), servicedAt: z.string().datetime(), odometer: z.number().int().min(0), workshop: z.string().trim().min(2).max(200), workCompleted: z.string().trim().min(2).max(10000), cost: z.number().min(0).max(9999999999.99), attachment: attachmentSchema.nullable().optional(), nextServiceAt: z.number().int().min(0).nullable(), nextServiceDate: z.string().datetime().nullable(), releaseVehicle: z.boolean().default(false) }).refine(v => v.nextServiceAt === null || v.nextServiceAt > v.odometer, "Next service mileage must exceed the recorded odometer.").refine(v => v.nextServiceDate === null || new Date(v.nextServiceDate) > new Date(v.servicedAt), "Next service date must be after the maintenance date.");
-async function verifyDriver(input: z.infer<typeof identity>) { const employee = await prisma.employee.findFirst({ where: { employeeId: { equals: input.driverEmployeeId, mode: "insensitive" }, status: "ACTIVE" }, include: { department: departmentWithHod } }); if (!employee?.name || normalizeAttendanceName(employee.name) !== normalizeAttendanceName(input.driverName))
+export async function verifyDriver(input: z.infer<typeof identity>) { const employee = await prisma.employee.findFirst({ where: { employeeId: { equals: input.driverEmployeeId, mode: "insensitive" }, status: "ACTIVE" }, include: { department: departmentWithHod } }); if (!employee?.name || normalizeAttendanceName(employee.name) !== normalizeAttendanceName(input.driverName))
     throw new AttendanceError(400, "Employee ID and full name must match an active employee."); return employee; }
-export function createFleetWorkflowRouter() {
+/** `guest` builds the public /fleet/api router: employee routes only, no HR administration. */
+export function createFleetWorkflowRouter({ guest = false } = {}) {
     const router = Router();
+    // HR-only routes are attached to a router that the public build never mounts.
+    const hr = guest ? Router() : router;
     // HR route: protected by the same workspace access policy as fleet administration.
-    router.delete("/vehicle-trips/:id", async (req, res, next) => {
+    hr.delete("/vehicle-trips/:id", async (req, res, next) => {
         try {
             const input = z.object({ reason: z.string().trim().min(2).max(1000), confirmCarReturned: z.boolean().default(false) }).parse(req.body);
             const result = await prisma.$transaction(async tx => {
@@ -145,6 +149,49 @@ export function createFleetWorkflowRouter() {
             next(e);
         }
     });
+    // Return keyed in by the driver (public page); HR closes trips through PUT /api/vehicle-trips/:id/complete.
+    router.post("/vehicle-trips/:id/return", async (req, res, next) => {
+        try {
+            const employee = await verifyDriver(identity.parse(req.body));
+            res.json(await completeVehicleTrip(String(req.params.id), req.body, employee.employeeId));
+        }
+        catch (e) {
+            next(e);
+        }
+    });
+    // In-car QR: what this car is doing now, without exposing trip details beyond the driver's name.
+    router.get("/cars/:id", async (req, res, next) => {
+        try {
+            const car = await prisma.vehicle.findFirst({ where: { id: String(req.params.id), archivedAt: null }, select: { id: true, plate: true, model: true, photo: true, mileage: true, status: true, serviceAt: true, serviceDueDate: true } });
+            if (!car) throw new AttendanceError(404, "This car QR is not recognised. Please contact HR.");
+            const trips = await prisma.vehicleTrip.findMany({ where: { vehicleId: car.id, archivedAt: null, status: { in: [...scheduledStatuses] } }, select: { id: true, status: true, driverName: true, bookedFrom: true, startedAt: true, expectedReturnAt: true }, orderBy: { startedAt: "asc" } });
+            const current = trips.find(trip => trip.status !== "BOOKED");
+            const next = trips.filter(trip => trip.status === "BOOKED").sort((a, b) => (a.bookedFrom ?? a.startedAt).getTime() - (b.bookedFrom ?? b.startedAt).getTime())[0];
+            const { serviceAt, serviceDueDate, ...shown } = car;
+            const serviceDue = car.status === "SERVICE_DUE" || car.mileage >= serviceAt || (!!serviceDueDate && serviceDueDate <= new Date());
+            res.set("Cache-Control", "no-store").json({ ...shown, serviceDue,
+                current: current ? { tripId: current.id, status: current.status, driverName: current.driverName, until: current.expectedReturnAt } : null,
+                next: next ? { driverName: next.driverName, from: next.bookedFrom ?? next.startedAt, until: next.expectedReturnAt } : null });
+        }
+        catch (e) {
+            next(e);
+        }
+    });
+    if (guest) {
+        // The public page's car list: only what the booking form shows.
+        router.get("/vehicles", async (_req, res, next) => {
+            try {
+                res.set("Cache-Control", "no-store").json(await prisma.vehicle.findMany({ where: { archivedAt: null }, orderBy: { plate: "asc" }, select: { id: true, plate: true, model: true, category: true, photo: true, mileage: true, serviceAt: true, serviceDueDate: true, status: true } }));
+            }
+            catch (e) {
+                next(e);
+            }
+        });
+        router.post("/ocr/odometer", async (req, res, next) => {
+            try { res.json(await recognizeOdometer(req.body)); }
+            catch (e) { next(e); }
+        });
+    }
     router.post("/vehicle-trips/:id/check-in", async (req, res, next) => {
         try {
             const employee = await verifyDriver(identity.parse(req.body));
@@ -164,13 +211,13 @@ export function createFleetWorkflowRouter() {
     catch (e) {
         next(e);
     } });
-    router.get("/vehicles/:id/maintenance", async (req, res, next) => { try {
+    hr.get("/vehicles/:id/maintenance", async (req, res, next) => { try {
         res.json(await prisma.vehicleMaintenance.findMany({ where: { vehicleId: String(req.params.id) }, orderBy: { servicedAt: "desc" } }));
     }
     catch (e) {
         next(e);
     } });
-    router.post("/vehicles/:id/maintenance", async (req, res, next) => { try {
+    hr.post("/vehicles/:id/maintenance", async (req, res, next) => { try {
         const input = maintenanceSchema.parse(req.body);
         const result = await prisma.$transaction(async (tx) => { const id = String(req.params.id); await tx.$queryRaw `SELECT id FROM "Vehicle" WHERE id = ${id} FOR UPDATE`; const car = await tx.vehicle.findUniqueOrThrow({ where: { id } }); if (car.archivedAt)
             throw new AttendanceError(409, "This car has been archived."); if (await tx.vehicleTrip.findFirst({ where: { vehicleId: id, archivedAt: null, status: { in: ["AWAITING_DEPARTURE", "IN_PROGRESS"] } } }))

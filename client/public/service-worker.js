@@ -1,4 +1,4 @@
-const CACHE_NAME = "hr-digital-v4";
+const CACHE_NAME = "hr-digital-v5";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/favicon.svg", "/sugihara-mark.png", "/sgi-logo.png"];
 
 self.addEventListener("install", (event) => {
@@ -18,7 +18,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
-  if (request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+  if (request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname === "/fleet" || url.pathname.startsWith("/fleet/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(
