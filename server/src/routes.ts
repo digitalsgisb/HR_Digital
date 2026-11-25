@@ -1,4 +1,5 @@
 import { departmentWithHod, hodEmployeeSelect } from "./department-hod.js";
+import { locationFields, recordPing } from "./fleet-board.js";
 import { Router, type Request, type Response, type NextFunction } from "express";
 import multer from "multer";
 import { randomUUID } from "node:crypto";
@@ -1002,6 +1003,7 @@ export const createRouter = () => {
     "/vehicle-trips/:id/complete",
     asyncHandler(async (req, res) => {
       const input = completeVehicleTripSchema.parse(req.body);
+      const { location } = locationFields.parse(req.body);
       const id = routeParam(req.params.id);
       const completed = await prisma.$transaction(async (tx) => {
         const reference = await tx.vehicleTrip.findUniqueOrThrow({ where: { id }, select: { vehicleId: true } });
@@ -1017,6 +1019,7 @@ export const createRouter = () => {
             ? "SERVICE_DUE"
             : "AVAILABLE";
 
+        if (trip.locationConsent) await recordPing(tx, id, "RETURN", location);
         const updated = await tx.vehicleTrip.update({
           where: { id },
           data: { ...input, status: "COMPLETED", endedAt: new Date() },

@@ -7,6 +7,7 @@ import { vehicleConditions } from "@hr-training/shared";
 import { departmentWithHod } from "./department-hod.js";
 import { newTripToken, tripLinkDelivery, tripTokenPattern } from "./fleet-email.js";
 import { bookingWindow, checkInBooking, createBooking, scheduledStatuses } from "./vehicle-booking.js";
+import { locationFields, recordPing } from "./fleet-board.js";
 export const departureSchema = identitySchema();
 function identitySchema() { return z.object({ destination:z.string().trim().min(2).max(500).optional(), purpose:z.string().trim().min(2).max(1000).optional(), passengers:z.number().int().min(1).max(20).optional(), driverEmployeeId: z.string().trim().min(1), driverName: z.string().trim().min(2), odometerStart: z.number().int().min(0), odometerPhotoBefore: z.string().max(6000000).regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/), fuelBefore: z.number().int().min(0).max(100), conditionBefore: z.enum(vehicleConditions), checksBefore: z.object({ exterior: z.literal(true), tyres: z.literal(true), lights: z.literal(true), documents: z.literal(true) }), notesBefore: z.string().trim().max(10000).optional() }); }
 const identity = z.object({ driverEmployeeId: z.string().trim().min(1), driverName: z.string().trim().min(2) });
@@ -67,14 +68,15 @@ export function createFleetWorkflowRouter() {
     });
     router.post("/vehicle-trips/:id/depart", async (req, res, next) => { try {
         const input = departureSchema.parse(req.body);
+        const where = locationFields.parse(req.body);
         const employee = await verifyDriver(input);
         if (input.conditionBefore !== "GOOD")
             throw new AttendanceError(409, "Report this car's condition to HR before departure. Do not drive until cleared.");
         const result = await prisma.$transaction(async (tx) => { const reference = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) }, select: { vehicleId: true } }); await tx.$queryRaw`SELECT id FROM "Vehicle" WHERE id = ${reference.vehicleId} FOR UPDATE`; await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${String(req.params.id)} FOR UPDATE`; const trip = await tx.vehicleTrip.findUniqueOrThrow({ where: { id: String(req.params.id) }, include: { vehicle: true } }); if (trip.driverEmployeeId !== employee.employeeId)
             throw new AttendanceError(403, "This reservation belongs to another employee."); if (trip.vehicle.archivedAt || trip.vehicle.status !== "IN_USE")
             throw new AttendanceError(409, "This car is no longer cleared for departure."); if (input.odometerStart < trip.vehicle.mileage)
-            throw new AttendanceError(400, `Starting mileage cannot be below ${trip.vehicle.mileage} km.`); const saved = await tx.vehicleTrip.updateMany({ where: { id: trip.id, archivedAt: null, status: "AWAITING_DEPARTURE" }, data: { ...input, status: "IN_PROGRESS", departedAt: new Date(), mileageMismatch: input.odometerStart !== trip.vehicle.mileage } }); if (!saved.count)
-            throw new AttendanceError(409, "This trip is no longer awaiting departure. Reload the page."); await tx.vehicle.update({ where: { id: trip.vehicleId }, data: { mileage: input.odometerStart } }); return tx.vehicleTrip.findUniqueOrThrow({ where: { id: trip.id }, include: { vehicle: true } }); });
+            throw new AttendanceError(400, `Starting mileage cannot be below ${trip.vehicle.mileage} km.`); const saved = await tx.vehicleTrip.updateMany({ where: { id: trip.id, archivedAt: null, status: "AWAITING_DEPARTURE" }, data: { ...input, status: "IN_PROGRESS", departedAt: new Date(), locationConsent: where.locationConsent, mileageMismatch: input.odometerStart !== trip.vehicle.mileage } }); if (!saved.count)
+            throw new AttendanceError(409, "This trip is no longer awaiting departure. Reload the page."); await tx.vehicle.update({ where: { id: trip.vehicleId }, data: { mileage: input.odometerStart } }); if (where.locationConsent) await recordPing(tx, trip.id, "DEPART", where.location); return tx.vehicleTrip.findUniqueOrThrow({ where: { id: trip.id }, include: { vehicle: true } }); });
         res.json(result);
     }
     catch (e) {
@@ -117,6 +119,27 @@ export function createFleetWorkflowRouter() {
             const window = bookingWindow(input.startAt, input.expectedReturnAt);
             const trip = await prisma.$transaction(tx => createBooking(tx, employee, { vehicleId: input.vehicleId, destination: input.destination, purpose: input.purpose, passengers: input.passengers }, window));
             res.status(201).json({ ...trip, linkDelivery: tripLinkDelivery(employee) });
+        }
+        catch (e) {
+            next(e);
+        }
+    });
+    // "I've arrived": marks arrival for the board, with a location only if the driver consented for this trip.
+    router.post("/vehicle-trips/:id/arrive", async (req, res, next) => {
+        try {
+            const employee = await verifyDriver(identity.parse(req.body));
+            const { location } = locationFields.parse(req.body);
+            const id = String(req.params.id);
+            const trip = await prisma.$transaction(async tx => {
+                await tx.$queryRaw`SELECT id FROM "VehicleTrip" WHERE id = ${id} FOR UPDATE`;
+                const current = await tx.vehicleTrip.findUnique({ where: { id } });
+                if (!current) throw new AttendanceError(404, "Trip not found.");
+                if (current.driverEmployeeId !== employee.employeeId) throw new AttendanceError(403, "This trip belongs to another employee.");
+                if (current.archivedAt || current.status !== "IN_PROGRESS") throw new AttendanceError(409, "Only a trip in progress can be marked as arrived.");
+                if (current.locationConsent) await recordPing(tx, id, "ARRIVE", location);
+                return tx.vehicleTrip.update({ where: { id }, data: { arrivedAt: current.arrivedAt ?? new Date() }, include: { vehicle: true } });
+            });
+            res.json(trip);
         }
         catch (e) {
             next(e);

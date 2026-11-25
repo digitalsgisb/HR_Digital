@@ -394,6 +394,17 @@ Employees can now book a car for later as well as take one straight away, from t
 
 The schema adds `BOOKED` and `NO_SHOW` trip statuses and nullable `VehicleTrip.bookedFrom`, `noticeKind` and `noticeDueAt` columns with indexes; Docker startup applies them through the existing schema push. The no-show release runs every minute even when email automation is turned off.
 
+### Company car live board and trip locations (25 November 2026)
+
+**Company cars → Live board** shows every car on one screen, refreshed every 30 seconds. It is in the HR app only. For a tablet at the HR table, sign in as HR and open `/?view=fleet-board`, then use **Full screen**.
+
+- **Trip track.** Each car has a track from HR to its destination and back. While a trip is in progress the car icon moves along it based on the departure and expected return times: heading out in the first half, around the destination at halfway, heading back after that. This is an **estimate, not live tracking**, and the board says so. When the driver taps **I've arrived**, the car is held at the destination until the halfway point. Overdue cars sit at HR in red with a pulsing icon and the time overdue.
+- **States.** Cars are ordered overdue, in use, collecting key, booked today, available, then service. Booked cars show "Booked 2:00 pm – 5:00 pm · Name", available cars show their next booking, and service-due or out-of-service cars are greyed out with a wrench.
+- **Location pins.** The departure form has a consent tick. If the driver ticks it, their phone's location is recorded only when they tap Depart, I've arrived and Return on that trip. The board shows the last pin with a Google Maps link. Without consent no location is stored; "I've arrived" still records the arrival time. If the phone cannot read a location, the step still completes.
+- **PDPA.** The consent wording is a **placeholder** in `client/src/trip-location.ts` (`LOCATION_CONSENT_TEXT`). Replace it with HR's approved PDPA notice before rollout, and decide how long trip locations are kept; they are currently retained with the trip record and are not deleted automatically.
+
+The schema adds `VehicleTrip.locationConsent` and `arrivedAt` and a `VehicleTripPing` table (trip, kind, latitude, longitude, accuracy, time); Docker startup applies them through the existing schema push. Browsers only share location on HTTPS (or localhost).
+
 ### Vehicle details, maintenance and training evaluation (FR-HR-002 Rev 2)
 
 - Company cars → Vehicle status: click a car card or its View / edit details button to edit its photo, registration, model, pool, mileage, service target/date and operational status. Trip controls remain separate actions.

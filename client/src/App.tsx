@@ -3,6 +3,7 @@ import { TrainingEmailTracker } from "./TrainingEmailTracker";
 import { CurrentUsageCards, RemoveVehicleUsage, isOpenVehicleUsage } from "./VehicleUsageActions";
 import { FleetAccess } from "./FleetAccess";
 import { VehicleBookings } from "./VehicleBookings";
+import { FleetBoard } from "./FleetBoard";
 import { DepartmentHods } from "./DepartmentHods";
 import { MaintenancePage } from "./MaintenancePanel";
 import { TrainingSummaries } from "./TrainingSummaries";
@@ -47,7 +48,7 @@ import {
 } from "./portal-data";
 
 type View = "overview" | "employees" | "training-overview" | "training-calendar" |
-  "training-planner" | "training-records" | "email-overview" | "email-tracker" | "email-automation" | "email-delivery" | "email-settings" | "notes-library" | "fleet" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
+  "training-planner" | "training-records" | "email-overview" | "email-tracker" | "email-automation" | "email-delivery" | "email-settings" | "notes-library" | "fleet" | "fleet-board" | "fleet-qr" | "fleet-status" | "fleet-registry" | "fleet-maintenance" | "department-hods" | "usage-history" | "administration";
 
 const viewMeta: Record<View, { title: string }> = {
   overview: { title: "Dashboard" },
@@ -63,6 +64,7 @@ const viewMeta: Record<View, { title: string }> = {
   "email-automation": { title: "Email templates" },
   "notes-library": { title: "Evaluation submissions" },
   fleet: { title: "Car usage" },
+  "fleet-board": { title: "Live board" },
   "fleet-qr": { title: "Fleet QR" },
   "fleet-maintenance": { title: "Maintenance history" },
   "department-hods": { title: "Recipients & HODs" },
@@ -92,6 +94,7 @@ const emailNav: Array<{id:View;label:string;icon:LucideIcon}> = [
 
 const fleetNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
   { id: "fleet", label: "Car usage", icon: Route },
+  { id: "fleet-board", label: "Live board", icon: MapPin },
   { id: "fleet-qr", label: "Fleet QR", icon: QrCode },
   { id: "fleet-status", label: "Vehicle status", icon: Gauge },
   { id: "fleet-maintenance", label: "Maintenance history", icon: Wrench },
@@ -178,7 +181,7 @@ function App() {
 
 function AdminApp() {
   const initialVehicleId = new URLSearchParams(window.location.search).get("vehicle") ?? undefined;
-  const [activeView, setActiveView] = useState<View>(initialVehicleId ? "fleet" : "overview");
+  const [activeView, setActiveView] = useState<View>(initialVehicleId ? "fleet" : new URLSearchParams(window.location.search).get("view") === "fleet-board" ? "fleet-board" : "overview");
   const [emailOpen,setEmailOpen]=useState(false);
   const [trainingOpen, setTrainingOpen] = useState(false);
   const [fleetOpen, setFleetOpen] = useState(Boolean(initialVehicleId));
@@ -274,6 +277,7 @@ function AdminApp() {
           {activeView === "fleet" && <FleetTracker showNotice={setNotice} initialVehicleId={initialVehicleId} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
           {activeView === "department-hods" && <DepartmentHods />}
           {activeView === "fleet-maintenance" && <MaintenancePage />}
+          {activeView === "fleet-board" && <FleetBoard />}
           {activeView === "fleet-qr" && <FleetQrPage />}
           {activeView === "fleet-status" && <FleetTracker key="status" mode="status" showNotice={setNotice} onOpenRegistry={() => navigate("fleet-registry")} onOpenHistory={openHistory} />}
           {activeView === "fleet-registry" && <VehicleRegistryPage showNotice={setNotice} onOpenHistory={openHistory} />}

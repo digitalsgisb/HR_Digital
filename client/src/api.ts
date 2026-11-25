@@ -1,6 +1,6 @@
 import type { RosterPreview } from "./ProductionRosterImport";
 import type {
-  DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, Vehicle, VehicleAvailability, VehicleCondition, VehicleReservation, VehicleStatus, VehicleTrip
+  DashboardSummary, EmployeeImportPreview, EmployeeEmailImportPreview, FleetBoard, TripLocation, Vehicle, VehicleAvailability, VehicleCondition, VehicleReservation, VehicleStatus, VehicleTrip
 } from "@hr-training/shared";
 import type { Course, Employee, SessionListItem } from "./types";
 
@@ -176,6 +176,9 @@ export const api = {
     const params = new URLSearchParams({ endAt: window.endAt, ...(window.startAt ? { startAt: window.startAt } : {}), ...(excludeTripId ? { excludeTripId } : {}) });
     return request<VehicleAvailability[]>(`/api/vehicle-availability?${params}`, { signal });
   },
+  getFleetBoard(signal?: AbortSignal) {
+    return request<FleetBoard>("/api/vehicle-board", { signal });
+  },
   getVehicleBookings() {
     return request<VehicleTrip[]>("/api/vehicle-bookings");
   },
@@ -211,7 +214,7 @@ export const api = {
 
   completeVehicleTrip(id: string, input: {
     odometerEnd: number; odometerPhotoAfter: string; fuelAfter: number; conditionAfter: VehicleCondition;
-    checksAfter: Record<string, boolean>; notesAfter?: string;
+    checksAfter: Record<string, boolean>; notesAfter?: string; location?: TripLocation | null;
   }) {
     return request<VehicleTrip>(`/api/vehicle-trips/${id}/complete`, {
       method: "PUT",

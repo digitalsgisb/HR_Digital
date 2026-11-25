@@ -68,8 +68,19 @@ export type VehicleTrip = {
   resumeToken?: string | null;
   /** Booked start; expectedReturnAt is the booked end. */
   bookedFrom?: string | null;
+  locationConsent?: boolean;
+  arrivedAt?: string | null;
   vehicle?: Vehicle;
 };
+
+export type VehicleTripPingKind = "DEPART" | "ARRIVE" | "RETURN";
+export type VehicleTripPing = { kind: VehicleTripPingKind; latitude: number; longitude: number; accuracy: number | null; recordedAt: string };
+/** A location the driver's phone reported (with consent) at depart, arrive or return. */
+export type TripLocation = { latitude: number; longitude: number; accuracy?: number | null };
+
+export type FleetBoardTrip = Pick<VehicleTrip, "id" | "status" | "driverName" | "driverEmployeeId" | "destination" | "purpose" | "startedAt" | "departedAt" | "bookedFrom" | "expectedReturnAt" | "arrivedAt" | "locationConsent"> & { lastPing: VehicleTripPing | null };
+export type FleetBoardCar = Pick<Vehicle, "id" | "plate" | "model" | "category" | "photo" | "mileage" | "status"> & { current: FleetBoardTrip | null; next: FleetBoardTrip | null };
+export type FleetBoard = { now: string; cars: FleetBoardCar[] };
 
 /** A car's availability for a requested booking window. */
 export type VehicleAvailability = Pick<Vehicle, "id" | "plate" | "model" | "category" | "photo" | "mileage" | "status"> & { available: boolean; reason?: string };

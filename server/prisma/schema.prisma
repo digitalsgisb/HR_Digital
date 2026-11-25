@@ -301,6 +301,10 @@ model VehicleTrip {
   notesBefore      String?
   notesAfter       String?
   status           VehicleTripStatus    @default(IN_PROGRESS)
+  // Location is recorded only at depart / arrive / return, and only when the driver ticks consent for this trip.
+  locationConsent  Boolean              @default(false)
+  arrivedAt        DateTime?
+  pings            VehicleTripPing[]
   // Booked start time (advance bookings and "book now"); expectedReturnAt is the booked end.
   bookedFrom       DateTime?
   // One pending notice (no-show / HR change / HR cancel); a newer notice replaces an unsent one.
@@ -325,6 +329,19 @@ model VehicleTrip {
   @@index([archivedAt])
   @@index([driverEmployeeId])
   @@index([startedAt])
+}
+
+model VehicleTripPing {
+  id         String      @id @default(cuid())
+  tripId     String
+  trip       VehicleTrip @relation(fields: [tripId], references: [id])
+  kind       String
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  recordedAt DateTime    @default(now())
+
+  @@index([tripId, recordedAt])
 }
 
 model VehicleMaintenance {
