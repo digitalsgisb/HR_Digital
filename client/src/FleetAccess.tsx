@@ -90,14 +90,22 @@ export function FleetAccess() {
     const [message, setMessage] = useState("");
     const [busy, setBusy] = useState(false);
     const [tab, setTab] = useState<"book" | "trip" | "me">("book");
-    // Hide the tab bar while typing so it does not float above the keyboard.
+    // Hide the tab bar only while the keyboard is on screen, so it does not float above it.
+    // iPhone keeps the field focused after the keyboard is closed, so focus alone is not enough:
+    // the visible area shrinking well below the window height is what says the keyboard is up.
     const [typing, setTyping] = useState(false);
     useEffect(() => {
-        const onFocusIn = (event: FocusEvent) => { if (opensKeyboard(event.target)) setTyping(true); };
-        const onFocusOut = (event: FocusEvent) => { if (!opensKeyboard(event.relatedTarget)) setTyping(false); };
-        document.addEventListener("focusin", onFocusIn);
-        document.addEventListener("focusout", onFocusOut);
-        return () => { document.removeEventListener("focusin", onFocusIn); document.removeEventListener("focusout", onFocusOut); };
+        const viewport = window.visualViewport;
+        const update = () => {
+            const focused = opensKeyboard(document.activeElement);
+            const keyboardUp = viewport ? window.innerHeight - viewport.height > 120 : focused;
+            setTyping(focused && keyboardUp);
+        };
+        const later = () => window.setTimeout(update, 50);
+        document.addEventListener("focusin", later);
+        document.addEventListener("focusout", later);
+        viewport?.addEventListener("resize", update);
+        return () => { document.removeEventListener("focusin", later); document.removeEventListener("focusout", later); viewport?.removeEventListener("resize", update); };
     }, []);
     // Land on the open trip when there is one, otherwise on booking.
     useEffect(() => { if (identified) setTab(trip ? "trip" : "book"); }, [identified, trip?.id]);
