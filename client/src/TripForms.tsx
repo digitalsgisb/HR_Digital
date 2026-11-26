@@ -84,12 +84,6 @@ export function StartTripForm({
       setError("Choose the driver's department, position and name, or enter the guest's full name.");
       return;
     }
-    if (!odometerPhoto) {
-      setError(
-        "Take a clear photo of the ODO display before starting the trip.",
-      );
-      return;
-    }
     if (!Object.values(checks).every(Boolean)) {
       setError("Complete every required before-drive check.");
       return;
@@ -108,7 +102,7 @@ export function StartTripForm({
         purpose,
         passengers,
         odometerStart: odometer,
-        odometerPhotoBefore: odometerPhoto,
+        odometerPhotoBefore: odometerPhoto || null,
         fuelBefore: fuel,
         conditionBefore: condition,
         checksBefore: checks,
@@ -135,7 +129,7 @@ export function StartTripForm({
         </div>
       </div>
       <div className="form-grid">
-        <label className="field">
+        {vehicles.length > 1 && <label className="field">
           <span>Vehicle</span>
           <select
             value={vehicle.id}
@@ -151,7 +145,7 @@ export function StartTripForm({
                 </option>
               ))}
           </select>
-        </label>
+        </label>}
         {reservation ? <p className="field">Driver: <strong>{reservation.driverName}</strong></p> : <VehicleDriverPicker onChange={setDriver} />}
         <label className="field">
           <span>Destination</span>
@@ -359,12 +353,6 @@ export function CompleteTripForm({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
-    if (!odometerPhoto) {
-      setError(
-        "Take a clear photo of the ODO display before completing the return.",
-      );
-      return;
-    }
     if (
       !checks.interiorClean ||
       !checks.fuelCardReturned ||
@@ -377,7 +365,7 @@ export function CompleteTripForm({
       setBusy(true);
       await onSubmit({
         odometerEnd: odometer,
-        odometerPhotoAfter: odometerPhoto,
+        odometerPhotoAfter: odometerPhoto || null,
         fuelAfter: fuel,
         conditionAfter: condition,
         checksAfter: checks,

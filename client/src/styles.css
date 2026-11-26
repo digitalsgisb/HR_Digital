@@ -365,14 +365,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .registry-empty strong { margin-top: 9px; color: var(--ink); font-size: var(--fs-base); }.registry-empty p { margin: 5px 0 0; font-size: var(--fs-sm); }
 .confirm-dialog { width: min(560px,100%); }.confirm-dialog-body { display: grid; grid-template-columns: 48px 1fr; gap: 13px; padding: 22px; }.danger-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: var(--r-md); color: #9f1717; background: #f4eceb; }.confirm-dialog-body h3 { margin: 2px 0 5px; font-size: var(--fs-lg); }.confirm-dialog-body p { margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: 1.6; }.confirm-dialog-body .span-all, .confirm-dialog-body footer { grid-column: 1/-1; }.confirm-dialog-body footer { display: flex; justify-content: flex-end; gap: 9px; padding-top: 10px; }
 .employee-profile-dialog { width: min(720px,100%); }.employee-profile-body { padding: 21px; }.profile-identity { display: grid; grid-template-columns: 54px 1fr auto; align-items: center; gap: 13px; }.profile-identity .avatar { width: 52px; height: 52px; border-radius: var(--r-lg); color: #fff; background: #17181a; font-size: var(--fs-md); }.profile-identity h2 { margin: 0 0 4px; font-size: var(--fs-xl); }.profile-identity p { margin: 0; color: var(--muted); font-size: var(--fs-sm); }.employment-status { display: inline-flex; align-items: center; min-height: 24px; padding: 0 9px; border-radius: var(--r-pill); color: #555; background: #eee; font-size: var(--fs-xs); font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }.employment-status.active { color: #12623f; background: #e4f3eb; }.employment-status.on-leave { color: #755111; background: #fff1d6; }.employment-status.resigned, .employment-status.terminated { color: #8f1d16; background: #f4e8e7; }.profile-details { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin: 18px 0; }.profile-details div { padding: 12px; border-radius: var(--r-md); background: #f6f6f6; }.profile-details span, .profile-details strong { display: block; }.profile-details span { color: var(--subtle); font-size: var(--fs-xs); text-transform: uppercase; }.profile-details strong { margin-top: 5px; font-size: var(--fs-base); }.profile-training { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); }.profile-training div { padding: 9px; border-left: 2px solid #1a1a1a; }.profile-training span, .profile-training strong { display: block; }.profile-training span { color: var(--muted); font-size: var(--fs-xs); }.profile-training strong { margin-top: 4px; font-size: var(--fs-sm); }.profile-training-empty { display: flex; align-items: center; gap: 10px; padding: 14px; border-radius: var(--r-md); color: var(--muted); background: #f6f6f6; font-size: var(--fs-sm); }.profile-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
-.odometer-photo { display: grid; gap: 10px; padding: 14px; border: 1px solid #d8d5d2; border-radius: var(--r-md); background: #f7f7f7; }
-.odometer-photo-heading { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 10px; }
-.odometer-photo-heading > span { display: grid; place-items: center; width: 37px; height: 37px; border-radius: var(--r-sm); color: #fff; background: #17181a; }
-.odometer-photo-heading strong, .odometer-photo-heading small { display: block; }.odometer-photo-heading strong { font-size: var(--fs-base); }.odometer-photo-heading small { margin-top: 3px; color: var(--muted); font-size: var(--fs-xs); line-height: 1.4; }.odometer-photo-heading em { padding: 4px 7px; border-radius: var(--r-pill); color: #fff; background: #252628; font-size: var(--fs-xs); font-style: normal; font-weight: 850; text-transform: uppercase; }
-.odometer-capture { position: relative; display: grid; min-height: 170px; overflow: hidden; place-items: center; border: 1px dashed #b8b4b0; border-radius: var(--r-md); background: #fff; }
-.odometer-capture > img { width: 100%; max-height: 310px; object-fit: contain; background: #111; }
-.odometer-placeholder { display: grid; justify-items: center; gap: 6px; padding: 28px; color: #777; text-align: center; }.odometer-placeholder strong { color: #333; font-size: var(--fs-base); }.odometer-placeholder small { font-size: var(--fs-xs); }
-.odometer-capture > label { position: absolute; right: 9px; bottom: 9px; cursor: pointer; box-shadow: 0 5px 16px rgba(0,0,0,.12); }.odometer-capture input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .ocr-progress { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; }.ocr-progress > span { height: 6px; overflow: hidden; border-radius: var(--r-pill); background: #ddd; }.ocr-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#17181a,#73777b); transition: width .2s var(--ease); }.ocr-progress strong { font-size: var(--fs-xs); }
 .ocr-result, .ocr-warning { display: flex; align-items: center; gap: 7px; padding: 9px 10px; border-radius: var(--r-sm); font-size: var(--fs-xs); font-weight: 750; }.ocr-result { color: #176346; background: #e9f5ef; }.ocr-warning { color: #7a5517; background: #fff4df; }.odometer-photo > p { margin: 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; }
 .trip-evidence { display: flex !important; gap: 5px; margin-top: 5px !important; }.trip-evidence a { padding: 3px 5px; border: 1px solid var(--line); border-radius: var(--r-xs); color: #333; background: #fff; font-size: var(--fs-xs); font-weight: 800; text-decoration: none; }
@@ -410,7 +402,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 }
 @media (max-width: 760px) {
   .fleet-hero-actions { width: 100%; justify-content: stretch; }.fleet-hero-actions .button { flex: 1; }
-  .odometer-photo-heading { grid-template-columns: 38px 1fr; }.odometer-photo-heading em { grid-column: 2; justify-self: start; }.odometer-capture { min-height: 210px; }
   .topbar-actions > .topbar-icon { display: none; }
   .notification-panel { position: fixed; top: 70px; right: 10px; }
   .fleet-dialog-backdrop { align-items: end; padding: 0; }.fleet-dialog { width: 100%; max-height: 94vh; border-radius: 17px 17px 0 0; }.fleet-form { padding: 15px; }.inspection-grid { grid-template-columns: 1fr; }.fleet-form-actions { align-items: stretch; flex-direction: column; }.fleet-form-actions .button { width: 100%; }.return-summary { grid-template-columns: 38px 1fr; }.return-summary em { grid-column: 2; }.qr-actions { width: 100%; flex-direction: column; }.qr-actions .button { width: 100%; }.vehicle-actions button { min-height: 38px; }
@@ -778,27 +769,12 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 .fleet-identity-card p { font-size: var(--fs-lg); overflow-wrap: anywhere; }
 .fleet-identity-card > div > span { font-size: var(--fs-md); color: var(--muted); }
 .vehicle-usage-page .fleet-identity-card .button { flex-shrink: 0; padding: 9px 12px; min-height: 40px; font-size: var(--fs-md); }
-.vehicle-usage-page .fleet-mileage-hint { font-size: var(--fs-md); color: var(--muted); }
-.fleet-car-field { display: grid; gap: 7px; min-width: 0; font-size: var(--fs-lg); }
-.fleet-car-picker { min-width: 0; border: 1px solid var(--line); border-radius: var(--r-md); background: white; overflow: hidden; }
-.fleet-car-picker > .fleet-car-toggle { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 10px 12px; width: 100%; border: 0; background: white; color: inherit; font: inherit; cursor: pointer; }
-.fleet-car-picker > .fleet-car-toggle > svg { flex-shrink: 0; margin-left: auto; }
-.fleet-car-picker[data-open="true"] > .fleet-car-toggle { border-bottom: 1px solid var(--line); }
-.fleet-car-picker[data-open="true"] > .fleet-car-toggle > svg { transform: rotate(180deg); }
 .fleet-car-thumbnail { display: grid; place-items: center; width: 82px; height: 58px; flex: 0 0 82px; overflow: hidden; border-radius: var(--r-xs); background: #f2f1f0; color: #666; }
 .fleet-car-thumbnail img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .fleet-car-thumbnail:has(img) { background: white; }
 .fleet-car-copy { display: grid; gap: 3px; min-width: 0; text-align: left; }
 .fleet-car-copy strong { font-size: var(--fs-lg); color: var(--ink); overflow-wrap: anywhere; }
 .fleet-car-copy small { font-size: var(--fs-md); font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
-.fleet-car-options { display: grid; gap: 0; max-height: 300px; overflow-y: auto; margin: 0; padding: 0; min-width: 0; border: 0; }
-.fleet-car-option { display: flex; align-items: center; gap: 10px; padding: 12px; min-width: 0; cursor: pointer; }
-.fleet-car-option + .fleet-car-option { border-top: 1px solid var(--line); }
-.fleet-car-option:has(input:checked) { background: #f8f1f2; }
-.fleet-car-option input { flex-shrink: 0; width: 17px; height: 17px; margin: 0; accent-color: #9f1d33; }
-.fleet-car-options > p { padding: 14px; font-size: var(--fs-lg); }
-.fleet-car-confirm { display: block; width: calc(100% - 24px); margin: 0 12px 12px; padding: 10px; border: 0; border-radius: var(--r-sm); background: #17181a; color: white; font: inherit; font-size: var(--fs-md); cursor: pointer; }
-.fleet-car-confirm:disabled { opacity: .5; cursor: not-allowed; }
 .fleet-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; clip: rect(0,0,0,0); overflow: hidden; white-space: nowrap; border: 0; }
 @media (max-width: 600px) {
   .vehicle-usage-page { padding: 0; }
@@ -811,10 +787,6 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
   .vehicle-usage-page .fleet-form-actions .button { width: 100%; min-width: 0; }
 }
 
-.fleet-car-drawer { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 240ms var(--ease), opacity 180ms var(--ease); }
-.fleet-car-drawer[data-open="true"] { grid-template-rows: 1fr; opacity: 1; }
-.fleet-car-drawer-inner { min-height: 0; overflow: hidden; }
-.fleet-car-toggle > svg { transition: transform 200ms var(--ease); }
 .vehicle-usage-container > .card { animation: fleetCardReveal 180ms var(--ease) both; }
 .vehicle-usage-page button { transition: background-color 150ms var(--ease), border-color 150ms var(--ease), box-shadow 150ms var(--ease); }
 @keyframes fleetCardReveal { from { opacity: 0; } to { opacity: 1; } }
@@ -906,7 +878,7 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 @media (prefers-reduced-motion: reduce) {
   html.fleet-access-mode { scroll-behavior: auto; }
   .vehicle-usage-container > .card { animation: none; }
-  .fleet-car-drawer, .fleet-car-toggle > svg, .vehicle-usage-page button { transition: none; }
+  .fleet-car-option, .vehicle-usage-page button { transition: none; }
 }
 
 .vehicle-card-interactive{cursor:pointer}.vehicle-details-link{display:flex;justify-content:space-between;align-items:center;width:100%;background:transparent;color:inherit;border:0;padding:0 0 14px;text-align:left;font:inherit;font-weight:700;cursor:pointer}.vehicle-details-link:focus-visible{outline:2px solid #8dd6c0;outline-offset:5px}.maintenance-panel>h2{padding:24px 24px 0}.maintenance-record{padding:20px 0;border-top:1px solid #ddd}
@@ -1156,3 +1128,54 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 .journey-stop.future .journey-node{width:14px;height:14px;margin:4px 0 11px;border-color:#ddd6d3}
 .journey-stop.future strong{color:var(--muted)}
 @media(max-width:720px){.journey-stop.future .journey-node{margin:4px}}
+/* Odometer photo: optional helper that fills in the ODO reading */
+.odometer-photo { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: #f7f6f5; min-width: 0; }
+.odometer-photo-heading { display: grid; gap: 4px; }
+.odometer-photo-heading strong { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-lg); }
+.odometer-photo-heading strong span { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); }
+.odometer-photo-heading small { color: var(--muted); font-size: var(--fs-md); line-height: 1.45; }
+.odometer-photo-preview { display: block; width: 100%; max-height: 240px; object-fit: contain; border-radius: var(--r-sm); background: #17181a; }
+.odometer-photo-button { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer; }
+.odometer-photo-button input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.odometer-photo-button:has(input:focus-visible) { outline: 2px solid #9f1d33; outline-offset: 2px; }
+.odometer-photo-remove { justify-self: center; padding: 4px 8px; border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--fs-md); text-decoration: underline; cursor: pointer; }
+
+/* Booking form: three steps, each with its own heading */
+.vehicle-usage-page .fleet-booking { gap: 0; }
+.vehicle-usage-page .fleet-booking > h2 { padding-bottom: 6px; }
+.fleet-book-section { display: grid; gap: 14px; min-width: 0; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.fleet-book-section:last-of-type { border-bottom: 0; }
+.fleet-book-step { display: flex; align-items: center; gap: 10px; margin: 0; font-size: var(--fs-lg); font-weight: 800; line-height: 1.3; }
+.fleet-book-step > span { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; background: #17181a; color: white; font-size: var(--fs-md); }
+.fleet-booking .booking-window legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+.fleet-booking .booking-window-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fleet-booking .booking-window-mode .button { width: 100%; justify-content: center; }
+.fleet-booking > .button-primary { width: 100%; margin-top: 4px; }
+.fleet-book-missing { margin: 0 0 10px !important; color: var(--muted); font-size: var(--fs-md); text-align: center; }
+
+/* Car list: every free car visible, one tap to choose */
+.fleet-car-list { display: grid; gap: 10px; min-width: 0; }
+.fleet-car-option { position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr) 28px; align-items: center; gap: 12px; padding: 10px 14px 10px 10px; border: 1.5px solid var(--line); border-radius: var(--r-md); background: white; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease); }
+.fleet-car-option:has(input:checked) { border-color: #17181a; box-shadow: inset 4px 0 0 #9f1d33; }
+.fleet-car-option:has(input:focus-visible) { outline: 2px solid #9f1d33; outline-offset: 2px; }
+.fleet-car-thumbnail { display: grid; place-items: center; width: 84px; height: 56px; overflow: hidden; border-radius: var(--r-xs); background: #f2f1f0; color: #666; }
+.fleet-car-thumbnail img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.fleet-car-thumbnail:has(img) { background: white; }
+.fleet-car-copy { display: grid; gap: 2px; min-width: 0; text-align: left; }
+.fleet-car-copy strong { font-size: var(--fs-lg); color: var(--ink); letter-spacing: .02em; overflow-wrap: anywhere; }
+.fleet-car-copy small { font-size: var(--fs-md); color: var(--muted); overflow-wrap: anywhere; }
+.fleet-car-copy small + small { font-size: var(--fs-sm); }
+.fleet-car-tick { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid #c9c6c3; border-radius: 50%; color: transparent; }
+.fleet-car-option:has(input:checked) .fleet-car-tick { border-color: #9f1d33; background: #9f1d33; color: white; }
+@media (max-width: 600px) {
+  .fleet-location-consent { margin: 0 18px; }
+  .fleet-car-option { grid-template-columns: 72px minmax(0, 1fr) 26px; gap: 10px; }
+  .fleet-car-thumbnail { width: 72px; height: 50px; }
+}
+
+/* Trip card: the forms inside carry their own padding, so the card adds none */
+.vehicle-usage-page .fleet-trip-card { padding: 0; overflow: hidden; }
+.vehicle-usage-page .fleet-form-step { align-items: flex-start; }
+.vehicle-usage-page .fleet-form-step > span { margin-top: 1px; flex-shrink: 0; }
+.vehicle-usage-page .field, .vehicle-usage-page .field > span { font-weight: 600; }
+.vehicle-usage-page .field input, .vehicle-usage-page .field select, .vehicle-usage-page .field textarea { font-weight: 400; }

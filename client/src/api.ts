@@ -204,7 +204,7 @@ export const api = {
 
   startVehicleTrip(input: {
     vehicleId: string; driverEmployeeId: string; driverName: string; destination: string;
-    purpose: string; passengers: number; odometerStart: number; odometerPhotoBefore: string; fuelBefore: number;
+    purpose: string; passengers: number; odometerStart: number; odometerPhotoBefore?: string | null; fuelBefore: number;
     conditionBefore: VehicleCondition; checksBefore: Record<string, boolean>; notesBefore?: string;
   }) {
     return request<VehicleTrip>("/api/vehicle-trips/start", {
@@ -214,7 +214,7 @@ export const api = {
   },
 
   completeVehicleTrip(id: string, input: {
-    odometerEnd: number; odometerPhotoAfter: string; fuelAfter: number; conditionAfter: VehicleCondition;
+    odometerEnd: number; odometerPhotoAfter?: string | null; fuelAfter: number; conditionAfter: VehicleCondition;
     checksAfter: Record<string, boolean>; notesAfter?: string; location?: TripLocation | null;
   }) {
     return request<VehicleTrip>(`/api/vehicle-trips/${id}/complete`, {

@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { apiBase } from "./api-base";
-import { Camera, CheckCircle2, CircleAlert, ScanLine } from "lucide-react";
+import { Camera, CheckCircle2, CircleAlert } from "lucide-react";
 
 type Props = {
   minimumMileage: number;
@@ -74,7 +74,7 @@ export function OdometerPhotoField({ minimumMileage, photo, onPhoto, onMileage }
     try {
       const prepared = await resizePhoto(file);
       onPhoto(prepared.dataUrl);
-      setResult("Checking the on-prem vision model…");
+      setResult("Reading the ODO number…");
       try {
         const visionResponse = await fetch(`${apiBase}/ocr/odometer`, {
           method: "POST",
@@ -85,7 +85,7 @@ export function OdometerPhotoField({ minimumMileage, photo, onPhoto, onMileage }
           const vision = await visionResponse.json() as { mileage: number | null; confidence: number; reason?: string };
           if (vision.mileage != null && vision.confidence >= 0.45) {
             onMileage(vision.mileage);
-            setResult(`On-prem AI detected ${new Intl.NumberFormat("en-MY").format(vision.mileage)} km · please confirm`);
+            setResult(`Read ${new Intl.NumberFormat("en-MY").format(vision.mileage)} km from the photo. Check it matches the dashboard.`);
             return;
           }
         }
@@ -116,15 +116,29 @@ export function OdometerPhotoField({ minimumMileage, photo, onPhoto, onMileage }
         minimumMileage
       );
       if (detected == null) {
-        setError("Photo saved, but OCR could not confidently find the ODO number. Enter it manually and confirm against the photo.");
+        setError("Photo saved, but the ODO number could not be read. Type it in above.");
         return;
       }
       onMileage(detected);
-      setResult(`Detected ${new Intl.NumberFormat("en-MY").format(detected)} km · please confirm`);
-    } catch (cause) {
-      setError(cause instanceof Error ? `Photo saved, but OCR failed: ${cause.message}` : "Photo saved, but OCR could not run. Enter the mileage manually.");
+      setResult(`Read ${new Intl.NumberFormat("en-MY").format(detected)} km from the photo. Check it matches the dashboard.`);
+    } catch {
+      setError("Photo saved, but the ODO number could not be read. Type it in above.");
     } finally { setReading(false); setProgress(1); }
   };
 
-  return <section className="odometer-photo"><div className="odometer-photo-heading"><span><Camera size={19} /></span><div><strong>Odometer photo evidence</strong><small>Frame the digital <b>ODO</b> number clearly—not Trip A/B or the speedometer.</small></div><em>Required</em></div><div className="odometer-capture">{photo ? <img src={photo} alt="Captured odometer" /> : <div className="odometer-placeholder"><ScanLine size={30} /><strong>Keep the ODO display inside the frame</strong><small>A straight, glare-free close-up gives the best reading.</small></div>}<label className="button button-secondary"><Camera size={16} /> {photo ? "Retake photo" : "Take odometer photo"}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={readPhoto} disabled={reading} /></label></div>{reading && <div className="ocr-progress"><span><i style={{ width: `${Math.max(6, progress * 100)}%` }} /></span><strong>Reading ODO locally… {Math.round(progress * 100)}%</strong></div>}{result && !reading && <div className="ocr-result"><CheckCircle2 size={16} />{result}</div>}{error && !reading && <div className="ocr-warning"><CircleAlert size={16} />{error}</div>}<p><b>Privacy:</b> OCR runs from assets hosted on your AI PC. No cloud vision provider or n8n upload is required.</p></section>;
+  return <section className="odometer-photo" aria-label="Odometer photo, optional">
+    <div className="odometer-photo-heading">
+      <strong>ODO photo <span>optional</span></strong>
+      <small>A photo of the total ODO reading fills in the number for you and keeps a record. Skip it if the camera is not working.</small>
+    </div>
+    {photo && <img className="odometer-photo-preview" src={photo} alt="Your odometer photo" />}
+    <label className="button button-secondary odometer-photo-button">
+      <Camera size={18} aria-hidden="true" /> {photo ? "Retake photo" : "Take ODO photo"}
+      <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={readPhoto} disabled={reading} />
+    </label>
+    {photo && !reading && <button type="button" className="odometer-photo-remove" onClick={() => { onPhoto(""); setResult(""); setError(""); }}>Remove photo</button>}
+    {reading && <div className="ocr-progress" role="status"><span><i style={{ width: `${Math.max(6, progress * 100)}%` }} /></span><strong>Reading ODO… {Math.round(progress * 100)}%</strong></div>}
+    {result && !reading && <div className="ocr-result" role="status"><CheckCircle2 size={16} aria-hidden="true" />{result}</div>}
+    {error && !reading && <div className="ocr-warning" role="status"><CircleAlert size={16} aria-hidden="true" />{error}</div>}
+  </section>;
 }

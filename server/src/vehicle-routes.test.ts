@@ -55,6 +55,13 @@ test("car QR loads only the requested active car and accepts a guest trip", asyn
     assert.equal(saved.driverEmployeeId, "GUEST");
     assert.equal(vehicle.status, "IN_USE");
     assert.equal((await start()).status, 409);
+    // The odometer photo is optional: a trip starts with only the typed reading.
+    vehicle.status = "AVAILABLE";
+    saved = undefined;
+    const { odometerPhotoBefore: _photo, ...withoutPhoto } = input;
+    const noPhoto = await fetch(`${root}/vehicle-trips/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(withoutPhoto) });
+    assert.equal(noPhoto.status, 201);
+    assert.equal(saved.odometerPhotoBefore ?? null, null);
     saved = undefined;
     vehicle.status = "AVAILABLE";
     vehicle.archivedAt = new Date() as any;

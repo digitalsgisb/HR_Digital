@@ -149,7 +149,7 @@ const startVehicleTripSchema = z.object({
   purpose: z.string().trim().min(2),
   passengers: z.coerce.number().int().min(1).max(20).default(1),
   odometerStart: z.coerce.number().int().min(0),
-  odometerPhotoBefore: odometerPhotoSchema,
+  odometerPhotoBefore: odometerPhotoSchema.optional().nullable(),
   fuelBefore: z.coerce.number().int().min(0).max(100),
   conditionBefore: z.enum(vehicleConditions),
   checksBefore: beforeChecksSchema,
@@ -158,7 +158,7 @@ const startVehicleTripSchema = z.object({
 
 const completeVehicleTripSchema = z.object({
   odometerEnd: z.coerce.number().int().min(0),
-  odometerPhotoAfter: odometerPhotoSchema,
+  odometerPhotoAfter: odometerPhotoSchema.optional().nullable(),
   fuelAfter: z.coerce.number().int().min(0).max(100),
   conditionAfter: z.enum(vehicleConditions),
   checksAfter: afterChecksSchema,
