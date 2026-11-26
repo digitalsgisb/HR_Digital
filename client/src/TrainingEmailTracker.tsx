@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, CalendarDays, MapPin, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Check, MapPin, RefreshCw, RotateCcw } from "lucide-react";
 import { workflowRequest } from "./FleetAccess";
 import { errorText, optimistic } from "./optimistic";
 
@@ -24,7 +24,6 @@ type TrainingDetail = Omit<TrainingSummary, "participants"> & { ready: boolean; 
 export const trackerKinds: Array<[string, string]> = [["INVITATION", "Invitation"], ["REMINDER", "Day reminder"], ["FOLLOW_UP", "Evaluation request"], ["SUMMARY_REMINDER", "Evaluation reminders"], ["HOD_SUMMARY", "Copy to HOD"], ["SUPERIOR_REVIEW", "3-month review"]];
 const kindLabel = Object.fromEntries(trackerKinds);
 const phaseLabel: Record<Phase, string> = { UPCOMING: "Upcoming", IN_PROGRESS: "In progress", FOLLOW_UP: "Follow-up" };
-const stateLabel: Record<EmailCell["state"], string> = { SCHEDULED: "Scheduled", SENDING: "Sending", SENT: "Sent", RECURRING: "Sent · repeats", FAILED: "Failed", CANCELLED: "Not needed" };
 
 const when = (value: string) => new Date(value).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur", dateStyle: "medium", timeStyle: "short" });
 const day = (value: string) => new Date(value).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur", weekday: "short", day: "numeric", month: "short", year: "numeric" });
@@ -117,34 +116,98 @@ function TrainingEmailDetail({ id, onBack, showNotice }: { id: string; onBack: (
         <div className="card"><span>Scheduled</span><strong>{data.emails.scheduled}</strong><small>{data.emails.failed} failed</small></div>
         <div className="card"><span>Evaluations</span><strong>{data.evaluations.submitted}/{data.evaluations.eligible}</strong><small>{data.evaluations.outstanding} outstanding</small></div>
       </div>
-      <section className="card data-card">
-        <div className="section-header tracker-table-head"><h3>Participants and emails</h3><label className="field">Show<select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="all">Everyone</option><option value="failed">Failed emails</option><option value="outstanding">Evaluation outstanding</option><option value="no-email">No email address</option></select></label></div>
-        <div className="table-wrap"><table className="data-table tracker-table"><thead><tr><th>Participant</th>{trackerKinds.map(([kind, label]) => <th key={kind}>{label}</th>)}<th>Evaluation</th><th /></tr></thead>
-          <tbody>{people.map(person => <Fragment key={person.employeeId}><tr>
-            <td><strong>{person.name}</strong><small>{person.staffId} · {person.department}</small><small>{person.email || "No email address"}</small></td>
-            {trackerKinds.map(([kind]) => <td key={kind}><Cell cell={person.emails[kind]} busy={busy} onRetry={retry} /></td>)}
-            <td>{person.summarySubmittedAt ? <span className="tracker-state sent">Submitted</span> : outstanding(person) ? <span className="tracker-state failed">Outstanding</span> : <span className="tracker-state muted">{["REQUIRED", "COMPLETED"].includes(person.attendance) ? "Not open yet" : "Not required"}</span>}{person.summarySubmittedAt && <small>{when(person.summarySubmittedAt)}</small>}</td>
-            <td><button className="button button-secondary tracker-history-button" aria-expanded={open === person.employeeId} onClick={() => setOpen(open === person.employeeId ? null : person.employeeId)}>History ({person.history.length})</button></td>
-          </tr>{open === person.employeeId && <tr className="tracker-history-row"><td colSpan={trackerKinds.length + 3}>
-            {person.history.length ? <ol className="tracker-history">{person.history.map(event => <li key={event.id} className={event.outcome.toLowerCase()}><strong>{kindLabel[event.kind] ?? event.kind}</strong><span>{event.outcome === "SENT" ? "Sent" : "Failed"} · {when(event.createdAt)}</span><span>To {event.recipient}{event.cc.length ? ` · CC ${event.cc.join(", ")}` : ""}</span>{event.error && <span className="form-error">{event.error}</span>}</li>)}</ol> : <p>No emails have been sent to this participant yet. Sends are recorded from this update onwards.</p>}
-          </td></tr>}</Fragment>)}</tbody></table></div>
+      <section className="card data-card journey-card">
+        <div className="section-header tracker-table-head"><div><h3>Participant journeys</h3><p className="journey-sub">Each line follows one person from invitation to the 3-month review.</p></div><label className="field">Show<select value={filter} onChange={e => setFilter(e.target.value as typeof filter)}><option value="all">Everyone</option><option value="failed">Failed emails</option><option value="outstanding">Evaluation outstanding</option><option value="no-email">No email address</option></select></label></div>
+        <div className="journey-list">
+          {people.length > 0 && <div className="journey-row journey-phases" aria-hidden="true"><span /><div className="journey-rail-grid"><span style={{ gridColumn: "1 / 3" }}>Before training</span><span style={{ gridColumn: "3 / 4" }}>Training day</span><span style={{ gridColumn: "4 / 9" }}>After training</span></div><span /></div>}
+          {people.map(person => {
+            const stops = journeyFor(person, data, ended, outstanding(person));
+            const current = stops.find(stop => stop.current);
+            return <Fragment key={person.employeeId}><article className="journey-row">
+              <div className="journey-person"><strong>{person.name}</strong><small>{person.staffId} · {person.department}</small><small>{person.email || "No email address"}</small>
+                <span className={`journey-now ${current?.status ?? "complete"}`}>{current ? current.now : "Journey complete"}</span></div>
+              <ol className="journey-rail-grid journey-rail" style={{ ["--reached" as string]: lastReached(stops) }} aria-label={`Journey for ${person.name}`}>
+                {stops.map(stop => <li key={stop.key} className={`journey-stop ${stop.status}${stop.current ? " current" : ""}`} title={stop.error ?? undefined}>
+                  <span className="journey-node" aria-hidden="true">{stop.status === "done" ? <Check size={12} strokeWidth={3} /> : stop.status === "failed" || stop.status === "late" ? "!" : null}</span>
+                  <strong>{stop.label}</strong>
+                  <small><span className="visually-hidden">{stateWord[stop.status]}: </span>{stop.detail}</small>
+                  {stop.extra && <small className="journey-extra">{stop.extra}</small>}
+                  {stop.status === "failed" && stop.jobId && <button className="tracker-retry" disabled={busy} onClick={() => retry(stop.jobId!)}><RotateCcw size={12} />Retry</button>}
+                </li>)}
+              </ol>
+              <button className="button button-secondary tracker-history-button" aria-expanded={open === person.employeeId} onClick={() => setOpen(open === person.employeeId ? null : person.employeeId)}>History ({person.history.length})</button>
+            </article>
+            {open === person.employeeId && <div className="journey-history">
+              {person.history.length ? <ol className="tracker-history">{person.history.map(event => <li key={event.id} className={event.outcome.toLowerCase()}><strong>{kindLabel[event.kind] ?? event.kind}</strong><span>{event.outcome === "SENT" ? "Sent" : "Failed"} · {when(event.createdAt)}</span><span>To {event.recipient}{event.cc.length ? ` · CC ${event.cc.join(", ")}` : ""}</span>{event.error && <span className="form-error">{event.error}</span>}</li>)}</ol> : <p>No emails have been sent to this participant yet. Sends are recorded from this update onwards.</p>}
+            </div>}</Fragment>;
+          })}
+        </div>
         {!people.length && <p className="tracker-empty">No participants match this filter.</p>}
+        <div className="journey-legend"><span className="done"><i />Done</span><span className="current"><i />Up next</span><span className="waiting"><i />Scheduled</span><span className="late"><i />Failed or overdue</span><span className="skipped"><i />Not needed</span></div>
         <p className="field-help tracker-empty">“Sent” means the mail server accepted the email; it does not confirm the email was opened. Evaluation reminders go out every three days at 9:00 am (weekends move to Monday) until the participant submits. From the 5th reminder the HOD and immediate superior are copied.</p>
       </section>
     </>}
   </section>;
 }
 
-function Cell({ cell, busy, onRetry }: { cell?: EmailCell; busy: boolean; onRetry: (jobId: string) => void }) {
-  if (!cell) return <span className="tracker-state muted">—</span>;
-  const next = cell.state === "SCHEDULED" || cell.state === "RECURRING" ? `next ${when(cell.dueAt)}` : null;
-  const detail = cell.state === "SCHEDULED" ? `Due ${when(cell.dueAt)}` : cell.state === "RECURRING" ? `Last ${when(cell.sentAt!)} · ${next}` : cell.sentAt ? when(cell.sentAt) : null;
-  return <div className="tracker-cell" title={cell.lastError ?? undefined}>
-    <span className={`tracker-state ${cell.state.toLowerCase()}`}>{stateLabel[cell.state]}{cell.sends > 1 && !cell.reminders ? ` ×${cell.sends}` : ""}</span>
-    {cell.reminders > 0 && <small><strong>Reminder {cell.reminders}</strong>{cell.escalated ? "" : ` · HOD copied from #5`}</small>}
-    {cell.escalated && <span className="tracker-state escalated">Escalated to HOD</span>}
-    {detail && <small>{detail}</small>}
-    {cell.lastError && cell.state !== "SENT" && <small className="form-error">{cell.lastError}</small>}
-    {cell.state === "FAILED" && <button className="tracker-retry" disabled={busy} onClick={() => onRetry(cell.id)}><RotateCcw size={12} />Retry</button>}
-  </div>;
+type StopStatus = "done" | "waiting" | "future" | "failed" | "late" | "skipped";
+type Stop = { key: string; label: string; status: StopStatus; detail: string; now: string; extra?: string; error?: string; jobId?: string; current?: boolean };
+const stateWord: Record<StopStatus, string> = { done: "Done", waiting: "Scheduled", future: "Not yet", failed: "Failed", late: "Overdue", skipped: "Not needed" };
+const short = (value: string) => new Date(value).toLocaleString("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+const shortDay = (value: string) => new Date(value).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short" });
+
+/** One email job as a journey stop. `waitingNow` describes the person if this is where they currently are. */
+function emailStop(key: string, label: string, cell: EmailCell | undefined, waitingNow: string): Stop {
+  if (!cell) return { key, label, status: "future", detail: "Not yet", now: waitingNow };
+  const base = { key, label, now: waitingNow, jobId: cell.id, error: cell.lastError ?? undefined };
+  switch (cell.state) {
+    case "SENT": return { ...base, status: "done", detail: cell.sentAt ? short(cell.sentAt) : "Sent", extra: cell.sends > 1 ? `Sent ${cell.sends} times` : undefined };
+    case "RECURRING": return { ...base, status: "waiting", detail: `${cell.reminders || cell.sends} sent · next ${shortDay(cell.dueAt)}`, extra: cell.escalated ? "HOD copied" : undefined };
+    case "SCHEDULED": return { ...base, status: "waiting", detail: `Due ${short(cell.dueAt)}` };
+    case "SENDING": return { ...base, status: "waiting", detail: "Sending now" };
+    case "FAILED": return { ...base, status: "failed", detail: "Failed to send", now: `${label}: email failed` };
+    case "CANCELLED": return { ...base, status: "skipped", detail: "Not needed" };
+  }
+}
+
+function journeyFor(person: Participant, training: TrainingDetail, ended: boolean, overdue: boolean): Stop[] {
+  const required = ["REQUIRED", "COMPLETED"].includes(person.attendance);
+  const e = person.emails;
+  const day = { key: "DAY", label: "Attended" };
+  const attended: Stop = !required ? { ...day, status: "skipped", detail: "Not required", now: "" }
+    : person.checkedInAt ? { ...day, status: "done", detail: `Checked in ${short(person.checkedInAt)}`, now: "" }
+    : person.attendance === "COMPLETED" ? { ...day, status: "done", detail: "Marked attended", now: "" }
+    : ended ? { ...day, status: "late", detail: "No check-in", now: "No check-in recorded" }
+    : { ...day, status: "waiting", detail: shortDay(training.dateStart), now: `Training on ${shortDay(training.dateStart)}` };
+  const reminders = emailStop("SUMMARY_REMINDER", "Reminders", e.SUMMARY_REMINDER, "Waiting for evaluation");
+  // Reminders stop once the evaluation is in.
+  if (person.summarySubmittedAt && reminders.status === "waiting") Object.assign(reminders, { status: "done", detail: "Stopped after submission" });
+  const evaluation = { key: "SUBMITTED", label: "Evaluation" };
+  const submitted: Stop = person.summarySubmittedAt ? { ...evaluation, status: "done", detail: `Submitted ${short(person.summarySubmittedAt)}`, now: "" }
+    : !required ? { ...evaluation, status: "skipped", detail: "Not required", now: "" }
+    : overdue ? { ...evaluation, status: "late", detail: "Outstanding", now: "Evaluation outstanding" }
+    : { ...evaluation, status: "waiting", detail: "Opens after training", now: "Evaluation opens after training" };
+  const review = emailStop("SUPERIOR_REVIEW", "3-month review", e.SUPERIOR_REVIEW, "Waiting for 3-month review");
+  if (person.reviewSubmittedAt) Object.assign(review, { status: "done", detail: `Received ${short(person.reviewSubmittedAt)}` });
+  const stops = [
+    emailStop("INVITATION", "Invited", e.INVITATION, "Invitation scheduled"),
+    emailStop("REMINDER", "Reminded", e.REMINDER, "Day reminder scheduled"),
+    attended,
+    emailStop("FOLLOW_UP", "Evaluation sent", e.FOLLOW_UP, "Evaluation request scheduled"),
+    reminders,
+    submitted,
+    emailStop("HOD_SUMMARY", "Copy to HOD", e.HOD_SUMMARY, "HOD copy scheduled"),
+    review,
+  ];
+  // A failure or an overdue step is where the person is stuck; otherwise it is the first step still to come.
+  const next = stops.find(stop => stop.status === "failed" || stop.status === "late") ?? stops.find(stop => stop.status === "waiting");
+  if (next) next.current = true;
+  return stops;
+}
+
+/** Index of the furthest stop reached; the filled part of the rail runs up to it. */
+function lastReached(stops: Stop[]) {
+  let last = 0;
+  stops.forEach((stop, index) => { if (stop.status === "done") last = index; });
+  return String(last);
 }

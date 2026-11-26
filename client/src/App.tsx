@@ -84,7 +84,6 @@ const trainingNav: Array<{ id: View; label: string; icon: LucideIcon }> = [
 
 const emailNav: Array<{id:View;label:string;icon:LucideIcon}> = [
   {id:"email-overview",label:"Overview",icon:LayoutDashboard},
-  {id:"email-tracker",label:"Training tracker",icon:Activity},
   {id:"email-automation",label:"Email templates",icon:FileText},
   {id:"email-delivery",label:"Delivery status",icon:MailCheck},
   {id:"notes-library",label:"Evaluation submissions",icon:ClipboardCheck},
@@ -326,6 +325,7 @@ function Sidebar({ emailOpen,onEmailToggle,activeView, trainingOpen, fleetOpen, 
             <item.icon size={15} /><span>{item.label}</span></button>)}
           </div>
         </div>
+        <NavButton icon={Activity} label="Training tracker" active={activeView === "email-tracker"} onClick={() => onNavigate("email-tracker")} />
         <button className={`nav-item nav-parent ${inEmail?"active-parent":""}`} onClick={onEmailToggle} aria-expanded={emailOpen} aria-controls="email-navigation"><span className="nav-icon"><MailCheck size={18}/></span><span>Email</span><ChevronDown className={emailOpen?"rotate":""} size={16}/></button>
         <div id="email-navigation" className={`nav-children ${emailOpen?"open":""}`} inert={!emailOpen}><div className="nav-children-content">{emailNav.map(item=><button key={item.id} className={`nav-child ${activeView===item.id?"active":""}`} onClick={()=>onNavigate(item.id)}><item.icon size={15}/><span>{item.label}</span></button>)}</div></div>
         <button className={`nav-item nav-parent ${inFleet ? "active-parent" : ""}`} onClick={onFleetToggle} aria-expanded={fleetOpen} aria-controls="car-navigation">
