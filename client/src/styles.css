@@ -234,7 +234,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .nav-section-label { margin: 11px 12px 4px; font-size: var(--fs-sm); }
 .nav-item { min-height: 39px; padding: 4px 10px; font-size: var(--fs-md); }
 .nav-item.active { animation: activeBreath 2.8s var(--ease) infinite; }
-.nav-item:hover .nav-icon { transform: scale(1.08) rotate(-3deg); }
+
 .nav-icon { transition: transform .22s var(--ease), background .2s var(--ease); }
 .nav-child { min-height: 29px; gap: 8px; padding: 4px 9px 4px 15px; font-size: var(--fs-base); }
 .nav-children.open .nav-child { animation: childReveal .35s var(--ease) both; }
@@ -1235,3 +1235,34 @@ body.fleet-access-mode { min-height: 100svh; overflow: visible; }
 .fleet-sheet-timer i { position: absolute; inset: 0; background: #1f8a5b; transform-origin: left; animation: fleetSheetTimer 2600ms linear both; }
 @keyframes fleetSheetTimer { to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .fleet-sheet-timer i { animation: none; } }
+
+/* Fleet app shell: the body never scrolls, only .fleet-scroll does. On iOS this keeps the
+   browser toolbars from expanding mid-page, so the header and tab bar never jump. */
+html.fleet-access-mode, body.fleet-access-mode { height: 100%; overflow: hidden; overscroll-behavior: none; }
+.vehicle-usage-page { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; }
+.vehicle-usage-page > .fleet-header-shell { position: relative; flex: none; }
+.fleet-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.vehicle-usage-page.has-tabbar .vehicle-usage-container { padding-bottom: 24px; }
+.fleet-tabbar { position: relative; left: auto; right: auto; bottom: auto; flex: none; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.fleet-tabbar button, .fleet-tab-icon { transition: none; }
+@media (min-width: 760px) { .fleet-tabbar { left: auto; width: 420px; margin: 0 auto 16px; transform: none; } }
+
+/* Status message: carries the next step, so it has to stand out */
+.vehicle-usage-page .fleet-notice { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: start; margin: 0; padding: 14px 16px; border-left: 4px solid; font-size: var(--fs-lg); font-weight: 600; line-height: 1.45; animation: fleetNotice 1200ms ease-out both; }
+.fleet-notice.is-success { border-left-color: #1f8a5b; color: #12402c; --notice-flash: #d6f0e2; }
+.fleet-notice.is-success > svg { color: #1f8a5b; }
+.fleet-notice.is-info { border-left-color: #17181a; --notice-flash: #ecebea; }
+@keyframes fleetNotice { from { background: var(--notice-flash); } to { background: white; } }
+
+/* Trip link: calm, with the recovery route as a footnote */
+.vehicle-usage-page .fleet-trip-link { gap: 14px; border: 1px solid var(--line); }
+.fleet-trip-link-head { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: start; }
+.fleet-trip-link-head > span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #17181a; color: white; }
+.fleet-trip-link-head h2 { margin: 0 0 4px; font-size: var(--fs-xl); }
+.fleet-trip-link-head p, .fleet-trip-link-delivery { margin: 0; color: var(--muted); line-height: 1.45; }
+.fleet-trip-link-delivery { font-weight: 600; color: #12402c; }
+.fleet-trip-link-only { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: #fbeaec; color: #7d1527; font-weight: 600; }
+.fleet-trip-link-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fleet-trip-link-actions .button:only-child { grid-column: 1 / -1; }
+.fleet-trip-link-note { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-md); line-height: 1.45; }
+@media (prefers-reduced-motion: reduce) { .vehicle-usage-page .fleet-notice { animation: none; } }

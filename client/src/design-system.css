@@ -138,7 +138,7 @@ body { background: var(--canvas); color: var(--ink); -webkit-font-smoothing: ant
 }
 :is(.button, .row-action, .segmented button, .vehicle-actions button, .topbar-icon, .metric-card-button,
     .employee-card, .feature-grid button):active:not(:disabled) { transform: scale(.97); }
-:is(.nav-item, .nav-child, .calendar-day):active { transform: scale(.985); }
+.calendar-day:active { transform: scale(.985); }
 
 /* One orchestrated entrance per page: the stage fades, its card groups stagger in. */
 .page-stage { animation: dsFade var(--dur-enter) var(--ease) both; }
