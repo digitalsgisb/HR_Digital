@@ -1,0 +1,17 @@
+{
+  "name": "Company cars · HR Digital",
+  "short_name": "Company cars",
+  "description": "Book a Sugihara company car, collect the key, depart and return.",
+  "id": "/fleet/",
+  "start_url": "/fleet/",
+  "scope": "/fleet/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f1f0",
+  "theme_color": "#17181a",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/fleet/favicon.svg?v=7", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/fleet/sugihara-mark.png", "sizes": "2000x2000", "type": "image/png", "purpose": "any" }
+  ]
+}
